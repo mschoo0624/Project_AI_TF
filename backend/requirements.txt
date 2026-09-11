@@ -1,5 +1,5 @@
 fastapi
 uvicorn
 sqlalchemy
-pymysql
-python-dotenv
+pytest
+httpx

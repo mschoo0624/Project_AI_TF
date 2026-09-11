@@ -1,4 +1,4 @@
-"""AuditLog database model for the MySQL testing phase."""
+"""AuditLog database model for the SQLite testing phase."""
 
 from __future__ import annotations
 

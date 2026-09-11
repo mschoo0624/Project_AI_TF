@@ -1,26 +1,31 @@
-"""MySQL database configuration for the testing phase."""
+"""SQLite database configuration for the testing phase."""
 
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "3306")
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "root")
-DB_NAME = os.getenv("DB_NAME", "project_ai_tf")
+DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "project_ai_tf.db"
+DB_PATH = Path(os.getenv("DB_PATH", str(DEFAULT_DB_PATH)))
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
 
-DATABASE_URL = (
-    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+engine: Engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False},
 )
-
-engine: Engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+
+def init_db() -> None:
+    """Import models and create any missing SQLite tables."""
+    from user.app import models  # noqa: F401
+
+    Base.metadata.create_all(bind=engine)
 
 
 def get_db():

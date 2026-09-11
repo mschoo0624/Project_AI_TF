@@ -1,4 +1,4 @@
-"""User database model for the MySQL testing phase."""
+"""User database model for the SQLite testing phase."""
 
 from __future__ import annotations
 

@@ -1,5 +1,3 @@
-USE project_ai_tf;
-
 INSERT INTO squad (name, description) VALUES
     ('1분대', '제1분대'),
     ('2분대', '제2분대');
@@ -11,6 +9,9 @@ INSERT INTO person (military_number, name, rank, unit, specialty, status, squad_
     ('21-72007386', '김철수', '상병', '31사단', '통신', 'active', 2),
     ('18-72007387', '박영희', '일병', '31사단', '의무', 'on_leave', NULL);
 
+/*
+군번, 소속부대, 배치일자, 상태.
+*/
 INSERT INTO assignment (person_id, squad_id, assigned_date, status) VALUES
     ('22-72007385', 1, '2026-09-01', 'assigned'),
     ('21-72007386', 2, '2026-09-01', 'assigned');

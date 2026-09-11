@@ -1,16 +1,49 @@
-## installiation Steps:
+## Installation Steps
 1. sudo apt update
 2. sudo apt install python3 python3-pip python3-venv -y
-3. And check for the python version.
+3. Check the Python version: `python3 --version`
+4. Create and activate the virtual environment:
 
-## To run the server
-1. ACtivate the Soruce file (source venv/bin/activate)
-2. and run the command "uv run fastapi dev --port 8001"
-which is going to open the backend server. 
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+5. Install the backend dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+SQLite is included with Python. The `sqlite3` command-line tool is optional and
+is only needed for manually running SQL files.
+
+## Database
+The backend uses SQLite. The database file is created at
+`backend/project_ai_tf.db` when the application starts.
+
+To initialize the schema manually from the `backend` directory:
+
+```bash
+sqlite3 project_ai_tf.db < sql/init_phase1.sql
+sqlite3 project_ai_tf.db < sql/seed_phase1.sql
+```
+
+You can use a different database file by setting `DB_PATH`:
+
+```bash
+DB_PATH=/path/to/project_ai_tf.db uv run uvicorn user.app.main:app --reload --port 8001
+```
+
+## Run the server
+1. Activate the virtual environment: `source venv/bin/activate`
+2. Run `uv run uvicorn user.app.main:app --reload --port 8001`
+
+The application creates missing tables automatically on startup.
 
 ## Development Roadmap
 ### Phase 1 — Database
- PostgreSQL 설정
+ SQLite 설정
  Person 모델
  Squad 모델
  Assignment 모델

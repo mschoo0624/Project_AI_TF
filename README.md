@@ -169,7 +169,7 @@ Dashboard
 
 ## Development Roadmap
 ### Phase 1 — Database
- PostgreSQL 설정
+ SQLite 설정
  Person 모델
  Squad 모델
  Assignment 모델
