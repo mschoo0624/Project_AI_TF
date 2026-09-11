@@ -1,0 +1,1 @@
+"""Squad API routes."""
