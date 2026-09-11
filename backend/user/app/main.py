@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from sqlalchemy import inspect, text
-
+# Importing the files from the other folders. 
 from user.app.database import engine, init_db
 from user.app.api.dashboard import router as dashboard_router
 from user.app.api.postponements import router as postponements_router
@@ -13,11 +13,9 @@ app.include_router(squads_router)
 app.include_router(postponements_router)
 app.include_router(dashboard_router)
 
-
 @app.on_event("startup")
 def startup() -> None:
     init_db()
-
 
 @app.get("/")
 def read_root() -> dict[str, str]:
