@@ -45,6 +45,29 @@
 ### 4. Dashboard
 한 화면에서 주요 현황을 확인할 수 있도록 합니다.
 
+─────────────────────────────────────────────────────┐
+│                 31사단 AI TF Dashboard               │
+├───────────┬───────────┬───────────┬─────────────────┤
+│ 전체 인원 │ 가용 인원 │ 연기 인원 │ 보류 인원        │
+│   000명   │   000명   │   000명   │   000명         │
+├───────────┴───────────┴───────────┴─────────────────┤
+│                                                     │
+│                  인원 통계 / 차트                    │
+│                                                     │
+├─────────────────────────────────────────────────────┤
+│ 분대별 편성 현황                                     │
+│                                                     │
+│  1분대  ███████████████  12명                        │
+│  2분대  █████████████    10명                        │
+│  3분대  ███████████████  12명                        │
+│                                                     │
+├─────────────────────────────────────────────────────┤
+│ ⚠ 결재 필요 인원             [더보기]                        │
+│                                                     │
+│  홍길동    보류서 작성    [확인] [수정]               │
+│  김철수    연기 신청      [확인] [수정]               │
+└───────────────────────────────
+
 전체 인원
 가용 인원
 분대별 인원
@@ -60,96 +83,6 @@
 
 ### 6. 알림
 보류서 등 업무 요청이 생성되면 실무자가 확인할 수 있도록 알림을 제공합니다.
-
-Tech Stack
-Frontend
-Tailwind CSS
-CSS
-Figma
-Backend
-Python
-FastAPI
-Pydantic
-SQLAlchemy
-Database
-PostgreSQL
-SQL
-Alembic
-Testing
-pytest
-Deployment
-Docker
-Linux
-System Architecture
-┌──────────────────────┐
-│       Frontend       │
-│   Tailwind / CSS     │
-└──────────┬───────────┘
-           │ HTTP / REST API
-           ↓
-┌──────────────────────┐
-│       FastAPI        │
-│      Backend         │
-└──────────┬───────────┘
-           │
-     ┌─────┴─────┐
-     ↓           ↓
-┌──────────┐ ┌──────────────┐
-│ Business │ │  SQLAlchemy  │
-│  Logic   │ │     ORM      │
-└──────────┘ └──────┬───────┘
-                    ↓
-             ┌────────────┐
-             │ PostgreSQL │
-             └────────────┘
-
-Backend Structure
-app/
-├── main.py
-│
-├── api/
-│   ├── auth.py
-│   ├── persons.py
-│   ├── assignments.py
-│   ├── postponements.py
-│   ├── dashboard.py
-│   └── notifications.py
-│
-├── models/
-│   ├── user.py
-│   ├── person.py
-│   ├── squad.py
-│   ├── education.py
-│   ├── postponement.py
-│   └── audit_log.py
-│
-├── schemas/
-│   ├── person.py
-│   ├── assignment.py
-│   └── postponement.py
-│
-├── services/
-│   ├── assignment_service.py
-│   ├── postponement_service.py
-│   ├── dashboard_service.py
-│   └── notification_service.py
-│
-├── core/
-│   ├── security.py
-│   └── config.py
-│
-└── database.py
-
-Backend Layer
-API Router
-    ↓
-Service / Business Logic
-    ↓
-SQLAlchemy
-    ↓
-PostgreSQL
-
-Business logic should not be placed directly inside API routes.
 
 ### Core API Examples
 예비군
