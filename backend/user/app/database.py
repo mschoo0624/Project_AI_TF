@@ -27,10 +27,18 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
 
-    if "branch" not in {column["name"] for column in inspect(engine).get_columns("person") }:
-        with engine.begin() as connection:
+    person_columns = {column["name"] for column in inspect(engine).get_columns("person")}
+    postponement_columns = {
+        column["name"] for column in inspect(engine).get_columns("postponement")
+    }
+    with engine.begin() as connection:
+        if "branch" not in person_columns:
             connection.execute(
                 text("ALTER TABLE person ADD COLUMN branch VARCHAR(50) NOT NULL DEFAULT '육군'")
+            )
+        if "approved_at" not in postponement_columns:
+            connection.execute(
+                text("ALTER TABLE postponement ADD COLUMN approved_at DATETIME")
             )
 
 

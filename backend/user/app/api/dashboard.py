@@ -1,1 +1,48 @@
 """Dashboard API routes."""
+
+from fastapi import APIRouter, Depends
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from user.app.database import get_db
+from user.app.models.person import Person
+from user.app.models.postponement import Postponement
+from user.app.models.squad import Squad
+
+router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+def grouped_counts(db: Session, field: object) -> dict[str, int]:
+	rows = db.execute(select(field, func.count()).group_by(field)).all()
+	return {str(key): count for key, count in rows if key is not None}
+
+
+@router.get("/summary")
+def dashboard_summary(db: Session = Depends(get_db)) -> dict[str, object]:
+	total_people = db.scalar(select(func.count()).select_from(Person)) or 0
+	active_people = db.scalar(
+		select(func.count()).select_from(Person).where(Person.status == "active")
+	) or 0
+	pending_postponements = db.scalar(
+		select(func.count())
+		.select_from(Postponement)
+		.where(Postponement.status == "pending")
+	) or 0
+
+	squad_counts = dict(
+		db.execute(
+			select(Squad.name, func.count(Person.military_number))
+			.outerjoin(Person, Person.squad_id == Squad.id)
+			.group_by(Squad.id, Squad.name)
+			.order_by(Squad.id)
+		).all()
+	)
+
+	return {
+		"total_people": total_people,
+		"active_people": active_people,
+		"pending_postponements": pending_postponements,
+		"by_branch": grouped_counts(db, Person.branch),
+		"by_rank": grouped_counts(db, Person.rank),
+		"by_squad": squad_counts,
+	}

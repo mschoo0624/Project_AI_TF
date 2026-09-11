@@ -10,7 +10,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from user.app.database import Base
 
 if TYPE_CHECKING:
+    from user.app.models.assignment import Assignment
     from user.app.models.education import Education
+    from user.app.models.postponement import Postponement
     from user.app.models.squad import Squad
 
 
@@ -27,5 +29,7 @@ class Person(Base):
     squad_id: Mapped[int | None] = mapped_column(ForeignKey("squad.id"), nullable=True)
 
     squad: Mapped["Squad | None"] = relationship(back_populates="persons")
+    assignments: Mapped[list["Assignment"]] = relationship(back_populates="person")
     education_records: Mapped[list["Education"]] = relationship(back_populates="person")
+    postponements: Mapped[list["Postponement"]] = relationship(back_populates="person")
 
