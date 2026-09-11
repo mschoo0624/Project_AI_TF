@@ -8,7 +8,7 @@ class PersonBase(BaseModel):
 	rank: str | None = None
 	unit: str | None = None
 	specialty: str | None = None
-	service_year: int = Field(ge=1, le=8)
+	service_year: int = Field(ge=0, le=8)
 	position: str
 	mobilization_status: str = "해당없음"
 	status: str = "active"
@@ -16,7 +16,7 @@ class PersonBase(BaseModel):
 
 	@model_validator(mode="after")
 	def validate_training_category(self) -> "PersonBase":
-		if self.service_year <= 4 and self.mobilization_status not in {
+		if 1 <= self.service_year <= 4 and self.mobilization_status not in {
 			"지정",
 			"동원지정",
 			"미지정",

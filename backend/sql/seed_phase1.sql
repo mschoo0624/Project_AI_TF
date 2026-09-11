@@ -76,7 +76,7 @@ SELECT
         WHEN 4 THEN '241102'
         ELSE '231101'
     END,
-    ((number - 1) % 8) + 1,
+    (number - 1) % 9,
     CASE (number - 1) % 6
         WHEN 0 THEN '행정병'
         WHEN 1 THEN '통신병'
@@ -86,9 +86,9 @@ SELECT
         ELSE '보급병'
     END,
     CASE
-        WHEN ((number - 1) % 8) + 1 BETWEEN 1 AND 4 AND number % 10 = 0 THEN '학생예비군'
-        WHEN ((number - 1) % 8) + 1 BETWEEN 1 AND 4 AND number % 2 = 0 THEN '동원지정'
-        WHEN ((number - 1) % 8) + 1 BETWEEN 1 AND 4 THEN '동원미지정'
+        WHEN (number - 1) % 9 BETWEEN 1 AND 4 AND number % 10 = 0 THEN '학생예비군'
+        WHEN (number - 1) % 9 BETWEEN 1 AND 4 AND number % 2 = 0 THEN '동원지정'
+        WHEN (number - 1) % 9 BETWEEN 1 AND 4 THEN '동원미지정'
         ELSE '해당없음'
     END,
     CASE WHEN number % 10 = 0 THEN 'on_leave' ELSE 'active' END,
@@ -120,12 +120,14 @@ WITH RECURSIVE numbers(number) AS (
 ), training_candidates AS (
     SELECT
         number,
-        ((number - 1) % 8) + 1 AS service_year,
+        (number - 1) % 9 AS service_year,
         CASE
-            WHEN ((number - 1) % 8) + 1 BETWEEN 1 AND 4 AND number % 10 = 0 THEN 8
-            WHEN ((number - 1) % 8) + 1 BETWEEN 1 AND 4 AND number % 2 = 0 THEN 28
-            WHEN ((number - 1) % 8) + 1 BETWEEN 1 AND 4 THEN 32
-            WHEN ((number - 1) % 8) + 1 BETWEEN 5 AND 6 THEN 20
+            WHEN (number - 1) % 9 BETWEEN 1 AND 4 AND number % 10 = 0 THEN 8
+            WHEN (number - 1) % 9 BETWEEN 1 AND 4 AND number % 2 = 0 THEN 28
+            WHEN (number - 1) % 9 BETWEEN 1 AND 4
+                AND ((number * 17 + number / 4 * 3) % 4) IN (1, 2) THEN 28
+            WHEN (number - 1) % 9 BETWEEN 1 AND 4 THEN 32
+            WHEN (number - 1) % 9 BETWEEN 5 AND 6 THEN 20
             ELSE 0
         END AS required_hours,
         CASE WHEN number % 7 = 0 THEN '무단불참' ELSE 'completed' END AS attendance_status
@@ -138,8 +140,8 @@ WITH RECURSIVE numbers(number) AS (
         attendance_status,
         CASE
             WHEN attendance_status = '무단불참' THEN 0
-            WHEN number % 5 = 0 THEN required_hours
-            ELSE 1 + abs(random()) % required_hours
+            WHEN number % 5 = 0 THEN max(required_hours, 1)
+            ELSE max(1, 1 + abs(random()) % required_hours)
         END AS training_hours
     FROM training_candidates
     WHERE service_year BETWEEN 1 AND 6

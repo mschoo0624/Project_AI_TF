@@ -68,7 +68,8 @@ def add_training_record(
 	)
 
 	progress = all_training_progress(db, person)
-	year_progress = progress[payload.service_year - 1]
+	# Progress includes year 0, so the service year is its list index.
+	year_progress = progress[payload.service_year]
 	target = int(year_progress["required_hours"])
 	if target == 0:
 		raise HTTPException(
