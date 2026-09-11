@@ -6,12 +6,14 @@ from user.app.api.dashboard import router as dashboard_router
 from user.app.api.postponements import router as postponements_router
 from user.app.api.reservists import router as reservists_router
 from user.app.api.squads import router as squads_router
+from user.app.api.training import router as training_router
 
 app = FastAPI(title="Project AI TF API")
 app.include_router(reservists_router)
 app.include_router(squads_router)
 app.include_router(postponements_router)
 app.include_router(dashboard_router)
+app.include_router(training_router)
 
 @app.on_event("startup")
 def startup() -> None:

@@ -31,15 +31,60 @@ def init_db() -> None:
     postponement_columns = {
         column["name"] for column in inspect(engine).get_columns("postponement")
     }
+    education_columns = {column["name"] for column in inspect(engine).get_columns("education")}
     with engine.begin() as connection:
         if "branch" not in person_columns:
             connection.execute(
                 text("ALTER TABLE person ADD COLUMN branch VARCHAR(50) NOT NULL DEFAULT '육군'")
             )
+        if "service_year" not in person_columns:
+            connection.execute(
+                text("ALTER TABLE person ADD COLUMN service_year INTEGER")
+            )
+        if "position" not in person_columns:
+            connection.execute(
+                text("ALTER TABLE person ADD COLUMN position VARCHAR(50)")
+            )
+        if "mobilization_status" not in person_columns:
+            connection.execute(
+                text("ALTER TABLE person ADD COLUMN mobilization_status VARCHAR(20)")
+            )
         if "approved_at" not in postponement_columns:
             connection.execute(
                 text("ALTER TABLE postponement ADD COLUMN approved_at DATETIME")
             )
+        if "training_year" not in education_columns:
+            connection.execute(text("ALTER TABLE education ADD COLUMN training_year INTEGER"))
+        if "training_round" not in education_columns:
+            connection.execute(
+                text("ALTER TABLE education ADD COLUMN training_round INTEGER NOT NULL DEFAULT 1")
+            )
+        if "attendance_status" not in education_columns:
+            connection.execute(
+                text("ALTER TABLE education ADD COLUMN attendance_status VARCHAR(20) NOT NULL DEFAULT 'completed'")
+            )
+        connection.execute(
+            text(
+                "UPDATE person SET service_year = 1 WHERE service_year IS NULL"
+            )
+        )
+        connection.execute(
+            text(
+                "UPDATE person SET position = '보충' WHERE position IS NULL"
+            )
+        )
+        connection.execute(
+            text(
+                "UPDATE person SET mobilization_status = '미지정' "
+                "WHERE mobilization_status IS NULL AND service_year <= 4"
+            )
+        )
+        connection.execute(
+            text(
+                "UPDATE person SET mobilization_status = '해당없음' "
+                "WHERE mobilization_status IS NULL AND service_year > 4"
+            )
+        )
 
 
 def get_db():

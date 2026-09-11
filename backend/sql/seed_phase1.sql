@@ -33,6 +33,9 @@ INSERT INTO person (
     rank,
     unit,
     specialty,
+    service_year,
+    position,
+    mobilization_status,
     status,
     squad_id
 )
@@ -65,12 +68,28 @@ SELECT
         WHEN 2 THEN printf('공군-%02d전투비행단', ((number - 1) % 5) + 1)
         ELSE printf('해병대-%02d연대', ((number - 1) % 5) + 1)
     END,
-    CASE (number - 1) % 5
-        WHEN 0 THEN '보병'
-        WHEN 1 THEN '통신'
-        WHEN 2 THEN '정비'
-        WHEN 3 THEN '의무'
-        ELSE '운전'
+    CASE (number - 1) % 6
+        WHEN 0 THEN '3111 101'
+        WHEN 1 THEN '171 101'
+        WHEN 2 THEN '222 101'
+        WHEN 3 THEN '411 101'
+        WHEN 4 THEN '241102'
+        ELSE '231101'
+    END,
+    ((number - 1) % 8) + 1,
+    CASE (number - 1) % 6
+        WHEN 0 THEN '행정병'
+        WHEN 1 THEN '통신병'
+        WHEN 2 THEN '병기취급병'
+        WHEN 3 THEN '의무병'
+        WHEN 4 THEN '운전병'
+        ELSE '보급병'
+    END,
+    CASE
+        WHEN ((number - 1) % 8) + 1 BETWEEN 1 AND 4 AND number % 10 = 0 THEN '학생예비군'
+        WHEN ((number - 1) % 8) + 1 BETWEEN 1 AND 4 AND number % 2 = 0 THEN '동원지정'
+        WHEN ((number - 1) % 8) + 1 BETWEEN 1 AND 4 THEN '동원미지정'
+        ELSE '해당없음'
     END,
     CASE WHEN number % 10 = 0 THEN 'on_leave' ELSE 'active' END,
     CASE WHEN number % 10 = 0 THEN NULL ELSE ((number - 1) % 9) + 1 END
@@ -91,19 +110,69 @@ SELECT
 FROM numbers
 WHERE number % 10 <> 0;
 
-/* Add one education record for every person. */
+/* Add varied training history for portal verification.
+   random() creates different values per seed run; all rows retain a unique
+   person's military number through the person_id foreign key. */
 WITH RECURSIVE numbers(number) AS (
     SELECT 1
     UNION ALL
     SELECT number + 1 FROM numbers WHERE number < 500
+), training_candidates AS (
+    SELECT
+        number,
+        ((number - 1) % 8) + 1 AS service_year,
+        CASE
+            WHEN ((number - 1) % 8) + 1 BETWEEN 1 AND 4 AND number % 10 = 0 THEN 8
+            WHEN ((number - 1) % 8) + 1 BETWEEN 1 AND 4 AND number % 2 = 0 THEN 28
+            WHEN ((number - 1) % 8) + 1 BETWEEN 1 AND 4 THEN 32
+            WHEN ((number - 1) % 8) + 1 BETWEEN 5 AND 6 THEN 20
+            ELSE 0
+        END AS required_hours,
+        CASE WHEN number % 7 = 0 THEN '무단불참' ELSE 'completed' END AS attendance_status
+    FROM numbers
+), training_values AS (
+    SELECT
+        number,
+        service_year,
+        required_hours,
+        attendance_status,
+        CASE
+            WHEN attendance_status = '무단불참' THEN 0
+            WHEN number % 5 = 0 THEN required_hours
+            ELSE 1 + abs(random()) % required_hours
+        END AS training_hours
+    FROM training_candidates
+    WHERE service_year BETWEEN 1 AND 6
+      AND (number % 3 <> 0 OR number % 7 = 0)
 )
-INSERT INTO education (person_id, education_year, training_hours, notes)
+INSERT INTO education (
+    person_id,
+    education_year,
+    training_year,
+    training_round,
+    attendance_status,
+    training_hours,
+    notes
+)
 SELECT
     printf('26-%08d', 72000000 + number),
-    2026,
-    (number * 8) % 41,
-    printf('2026년 교육 기록 %03d', number)
-FROM numbers;
+    service_year,
+    CASE
+        WHEN training_hours < required_hours THEN min(service_year + 1, 8)
+        ELSE service_year
+    END,
+    CASE
+        WHEN attendance_status = '무단불참' THEN 1 + abs(random()) % 3
+        ELSE 1
+    END,
+    attendance_status,
+    training_hours,
+    CASE
+        WHEN attendance_status = '무단불참' THEN '무단불참 이월 훈련 기록'
+        WHEN training_hours < required_hours THEN '부분 이수 후 잔여시간 이월 기록'
+        ELSE '훈련시간 전부 이수 기록'
+    END
+FROM training_values;
 
 /* Add a pending postponement for every tenth person. */
 WITH RECURSIVE numbers(number) AS (
@@ -127,6 +196,6 @@ INSERT INTO audit_log (user_id, action, table_name, record_id) VALUES
     (1, 'SEED', 'person', 500),
     (1, 'SEED', 'squad', 9),
     (1, 'SEED', 'assignment', 450),
-    (1, 'SEED', 'education', 500),
+    (1, 'SEED', 'education', (SELECT COUNT(*) FROM education)),
     (1, 'SEED', 'postponement', 50),
     (1, 'SEED', 'app_user', 1);

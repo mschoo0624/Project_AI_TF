@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from user.app.database import Base
@@ -25,6 +25,9 @@ class Person(Base):
     rank: Mapped[str | None] = mapped_column(String(50), nullable=True)
     unit: Mapped[str | None] = mapped_column(String(100), nullable=True)
     specialty: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    service_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    position: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    mobilization_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="active")
     squad_id: Mapped[int | None] = mapped_column(ForeignKey("squad.id"), nullable=True)
 
