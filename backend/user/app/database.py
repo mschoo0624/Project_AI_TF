@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -26,6 +26,12 @@ def init_db() -> None:
     from user.app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+
+    if "branch" not in {column["name"] for column in inspect(engine).get_columns("person") }:
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE person ADD COLUMN branch VARCHAR(50) NOT NULL DEFAULT '육군'")
+            )
 
 
 def get_db():

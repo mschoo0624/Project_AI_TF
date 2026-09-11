@@ -19,6 +19,7 @@ class Person(Base):
 
     military_number: Mapped[str] = mapped_column(String(50), primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    branch: Mapped[str] = mapped_column(String(50), default="육군", nullable=False)
     rank: Mapped[str | None] = mapped_column(String(50), nullable=True)
     unit: Mapped[str | None] = mapped_column(String(100), nullable=True)
     specialty: Mapped[str | None] = mapped_column(String(100), nullable=True)

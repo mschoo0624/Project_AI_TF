@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS squad (
 CREATE TABLE IF NOT EXISTS person (
     military_number VARCHAR(50) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
+    branch VARCHAR(50) NOT NULL DEFAULT '육군',
     rank VARCHAR(50),
     unit VARCHAR(100),
     specialty VARCHAR(100),
