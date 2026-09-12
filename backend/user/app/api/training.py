@@ -33,7 +33,11 @@ from sqlalchemy.orm import Session
 from user.app.database import get_db
 from user.app.models.education import Education
 from user.app.models.person import Person
-from user.app.schemas.education import TrainingRecordCreate, TrainingRecordRead
+from user.app.schemas.education import (
+	TrainingRecordCreate,
+	TrainingRecordRead,
+	TrainingRecordUpdate,
+)
 from user.app.services.training import (
 	all_training_progress,
     COMPLETED,
@@ -148,7 +152,7 @@ def add_training_record(
 	record = Education(
 		person_id=military_number,
 		education_year=payload.service_year,
-		training_year=person.service_year or payload.service_year,
+		training_year=payload.training_year or person.service_year or payload.service_year,
 		training_type=payload.training_type,
 		training_round=payload.training_round,
 		attendance_status=payload.attendance_status,
@@ -159,3 +163,38 @@ def add_training_record(
 	db.commit()
 	db.refresh(record)
 	return record
+
+
+@router.patch(
+	"/{military_number}/training-hours/{record_id}",
+	response_model=TrainingRecordRead,
+)
+def update_training_record(
+	military_number: str,
+	record_id: int,
+	payload: TrainingRecordUpdate,
+	db: Session = Depends(get_db),
+) -> Education:
+	_get_person_or_404(military_number, db)
+	record = db.get(Education, record_id)
+	if record is None or record.person_id != military_number:
+		raise HTTPException(status_code=404, detail="Training record not found")
+	for field, value in payload.model_dump(exclude_unset=True).items():
+		setattr(record, "education_year" if field == "service_year" else field, value)
+	db.commit()
+	db.refresh(record)
+	return record
+
+
+@router.delete("/{military_number}/training-hours/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_training_record(
+	military_number: str,
+	record_id: int,
+	db: Session = Depends(get_db),
+) -> None:
+	_get_person_or_404(military_number, db)
+	record = db.get(Education, record_id)
+	if record is None or record.person_id != military_number:
+		raise HTTPException(status_code=404, detail="Training record not found")
+	db.delete(record)
+	db.commit()

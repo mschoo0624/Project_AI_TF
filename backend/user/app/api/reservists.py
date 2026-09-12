@@ -17,11 +17,43 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from user.app.database import get_db
+from user.app.models.annual_status import AnnualStatus
+from user.app.models.assignment import Assignment
+from user.app.models.education import Education
 from user.app.models.person import Person
+from user.app.models.postponement import Postponement
 from user.app.schemas.person import PersonCreate, PersonRead, PersonUpdate
+from user.app.services.assignment import grouped_candidates
 
 router = APIRouter(prefix="/reservists", tags=["reservists"])
 persons_router = APIRouter(prefix="/persons", tags=["persons"])
+
+@persons_router.get("/assignment-candidates")
+def list_assignment_candidates(
+	position: str = Query(..., description="Wartime position, for example 행정병"),
+	branch: str | None = Query(default=None),
+	db: Session = Depends(get_db),
+) -> dict[str, dict[str, list[dict[str, object]]]]:
+	people = db.scalars(select(Person).order_by(Person.military_number)).all()
+	groups = grouped_candidates(people, position, branch)
+	return {
+		branch_name: {
+			personnel_category: [
+				{
+					"military_number": candidate.person.military_number,
+					"name": candidate.person.name,
+					"rank": candidate.person.rank,
+					"service_year": candidate.person.service_year,
+					"specialty": candidate.person.specialty,
+					"position": candidate.person.position,
+					"tier": candidate.tier,
+				}
+				for candidate in candidates
+			]
+			for personnel_category, candidates in personnel_groups.items()
+		}
+		for branch_name, personnel_groups in groups.items()
+	}
 
 @router.get("", response_model=list[PersonRead])
 @persons_router.get("", response_model=list[PersonRead])
@@ -91,5 +123,9 @@ def delete_reservist(military_number: str, db: Session = Depends(get_db)) -> Non
 	person = db.get(Person, military_number)
 	if person is None:
 		raise HTTPException(status_code=404, detail="Reservist not found")
+	for model in (AnnualStatus, Assignment, Education, Postponement):
+		db.query(model).filter(model.person_id == military_number).delete(
+			synchronize_session=False
+		)
 	db.delete(person)
 	db.commit()
