@@ -1,0 +1,104 @@
+from datetime import date
+
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+
+from user.app.models.assignment import Assignment
+from user.app.models.person import Person
+from user.app.models.squad import Squad
+from user.app.services.assignment import fill_squad_positions
+
+
+def make_session() -> Session:
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    from user.app import models  # noqa: F401
+
+    models.Person.metadata.create_all(engine)
+    return Session(engine)
+
+
+def add_person(
+    db: Session,
+    military_number: str,
+    position: str,
+    specialty: str | None,
+    service_year: int = 5,
+    squad_id: int | None = None,
+) -> Person:
+    person = Person(
+        military_number=military_number,
+        name=military_number,
+        branch="육군",
+        rank="하사",
+        specialty=specialty,
+        service_year=service_year,
+        position=position,
+        mobilization_status="해당없음",
+        status="active",
+        squad_id=squad_id,
+    )
+    db.add(person)
+    return person
+
+
+def test_fill_squad_positions_consumes_pool_and_reports_shortfall() -> None:
+    db = make_session()
+    db.add_all([
+        Squad(id=1, name="편성 대상", description="test"),
+        Squad(id=2, name="기존 분대", description="test"),
+    ])
+    add_person(db, "exact-admin", "행정병", "3111 101", service_year=5)
+    add_person(db, "fallback-admin", "행정병", "999 999", service_year=6)
+    add_person(db, "other-admin", "행정병", None, service_year=5)
+    add_person(db, "assigned-admin", "행정병", "3111 101", service_year=6, squad_id=2)
+    add_person(db, "signal", "통신병", "171 101", service_year=5)
+    db.commit()
+
+    result = fill_squad_positions(
+        db,
+        1,
+        {"행정병": 2, "통신병": 2},
+    )
+
+    assert result["positions"]["행정병"]["assigned"] == [
+        {"military_number": "exact-admin", "name": "exact-admin"},
+        {"military_number": "fallback-admin", "name": "fallback-admin"},
+    ]
+    assert result["positions"]["행정병"]["shortfall"] == 0
+    assert result["positions"]["통신병"]["shortfall"] == 1
+    assert result["total_assigned"] == 3
+    assert result["total_shortfall"] == 1
+
+    assigned = db.scalars(select(Assignment).order_by(Assignment.id)).all()
+    assert [item.person_id for item in assigned] == [
+        "exact-admin",
+        "fallback-admin",
+        "signal",
+    ]
+    assert len({item.person_id for item in assigned}) == len(assigned)
+    assert db.get(Person, "assigned-admin").squad_id == 2
+    assert db.get(Person, "exact-admin").squad_id == 1
+    assert all(item.assigned_date == date.today() for item in assigned)
+    db.close()
+
+
+def test_fill_squad_positions_uses_fixed_input_order() -> None:
+    db = make_session()
+    db.add(Squad(id=1, name="편성 대상", description="test"))
+    add_person(db, "admin", "행정병", "3111 101")
+    add_person(db, "signal", "통신병", "171 101")
+    db.commit()
+
+    result = fill_squad_positions(db, 1, {"통신병": 1, "행정병": 1})
+
+    assert list(result["positions"]) == ["통신병", "행정병"]
+    assert [item.person_id for item in db.scalars(select(Assignment).order_by(Assignment.id))] == [
+        "signal",
+        "admin",
+    ]
+    db.close()

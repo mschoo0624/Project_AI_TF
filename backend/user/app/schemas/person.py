@@ -8,6 +8,7 @@ class PersonBase(BaseModel):
 	rank: str | None = None
 	unit: str | None = None
 	specialty: str | None = None
+	origin_type: str | None = None
 	service_year: int = Field(ge=0, le=8)
 	position: str
 	mobilization_status: str = "해당없음"
@@ -39,6 +40,7 @@ class PersonUpdate(BaseModel):
 	rank: str | None = None
 	unit: str | None = None
 	specialty: str | None = None
+	origin_type: str | None = None
 	service_year: int | None = Field(default=None, ge=0, le=8)
 	position: str | None = None
 	mobilization_status: str | None = None

@@ -98,3 +98,12 @@ sqlite3 /tmp/project_ai_tf_test.db < sql/init_phase1.sql
 
 DB_PATH=/tmp/project_ai_tf_test.db \
 sqlite3 /tmp/project_ai_tf_test.db < sql/seed_phase1.sql
+
+
+심 파일은 다음과 같습니다.
+
+업무 로직: assignment.py
+API: squads.py
+DB 배정 모델: assignment.py
+테스트 데이터: randomize_assignment_test.sql
+자동 테스트: test_assignment.py

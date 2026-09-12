@@ -26,6 +26,8 @@ class Person(Base):
     rank: Mapped[str | None] = mapped_column(String(50), nullable=True)
     unit: Mapped[str | None] = mapped_column(String(100), nullable=True)
     specialty: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Populate from verified personnel records; this task does not infer origin.
+    origin_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     service_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     position: Mapped[str | None] = mapped_column(String(50), nullable=True)
     mobilization_status: Mapped[str | None] = mapped_column(String(20), nullable=True)

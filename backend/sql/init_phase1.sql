@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS person (
     rank VARCHAR(50),
     unit VARCHAR(100),
     specialty VARCHAR(100),
+    origin_type VARCHAR(50),
     service_year INT,
     position VARCHAR(50),
     mobilization_status VARCHAR(20),

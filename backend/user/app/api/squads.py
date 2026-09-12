@@ -12,8 +12,36 @@ from sqlalchemy.orm import Session, selectinload
 
 from user.app.database import get_db
 from user.app.models.squad import Squad
+from user.app.schemas.assignment import AssignmentPlan
+from user.app.services.assignment import available_assignment_candidates, fill_squad_positions
 
 router = APIRouter(prefix="/squads", tags=["squads"])
+
+
+@router.post("/{squad_id}/fill-positions")
+def fill_positions(
+	squad_id: int,
+	plan: AssignmentPlan,
+	db: Session = Depends(get_db),
+) -> dict[str, object]:
+	try:
+		return fill_squad_positions(
+			db,
+			squad_id,
+			plan.position_quotas,
+			tuple(plan.branch_order),
+			plan.allow_branch_merge,
+		)
+	except ValueError as error:
+		raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.get("/assignment-candidates")
+def assignment_candidates(
+	position: str | None = None,
+	db: Session = Depends(get_db),
+) -> dict[str, dict[str, list[dict[str, object]]]]:
+	return available_assignment_candidates(db, position)
 
 @router.get("")
 def list_squads(db: Session = Depends(get_db)) -> list[dict[str, object]]:

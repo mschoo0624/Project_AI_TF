@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import re
-from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import date
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from user.app.models.assignment import Assignment
 from user.app.models.person import Person
+from user.app.models.squad import Squad
 
 POSITION_SPECIALTIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 	"행정병": (("3111101",), ("311102",)),
@@ -19,7 +24,10 @@ POSITION_SPECIALTIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 }
 
 SOLDIER_RANKS = {"이병", "일병", "상병", "병장"}
+NCO_RANKS = {"하사", "중사", "상사", "원사"}
+OFFICER_RANKS = {"소위", "중위", "대위", "소령", "중령", "대령"}
 BRANCHES = ("육군", "해군", "공군", "해병대")
+PERSONNEL_CATEGORIES = ("병사", "부사관", "장교")
 
 
 @dataclass(frozen=True)
@@ -47,8 +55,14 @@ def classify_specialty(position: str, specialty: str | None) -> str:
 
 
 def personnel_category(rank: str | None) -> str:
-	"""Group personnel so soldier and officer lists can be shown separately."""
-	return "병사" if rank in SOLDIER_RANKS else "간부"
+	"""Group personnel into the three formation categories."""
+	if rank in SOLDIER_RANKS:
+		return "병사"
+	if rank in NCO_RANKS:
+		return "부사관"
+	if rank in OFFICER_RANKS:
+		return "장교"
+	return "기타"
 
 
 def specialty_priority(tier: str) -> int:
@@ -78,6 +92,146 @@ def rank_candidates(
 	return sorted(candidates, key=sort_key)
 
 
+def is_priority_medic_origin(person: Person) -> bool:
+	"""Return whether verified data marks a person as a priority medic origin."""
+	return person.origin_type in {"공중보건의", "공중보건의출신", "public_health_doctor"}
+
+
+def rank_candidates_for_position(
+	people: Iterable[Person], position: str
+) -> list[AssignmentCandidate]:
+	"""Rank candidates for one position using the existing specialty rules."""
+	ranked = rank_candidates(people, position)
+	if position != "의무병":
+		return ranked
+	return sorted(ranked, key=lambda candidate: (
+		0 if candidate.person.service_year in (5, 6) else 1,
+		0 if candidate.person.service_year in (5, 6) and is_priority_medic_origin(candidate.person) else 1,
+		specialty_priority(candidate.tier),
+		candidate.person.military_number,
+	))
+
+
+def fill_squad_positions(
+	db: Session,
+	squad_id: int,
+	position_quotas: dict[str, int] | dict[str, dict[str, int]],
+	branch_order: tuple[str, ...] = BRANCHES,
+	allow_branch_merge: bool = True,
+) -> dict[str, object]:
+	"""Fill one squad from the shared, unassigned 5-6 year candidate pool."""
+	for quota in position_quotas.values():
+		values = (quota,) if isinstance(quota, int) else quota.values()
+		if any(value < 0 for value in values):
+			raise ValueError("Position quotas must be non-negative")
+	if db.get(Squad, squad_id) is None:
+		raise ValueError(f"Squad {squad_id} not found")
+
+	try:
+		remaining = list(
+			db.scalars(
+				select(Person).where(
+					Person.service_year.in_((5, 6)),
+					Person.status == "active",
+					Person.squad_id.is_(None),
+				)
+			).all()
+		)
+		positions: dict[str, object] = {}
+		assigned_total = 0
+		for position, quota_spec in position_quotas.items():
+			quotas_by_category = {"전체": quota_spec} if isinstance(quota_spec, int) else quota_spec
+			selected: list[AssignmentCandidate] = []
+			for category, quota in quotas_by_category.items():
+				candidates = [
+					person for person in remaining
+					if person.position == position
+					and (category == "전체" or personnel_category(person.rank) == category)
+				]
+				ranked = rank_candidates_for_position(candidates, position)
+				if branch_order:
+					ranked = sorted(
+						ranked,
+						key=lambda candidate: (
+							branch_order.index(candidate.person.branch)
+							if candidate.person.branch in branch_order else len(branch_order),
+							specialty_priority(candidate.tier),
+							candidate.person.military_number,
+						),
+					)
+				selected.extend(ranked[:quota])
+			if not allow_branch_merge:
+				selected = [candidate for candidate in selected if candidate.person.branch == branch_order[0]]
+			assigned = []
+			for candidate in selected:
+				person = candidate.person
+				person.squad_id = squad_id
+				db.add(
+					Assignment(
+						person_id=person.military_number,
+						squad_id=squad_id,
+						assigned_date=date.today(),
+						status="assigned",
+					)
+				)
+				remaining.remove(person)
+				assigned.append({"military_number": person.military_number, "name": person.name})
+			assigned_total += len(assigned)
+			requested = sum(quotas_by_category.values())
+			positions[position] = {
+				"requested": requested,
+				"assigned": assigned,
+				"shortfall": requested - len(assigned),
+			}
+		db.commit()
+		return {
+			"squad_id": squad_id,
+			"positions": positions,
+			"total_requested": sum(
+				quota if isinstance(quota, int) else sum(quota.values())
+				for quota in position_quotas.values()
+			),
+			"total_assigned": assigned_total,
+			"total_shortfall": sum(item["shortfall"] for item in positions.values()),
+		}
+	except Exception:
+		db.rollback()
+		raise
+
+
+def available_assignment_candidates(
+	db: Session,
+	position: str | None = None,
+) -> dict[str, dict[str, list[dict[str, object]]]]:
+	"""Return currently eligible, unassigned candidates grouped for the UI."""
+	people = list(
+		db.scalars(
+			select(Person).where(
+				Person.service_year.in_((5, 6)),
+				Person.status == "active",
+				Person.squad_id.is_(None),
+			)
+		).all()
+	)
+	result = {branch: {category: [] for category in PERSONNEL_CATEGORIES} for branch in BRANCHES}
+	positions = {position} if position else {person.position for person in people if person.position}
+	for current_position in positions:
+		for candidate in rank_candidates_for_position(
+			[person for person in people if person.position == current_position],
+			current_position,
+		):
+			if candidate.person.branch in result and candidate.personnel_category in result[candidate.person.branch]:
+				result[candidate.person.branch][candidate.personnel_category].append({
+					"military_number": candidate.person.military_number,
+					"name": candidate.person.name,
+					"position": current_position,
+					"specialty": candidate.person.specialty,
+					"service_year": candidate.person.service_year,
+					"tier": candidate.tier,
+				})
+	return result
+
+
 def grouped_candidates(
 	people: Iterable[Person],
 	position: str,
@@ -85,7 +239,8 @@ def grouped_candidates(
 ) -> dict[str, dict[str, list[AssignmentCandidate]]]:
 	"""Return candidates grouped by branch and soldier/officer category."""
 	groups: dict[str, dict[str, list[AssignmentCandidate]]] = {
-		branch_name: {"병사": [], "간부": []} for branch_name in BRANCHES
+		branch_name: {category: [] for category in PERSONNEL_CATEGORIES}
+		for branch_name in BRANCHES
 	}
 	for candidate in rank_candidates(people, position, branch):
 		if candidate.person.branch in groups:

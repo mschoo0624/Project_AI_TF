@@ -1,12 +1,10 @@
 """Assignment database model for the SQLite testing phase."""
 
 from __future__ import annotations
-
 from sqlalchemy import Date, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from user.app.database import Base
-
 
 class Assignment(Base):
     __tablename__ = "assignment"

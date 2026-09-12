@@ -58,6 +58,10 @@ def init_db() -> None:
             connection.execute(
                 text("ALTER TABLE person ADD COLUMN position VARCHAR(50)")
             )
+        if "origin_type" not in person_columns:
+            connection.execute(
+                text("ALTER TABLE person ADD COLUMN origin_type VARCHAR(50)")
+            )
         if "mobilization_status" not in person_columns:
             connection.execute(
                 text("ALTER TABLE person ADD COLUMN mobilization_status VARCHAR(20)")
