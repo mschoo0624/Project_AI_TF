@@ -33,6 +33,19 @@ def init_db() -> None:
     }
     education_columns = {column["name"] for column in inspect(engine).get_columns("education")}
     with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS annual_status (
+                    person_id VARCHAR(50) NOT NULL,
+                    service_year INTEGER NOT NULL,
+                    mobilization_status VARCHAR(20) NOT NULL,
+                    PRIMARY KEY (person_id, service_year),
+                    FOREIGN KEY (person_id) REFERENCES person(military_number)
+                )
+                """
+            )
+        )
         if "branch" not in person_columns:
             connection.execute(
                 text("ALTER TABLE person ADD COLUMN branch VARCHAR(50) NOT NULL DEFAULT '육군'")
@@ -55,6 +68,13 @@ def init_db() -> None:
             )
         if "training_year" not in education_columns:
             connection.execute(text("ALTER TABLE education ADD COLUMN training_year INTEGER"))
+        if "training_type" not in education_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE education ADD COLUMN training_type VARCHAR(50) "
+                    "NOT NULL DEFAULT '기본훈련'"
+                )
+            )
         if "training_round" not in education_columns:
             connection.execute(
                 text("ALTER TABLE education ADD COLUMN training_round INTEGER NOT NULL DEFAULT 1")
@@ -83,6 +103,18 @@ def init_db() -> None:
             text(
                 "UPDATE person SET mobilization_status = '해당없음' "
                 "WHERE mobilization_status IS NULL AND service_year > 4"
+            )
+        )
+        connection.execute(
+            text(
+                """
+                INSERT OR IGNORE INTO annual_status (
+                    person_id, service_year, mobilization_status
+                )
+                SELECT military_number, service_year, mobilization_status
+                FROM person
+                WHERE service_year IS NOT NULL AND mobilization_status IS NOT NULL
+                """
             )
         )
 

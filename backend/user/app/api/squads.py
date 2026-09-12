@@ -1,5 +1,11 @@
 """Squad API routes."""
+"""
+기능 설명:
 
+전체 분대 목록 조회
+분대별 인원 수 표시
+특정 분대의 소속 인원 조회
+"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload

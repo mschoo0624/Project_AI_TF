@@ -1,5 +1,14 @@
 """Dashboard API routes."""
+"""
+반환하는 통계:
 
+전체 인원 수
+현재 활성 인원 수
+대기 중인 연기 신청 수
+군종별 인원 수
+계급별 인원 수
+분대별 인원 수
+"""
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session

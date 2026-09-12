@@ -1,5 +1,15 @@
 """Postponement API routes."""
+"""
+훈련 연기 또는 보류 신청을 관리합니다.
+기능 설명:
 
+전체 연기 신청 조회
+상태별 조회
+연기 신청 등록
+연기 신청 승인
+연기 신청 거절
+승인 시 approved_at 기록
+"""
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

@@ -1,5 +1,31 @@
 """Reserve-training hour APIs."""
+"""
+훈련시간과 연간 훈련 진행률을 관리합니다.
 
+라우터 기본 경로는 /reservists이지만 실제 기능은 훈련시간 주소에 붙습니다.
+
+GET 기능
+다음 정보를 반환합니다.
+
+현재 복무연도
+연도별 훈련 진행률
+연도별 동원 상태
+목표 훈련시간
+이월시간
+남은 시간
+고발 위험
+실제 교육 기록
+POST 기능
+훈련 기록을 등록합니다.
+
+검증하는 항목:
+
+미래 복무연도인지 여부
+훈련시간이 양수인지 여부
+불참 기록인데 시간이 입력됐는지 여부
+목표시간보다 많은 시간이 등록됐는지 여부
+출석 상태가 유효한지 여부
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -14,6 +40,23 @@ from user.app.services.training import (
 )
 
 router = APIRouter(prefix="/reservists", tags=["training"])
+persons_training_router = APIRouter(prefix="/persons", tags=["training"])
+
+
+def _get_person_or_404(military_number: str, db: Session) -> Person:
+	person = db.get(Person, military_number)
+	if person is None:
+		raise HTTPException(status_code=404, detail="Reservist not found")
+	return person
+
+
+@persons_training_router.get("/{military_number}/training-progress")
+def get_training_progress(
+	military_number: str,
+	db: Session = Depends(get_db),
+) -> list[dict[str, object]]:
+	person = _get_person_or_404(military_number, db)
+	return all_training_progress(db, person)
 
 
 @router.get("/{military_number}/training-hours")
@@ -21,9 +64,7 @@ def get_training_hours(
 	military_number: str,
 	db: Session = Depends(get_db),
 ) -> dict[str, object]:
-	person = db.get(Person, military_number)
-	if person is None:
-		raise HTTPException(status_code=404, detail="Reservist not found")
+	person = _get_person_or_404(military_number, db)
 
 	return {
 		"military_number": military_number,
@@ -34,7 +75,16 @@ def get_training_hours(
 				"id": record.id,
 				"education_year": record.education_year,
 				"training_year": record.training_year,
+				"training_type": record.training_type,
 				"training_round": record.training_round,
+				"mobilization_status": next(
+					(
+						status.mobilization_status
+						for status in person.annual_statuses
+						if status.service_year == record.education_year
+					),
+					person.mobilization_status,
+				),
 				"attendance_status": record.attendance_status,
 				"training_hours": record.training_hours,
 				"notes": record.notes,
@@ -99,6 +149,7 @@ def add_training_record(
 		person_id=military_number,
 		education_year=payload.service_year,
 		training_year=person.service_year or payload.service_year,
+		training_type=payload.training_type,
 		training_round=payload.training_round,
 		attendance_status=payload.attendance_status,
 		training_hours=payload.training_hours,

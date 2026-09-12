@@ -4,6 +4,7 @@ PRAGMA foreign_keys = ON;
 DELETE FROM audit_log;
 DELETE FROM postponement;
 DELETE FROM education;
+DELETE FROM annual_status;
 DELETE FROM assignment;
 DELETE FROM person;
 DELETE FROM app_user;
@@ -76,7 +77,7 @@ SELECT
         WHEN 4 THEN '241102'
         ELSE '231101'
     END,
-    (number - 1) % 9,
+    ((number - 1) % 6) + 1,
     CASE (number - 1) % 6
         WHEN 0 THEN '행정병'
         WHEN 1 THEN '통신병'
@@ -86,14 +87,36 @@ SELECT
         ELSE '보급병'
     END,
     CASE
-        WHEN (number - 1) % 9 BETWEEN 1 AND 4 AND number % 10 = 0 THEN '학생예비군'
-        WHEN (number - 1) % 9 BETWEEN 1 AND 4 AND number % 2 = 0 THEN '동원지정'
-        WHEN (number - 1) % 9 BETWEEN 1 AND 4 THEN '동원미지정'
+        WHEN ((number - 1) % 6) + 1 BETWEEN 1 AND 4 AND number % 10 = 0 THEN '학생예비군'
+        WHEN ((number - 1) % 6) + 1 BETWEEN 1 AND 4 AND number % 2 = 0 THEN '동원지정'
+        WHEN ((number - 1) % 6) + 1 BETWEEN 1 AND 4 THEN '동원미지정'
         ELSE '해당없음'
     END,
     CASE WHEN number % 10 = 0 THEN 'on_leave' ELSE 'active' END,
     CASE WHEN number % 10 = 0 THEN NULL ELSE ((number - 1) % 9) + 1 END
 FROM numbers;
+
+/* Mobilization status is assigned independently for each service year. */
+WITH RECURSIVE people(number) AS (
+    SELECT 1
+    UNION ALL
+    SELECT number + 1 FROM people WHERE number < 500
+), years(service_year) AS (
+    SELECT 0
+    UNION ALL
+    SELECT service_year + 1 FROM years WHERE service_year < 8
+)
+INSERT INTO annual_status (person_id, service_year, mobilization_status)
+SELECT
+    printf('26-%08d', 72000000 + people.number),
+    years.service_year,
+    CASE
+        WHEN years.service_year BETWEEN 1 AND 4 AND people.number % 10 = 0 THEN '학생예비군'
+        WHEN years.service_year BETWEEN 1 AND 4 AND people.number % 2 = 0 THEN '동원지정'
+        WHEN years.service_year BETWEEN 1 AND 4 THEN '동원미지정'
+        ELSE '해당없음'
+    END
+FROM people CROSS JOIN years;
 
 /* Add assignments for every person assigned to a squad. */
 WITH RECURSIVE numbers(number) AS (

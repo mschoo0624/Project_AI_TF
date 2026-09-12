@@ -1,19 +1,32 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 # Importing the files from the other folders. 
 from user.app.database import engine, init_db
 from user.app.api.dashboard import router as dashboard_router
 from user.app.api.postponements import router as postponements_router
-from user.app.api.reservists import router as reservists_router
+from user.app.api.reservists import persons_router, router as reservists_router
 from user.app.api.squads import router as squads_router
-from user.app.api.training import router as training_router
+from user.app.api.training import (
+    persons_training_router,
+    router as training_router,
+)
 
 app = FastAPI(title="Project AI TF API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(reservists_router)
+app.include_router(persons_router)
 app.include_router(squads_router)
 app.include_router(postponements_router)
 app.include_router(dashboard_router)
 app.include_router(training_router)
+app.include_router(persons_training_router)
 
 @app.on_event("startup")
 def startup() -> None:

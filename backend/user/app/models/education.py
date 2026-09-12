@@ -15,6 +15,7 @@ class Education(Base):
     person_id: Mapped[str] = mapped_column(ForeignKey("person.military_number"), nullable=False)
     education_year: Mapped[int] = mapped_column(Integer, nullable=False)
     training_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    training_type: Mapped[str] = mapped_column(String(50), default="기본훈련", nullable=False)
     training_round: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     attendance_status: Mapped[str] = mapped_column(String(20), default="completed", nullable=False)
     training_hours: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -23,6 +23,14 @@ CREATE TABLE IF NOT EXISTS person (
     FOREIGN KEY (squad_id) REFERENCES squad(id)
 );
 
+CREATE TABLE IF NOT EXISTS annual_status (
+    person_id VARCHAR(50) NOT NULL,
+    service_year INT NOT NULL,
+    mobilization_status VARCHAR(20) NOT NULL,
+    PRIMARY KEY (person_id, service_year),
+    FOREIGN KEY (person_id) REFERENCES person(military_number)
+);
+
 CREATE TABLE IF NOT EXISTS assignment (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     person_id VARCHAR(50) NOT NULL,
@@ -39,6 +47,7 @@ CREATE TABLE IF NOT EXISTS education (
     person_id VARCHAR(50) NOT NULL,
     education_year INT NOT NULL,
     training_year INT,
+    training_type VARCHAR(50) NOT NULL DEFAULT '기본훈련',
     training_round INT NOT NULL DEFAULT 1,
     attendance_status VARCHAR(20) NOT NULL DEFAULT 'completed',
     training_hours INT NOT NULL DEFAULT 0,

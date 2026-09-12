@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from user.app.models.annual_status import AnnualStatus
 from user.app.models.education import Education
 from user.app.models.person import Person
 
@@ -72,13 +73,27 @@ def completed_training_hours(db: Session, person_id: str, service_year: int) -> 
     )
 
 
+def mobilization_status_for_year(
+    db: Session, person: Person, service_year: int
+) -> str | None:
+    """Return the annual status, with a legacy-person fallback."""
+    annual_status = db.scalar(
+        select(AnnualStatus.mobilization_status).where(
+            AnnualStatus.person_id == person.military_number,
+            AnnualStatus.service_year == service_year,
+        )
+    )
+    return annual_status if annual_status is not None else person.mobilization_status
+
+
 def training_progress(
     db: Session,
     person: Person,
     service_year: int,
     carryover_hours: int = 0,
 ) -> dict[str, object]:
-    target = target_training_hours(service_year, person.mobilization_status, person.branch)
+    mobilization_status = mobilization_status_for_year(db, person, service_year)
+    target = target_training_hours(service_year, mobilization_status, person.branch)
     completed = completed_training_hours(db, person.military_number, service_year)
     required = target + carryover_hours
     remaining = max(required - completed, 0)
@@ -96,23 +111,24 @@ def training_progress(
             Education.attendance_status.in_(UNEXCUSED_ABSENCE),
         )
     ) or 0
-    designated_immediate_risk = (
-        1 <= service_year <= 4
-        and person.mobilization_status in DESIGNATED
-        and db.scalar(
-            select(func.count()).where(
-                Education.person_id == person.military_number,
-                Education.education_year <= service_year,
-                Education.attendance_status.in_(UNEXCUSED_ABSENCE),
-            )
+    absence_records = db.scalars(
+        select(Education).where(
+            Education.person_id == person.military_number,
+            Education.education_year <= service_year,
+            Education.attendance_status.in_(UNEXCUSED_ABSENCE),
         )
+    ).all()
+    designated_immediate_risk = any(
+        1 <= record.education_year <= 4
+        and mobilization_status_for_year(db, person, record.education_year) in DESIGNATED
+        for record in absence_records
     )
     prosecution_risk = bool(designated_immediate_risk or final_round_absence > 0)
     return {
         "service_year": service_year,
         "branch": person.branch,
-        "mobilization_status": person.mobilization_status,
-        "training_plan": training_plan(service_year, person.mobilization_status, person.branch),
+        "mobilization_status": mobilization_status,
+        "training_plan": training_plan(service_year, mobilization_status, person.branch),
         "target_hours": target,
         "carryover_hours": carryover_hours,
         "required_hours": required,
@@ -125,11 +141,12 @@ def training_progress(
 
 
 def all_training_progress(db: Session, person: Person) -> list[dict[str, object]]:
-    """Return every annual record and roll incomplete hours into the next year."""
+    """Return annual progress and roll incomplete hours through year six only."""
     progress: list[dict[str, object]] = []
     carryover = 0
     for service_year in range(0, 9):
-        current = training_progress(db, person, service_year, carryover)
+        current_carryover = carryover if 1 <= service_year <= 6 else 0
+        current = training_progress(db, person, service_year, current_carryover)
         progress.append(current)
-        carryover = int(current["remaining_hours"])
+        carryover = int(current["remaining_hours"]) if service_year < 6 else 0
     return progress

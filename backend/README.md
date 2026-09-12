@@ -87,3 +87,14 @@ The application creates missing tables automatically on startup.
  Linux server
  Logging
  Deployment
+
+
+ Updating to the new SQL database file.
+
+ rm -f /tmp/project_ai_tf_test.db
+
+DB_PATH=/tmp/project_ai_tf_test.db \
+sqlite3 /tmp/project_ai_tf_test.db < sql/init_phase1.sql
+
+DB_PATH=/tmp/project_ai_tf_test.db \
+sqlite3 /tmp/project_ai_tf_test.db < sql/seed_phase1.sql
