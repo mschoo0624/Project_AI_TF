@@ -106,3 +106,35 @@ def test_add_transferred_person_multi_year_allocation() -> None:
     assert completed_training_hours(db, "24-70000004", 2) == 22
     assert completed_training_hours(db, "24-70000004", 3) == 0
     db.close()
+
+
+def test_previous_training_hours_does_not_exceed_per_year_cap() -> None:
+    db = make_session()
+    # 2년차 동원지정 (1년차 목표 28시간, 2년차 목표 28시간) -> 초과값 100시간 입력시 1년차 28시간, 2년차 28시간으로 각각 캡
+    payload = PersonCreate(
+        military_number="24-70000005",
+        name="최초과",
+        branch="육군",
+        rank="상병",
+        unit="600연대",
+        position="소총수",
+        service_year=2,
+        mobilization_status="동원지정",
+        previous_training_hours=100,
+    )
+
+    person = create_person(db, payload)
+
+    assert person.registration_type == "예비군 전입"
+    records = db.scalars(
+        select(Education)
+        .where(Education.person_id == "24-70000005")
+        .order_by(Education.education_year)
+    ).all()
+
+    assert len(records) == 2
+    assert records[0].education_year == 1
+    assert records[0].training_hours == 28
+    assert records[1].education_year == 2
+    assert records[1].training_hours == 28
+    db.close()

@@ -41,17 +41,17 @@ def create_person(db: Session, payload: PersonCreate) -> Person:
         target_year = person.service_year if person.service_year is not None and person.service_year >= 1 else 1
         remaining_hours = previous_hours
 
-        # Sequentially allocate previous training hours from year 1 up to target_year
+        # Sequentially allocate previous training hours from year 1 up to target_year,
+        # capping each year at its target required hours so no year exceeds its training hours requirement.
         for y in range(1, target_year + 1):
             if remaining_hours <= 0:
                 break
 
             target = target_training_hours(y, person.mobilization_status, person.branch)
+            if target <= 0:
+                continue
 
-            if y == target_year or target <= 0:
-                allocated = remaining_hours
-            else:
-                allocated = min(remaining_hours, target)
+            allocated = min(remaining_hours, target)
 
             if allocated > 0:
                 education = Education(
@@ -66,10 +66,6 @@ def create_person(db: Session, payload: PersonCreate) -> Person:
                 )
                 db.add(education)
                 remaining_hours -= allocated
-
-    db.commit()
-    db.refresh(person)
-    return person
 
     db.commit()
     db.refresh(person)

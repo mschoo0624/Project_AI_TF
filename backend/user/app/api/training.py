@@ -27,7 +27,7 @@ POST 기능
 출석 상태가 유효한지 여부
 """
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from user.app.database import get_db
@@ -123,7 +123,7 @@ def add_training_record(
 	progress = all_training_progress(db, person)
 	# Progress includes year 0, so the service year is its list index.
 	year_progress = progress[payload.service_year]
-	target = int(year_progress["required_hours"])
+	target = int(year_progress["target_hours"])
 	if target == 0:
 		raise HTTPException(
 		status_code=400,
@@ -174,10 +174,61 @@ def update_training_record(
 	payload: TrainingRecordUpdate,
 	db: Session = Depends(get_db),
 ) -> Education:
-	_get_person_or_404(military_number, db)
+	person = _get_person_or_404(military_number, db)
 	record = db.get(Education, record_id)
 	if record is None or record.person_id != military_number:
 		raise HTTPException(status_code=404, detail="Training record not found")
+
+	new_service_year = payload.service_year if payload.service_year is not None else record.education_year
+	new_attendance_status = payload.attendance_status if payload.attendance_status is not None else record.attendance_status
+	new_training_hours = payload.training_hours if payload.training_hours is not None else record.training_hours
+
+	if person.service_year is not None and new_service_year > person.service_year:
+		raise HTTPException(
+			status_code=400,
+			detail="Cannot record training for a future service year",
+		)
+
+	if new_attendance_status not in COMPLETED and new_attendance_status not in {
+		"연기",
+		"postponed",
+		"무단불참",
+		"무단_불참",
+		"unexcused_absence",
+	}:
+		raise HTTPException(status_code=422, detail="Invalid attendance status")
+	if new_attendance_status in COMPLETED and new_training_hours == 0:
+		raise HTTPException(status_code=422, detail="Completed training must include positive hours")
+	if new_attendance_status not in COMPLETED and new_training_hours != 0:
+		raise HTTPException(status_code=422, detail="Non-completed training must have zero hours")
+
+	other_completed = int(
+		db.scalar(
+			select(func.coalesce(func.sum(Education.training_hours), 0)).where(
+				Education.person_id == military_number,
+				Education.education_year == new_service_year,
+				Education.id != record_id,
+				Education.attendance_status.in_(COMPLETED),
+			)
+		)
+		or 0
+	)
+
+	progress = all_training_progress(db, person)
+	year_progress = progress[new_service_year]
+	target = int(year_progress["target_hours"])
+	if target == 0:
+		raise HTTPException(
+			status_code=400,
+			detail="This service year has no configured training requirement",
+		)
+
+	if new_attendance_status in COMPLETED and new_training_hours > target - other_completed:
+		raise HTTPException(
+			status_code=400,
+			detail=f"Training hours exceed the remaining allowance ({max(target - other_completed, 0)} hours)",
+		)
+
 	for field, value in payload.model_dump(exclude_unset=True).items():
 		setattr(record, "education_year" if field == "service_year" else field, value)
 	db.commit()
