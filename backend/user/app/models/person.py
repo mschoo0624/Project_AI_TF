@@ -33,6 +33,7 @@ class Person(Base):
     mobilization_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="active")
     squad_id: Mapped[int | None] = mapped_column(ForeignKey("squad.id"), nullable=True)
+    registration_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     squad: Mapped["Squad | None"] = relationship(back_populates="persons")
     assignments: Mapped[list["Assignment"]] = relationship(back_populates="person")

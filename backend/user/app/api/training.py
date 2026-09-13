@@ -101,7 +101,6 @@ def get_training_hours(
 		],
 	}
 
-
 @router.post(
 	"/{military_number}/training-hours",
 	response_model=TrainingRecordRead,

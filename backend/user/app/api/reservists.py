@@ -24,6 +24,7 @@ from user.app.models.person import Person
 from user.app.models.postponement import Postponement
 from user.app.schemas.person import PersonCreate, PersonRead, PersonUpdate
 from user.app.services.assignment import grouped_candidates
+from user.app.services.person import create_person
 
 router = APIRouter(prefix="/reservists", tags=["reservists"])
 persons_router = APIRouter(prefix="/persons", tags=["persons"])
@@ -34,6 +35,7 @@ def list_assignment_candidates(
 	branch: str | None = Query(default=None),
 	db: Session = Depends(get_db),
 ) -> dict[str, dict[str, list[dict[str, object]]]]:
+	
 	people = db.scalars(select(Person).order_by(Person.military_number)).all()
 	groups = grouped_candidates(people, position, branch)
 	return {
@@ -90,15 +92,11 @@ def get_reservist(military_number: str, db: Session = Depends(get_db)) -> Person
 @router.post("", response_model=PersonRead, status_code=status.HTTP_201_CREATED)
 @persons_router.post("", response_model=PersonRead, status_code=status.HTTP_201_CREATED)
 def create_reservist(payload: PersonCreate, db: Session = Depends(get_db)) -> Person:
-	person = Person(**payload.model_dump())
-	db.add(person)
 	try:
-		db.commit()
+		return create_person(db, payload)
 	except IntegrityError as error:
 		db.rollback()
 		raise HTTPException(status_code=409, detail="Military number already exists") from error
-	db.refresh(person)
-	return person
 
 @router.patch("/{military_number}", response_model=PersonRead)
 @persons_router.patch("/{military_number}", response_model=PersonRead)

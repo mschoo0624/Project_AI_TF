@@ -9,6 +9,7 @@ class PersonBase(BaseModel):
 	unit: str | None = None
 	specialty: str | None = None
 	origin_type: str | None = None
+	registration_type: str | None = None
 	service_year: int = Field(ge=0, le=8)
 	position: str
 	mobilization_status: str = "해당없음"
@@ -33,6 +34,10 @@ class PersonBase(BaseModel):
 
 class PersonCreate(PersonBase):
 	military_number: str
+	previous_training_hours: int | None = Field(
+		default=None,
+		description="이전 부대 이수 훈련 시간 (null이면 신규, > 0 이면 예비군 전입)",
+	)
 
 class PersonUpdate(BaseModel):
 	name: str | None = None
