@@ -28,9 +28,6 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
 
     person_columns = {column["name"] for column in inspect(engine).get_columns("person")}
-    postponement_columns = {
-        column["name"] for column in inspect(engine).get_columns("postponement")
-    }
     education_columns = {column["name"] for column in inspect(engine).get_columns("education")}
     with engine.begin() as connection:
         connection.execute(
@@ -69,10 +66,6 @@ def init_db() -> None:
         if "mobilization_status" not in person_columns:
             connection.execute(
                 text("ALTER TABLE person ADD COLUMN mobilization_status VARCHAR(20)")
-            )
-        if "approved_at" not in postponement_columns:
-            connection.execute(
-                text("ALTER TABLE postponement ADD COLUMN approved_at DATETIME")
             )
         if "training_year" not in education_columns:
             connection.execute(text("ALTER TABLE education ADD COLUMN training_year INTEGER"))

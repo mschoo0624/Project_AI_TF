@@ -74,10 +74,8 @@ class AssignmentCandidate:
 	tier: str
 	personnel_category: str
 
-
 def normalize_specialty(specialty: str | None) -> str:
 	return re.sub(r"\D", "", specialty or "")
-
 
 def suggest_position_for_specialty(specialty: str | None) -> str | None:
 	if specialty is None:

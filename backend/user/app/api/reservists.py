@@ -21,7 +21,6 @@ from user.app.models.annual_status import AnnualStatus
 from user.app.models.assignment import Assignment
 from user.app.models.education import Education
 from user.app.models.person import Person
-from user.app.models.postponement import Postponement
 from user.app.schemas.person import PersonCreate, PersonRead, PersonUpdate
 from user.app.services.assignment import grouped_candidates
 from user.app.services.person import create_person
@@ -121,7 +120,7 @@ def delete_reservist(military_number: str, db: Session = Depends(get_db)) -> Non
 	person = db.get(Person, military_number)
 	if person is None:
 		raise HTTPException(status_code=404, detail="Reservist not found")
-	for model in (AnnualStatus, Assignment, Education, Postponement):
+	for model in (AnnualStatus, Assignment, Education):
 		db.query(model).filter(model.person_id == military_number).delete(
 			synchronize_session=False
 		)

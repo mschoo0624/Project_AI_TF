@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from user.app.models.assignment import Assignment
     from user.app.models.annual_status import AnnualStatus
     from user.app.models.education import Education
-    from user.app.models.postponement import Postponement
     from user.app.models.squad import Squad
 
 
@@ -41,5 +40,4 @@ class Person(Base):
         back_populates="person", cascade="all, delete-orphan"
     )
     education_records: Mapped[list["Education"]] = relationship(back_populates="person")
-    postponements: Mapped[list["Postponement"]] = relationship(back_populates="person")
 

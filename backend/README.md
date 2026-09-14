@@ -129,5 +129,6 @@ quota가 음수이거나 비정상적인 값인 경우
 1. 📊 메인 대시보드 (Dashboard) 탭 구현 (추천 1순위)
 백엔드에 구현되어 있는 GET /dashboard API를 프론트엔드와 연동합니다.
 대시보드 화면에 전체 인원, 가용 인원, 연기/보류 인원 요약 카운터 및 고발 위험 예비군 알림 카드를 구성합니다.
+- in the dashboard, I want to show the graph, data results, resluts and current situations, as a 자원 현항, 훈련 관리등등. 
 2. 📝 보류 및 연기 (Postponements) 신청/결재 관리 UI
 백엔드 /postponements API와 연동하여 예비군의 연기/보류 신청 등록 및 담당자 승인/반려(Workflow) 화면을 구현합니다.
