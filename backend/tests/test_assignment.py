@@ -7,7 +7,7 @@ from sqlalchemy.pool import StaticPool
 from user.app.models.assignment import Assignment
 from user.app.models.person import Person
 from user.app.models.squad import Squad
-from user.app.services.assignment import fill_squad_positions
+from user.app.services.assignment import fill_squad_positions, suggest_position_for_specialty
 
 
 def make_session() -> Session:
@@ -102,3 +102,11 @@ def test_fill_squad_positions_uses_fixed_input_order() -> None:
         "admin",
     ]
     db.close()
+
+
+def test_suggest_position_for_specialty_accepts_readable_name_and_code() -> None:
+    assert suggest_position_for_specialty("통신") == "통신병"
+    assert suggest_position_for_specialty("의무") == "의무병"
+    assert suggest_position_for_specialty("3111 101") == "행정병"
+    assert suggest_position_for_specialty("171101") == "통신병"
+    assert suggest_position_for_specialty("기타") is None

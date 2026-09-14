@@ -77,6 +77,59 @@ const initialCreatePersonForm: CreatePersonForm = {
   previous_training_hours: '',
 }
 
+function suggestPositionForSpecialty(specialty: string): string | null {
+  const normalized = specialty.trim()
+  if (!normalized) return null
+
+  const compact = normalized.replace(/\s+/g, '').toLowerCase()
+  const code = normalized.replace(/\D/g, '')
+  const candidates = [normalized, compact, code, normalized.toLowerCase(), compact.toLowerCase()]
+
+  const mapping: Record<string, string> = {
+    행정: '행정병',
+    행정병: '행정병',
+    '3111101': '행정병',
+    '311102': '행정병',
+    병기: '병기취급병',
+    병기취급: '병기취급병',
+    병기취급병: '병기취급병',
+    '222101': '병기취급병',
+    '222102': '병기취급병',
+    통신: '통신병',
+    통신병: '통신병',
+    '171101': '통신병',
+    '171102': '통신병',
+    '171104': '통신병',
+    '171106': '통신병',
+    의무: '의무병',
+    의무병: '의무병',
+    '411101': '의무병',
+    '411102': '의무병',
+    '411103': '의무병',
+    '411104': '의무병',
+    '411105': '의무병',
+    '411106': '의무병',
+    운전: '운전병',
+    운전병: '운전병',
+    '241102': '운전병',
+    '241103': '운전병',
+    '241104': '운전병',
+    '231101': '운전병',
+    보급: '보급병',
+    보급병: '보급병',
+    '231103': '보급병',
+    '231104': '보급병',
+    '231105': '보급병',
+  }
+
+  for (const candidate of candidates) {
+    if (mapping[candidate]) return mapping[candidate]
+    if (mapping[candidate.toLowerCase()]) return mapping[candidate.toLowerCase()]
+  }
+
+  return null
+}
+
 type Tab = 'profile' | 'progress' | 'records'
 type Squad = { id: number; name: string; description: string | null; person_count: number }
 type AssignmentResult = {
@@ -96,6 +149,12 @@ const trainingTypes = ['기본훈련', '동원훈련', '동미참훈련', '동�
 const assignmentPositions = ['행정병', '통신병', '의무병', '운전병', '보급병']
 const personnelCategories = ['병사', '부사관', '장교']
 const assignmentBranches = ['육군', '해군', '해병대', '공군']
+const rankCategoryMap: Record<string, string[]> = {
+  병사: ['이병', '일병', '상병', '병장'],
+  부사관: ['하사', '중사', '상사'],
+  장교: ['소위', '중위', '대위'],
+}
+const originTypeOptions = ['병사', '부사관', '장교']
 
 async function responseError(response: Response, fallback: string) {
   const body = await response.text()
@@ -106,6 +165,11 @@ async function responseError(response: Response, fallback: string) {
   } catch {
     return body === 'Internal Server Error' ? fallback : body
   }
+}
+
+function getRequiredTrainingHoursForYear(serviceYear: number) {
+  const defaultTargets = [8, 28, 32, 20]
+  return defaultTargets[serviceYear - 1] ?? 0
 }
 
 function App() {
@@ -319,7 +383,7 @@ function App() {
     <div className="page-intro"><div><p className="eyebrow">PERSONNEL DIRECTORY</p><h2>예비군 조회</h2><p>인원 정보를 검색하고 훈련 기록을 관리하세요.</p></div><div className="page-intro-actions"><button className="button primary" type="button" onClick={() => { setAddingPerson(true); setCreatePersonError(''); setCreatePersonForm(initialCreatePersonForm) }}>+ 신규 예비군 등록</button><div className="result-count"><strong>{people.length}</strong><span>조회 인원</span></div></div></div>
     <section className="search-panel"><label className="search-field"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="이름 또는 군번으로 검색" /></label><Select label="군종" value={branch} options={branches} onChange={setBranch} /><Select label="상태" value={status} options={statuses} labels={{ active: '복무 중', on_leave: '휴가 중' }} onChange={setStatus} /><Select label="동원 상태" value={mobilizationStatus} options={mobilizationStatuses} onChange={setMobilizationStatus} /></section>
     <section className="list-card"><div className="list-caption"><h3>인원 목록</h3><span>{search || branch || status || mobilizationStatus ? '필터 적용 중' : '전체 인원'}</span></div>{listLoading && <div className="state-panel">인원 목록을 불러오는 중입니다...</div>}{listError && <div className="state-panel error-state">{listError}</div>}{!listLoading && !listError && people.length === 0 && <div className="state-panel empty-state"><strong>검색 결과가 없습니다</strong><span>검색어나 필터를 바꿔 다시 시도해 보세요.</span></div>}{!listLoading && !listError && people.length > 0 && <div className="table-wrap"><table className="people-table"><thead><tr><th>군번</th><th>이름</th><th>군종</th><th>계급</th><th>소속부대</th><th>분대</th><th>상태</th></tr></thead><tbody>{people.map((person) => <tr key={person.military_number} onClick={() => openDetail(person)} tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter') openDetail(person) }}><td className="mono">{person.military_number}</td><td className="person-name">{person.name}</td><td>{person.branch}</td><td>{person.rank ?? '-'}</td><td>{person.unit ?? '-'}</td><td>{person.squad_id ? `${person.squad_id}분대` : '-'}</td><td><StatusBadge status={person.status} /></td></tr>)}</tbody></table></div>}</section>
-  </>}</section>{selectedId && <DetailModal person={selectedPerson} progress={progress} records={records} loading={detailLoading} error={detailError} tab={tab} setTab={setTab} onClose={closeModal} onEdit={startPersonEdit} onDelete={deletePerson} editingPerson={editingPerson} personForm={personForm} setPersonForm={setPersonForm} onSavePerson={savePerson} onCancelPerson={() => setEditingPerson(false)} editingRecord={editingRecord} recordForm={recordForm} setRecordForm={setRecordForm} addingRecord={addingRecord} onStartAdd={() => { setAddingRecord(true); setEditingRecord(null); setRecordForm({ service_year: selectedPerson?.service_year && selectedPerson.service_year <= 6 ? selectedPerson.service_year : 1, training_year: selectedPerson?.service_year ?? 1, training_type: '기본훈련', training_round: 1, attendance_status: 'completed', training_hours: 0, notes: '' }) }} onCancelRecord={() => { setEditingRecord(null); setAddingRecord(false); setRecordForm(null) }} onEditRecord={startRecordEdit} onSaveRecord={saveRecord} onAddRecord={addRecord} onDeleteRecord={deleteRecord} actionError={actionError} />}<CreatePersonModal open={addingPerson} form={createPersonForm} setForm={setCreatePersonForm} loading={createPersonLoading} error={createPersonError} onClose={() => setAddingPerson(false)} onSubmit={submitCreatePerson} /></main>
+  </>}</section>{selectedId && <DetailModal person={selectedPerson} progress={progress} records={records} loading={detailLoading} error={detailError} tab={tab} setTab={setTab} onClose={closeModal} onEdit={startPersonEdit} onDelete={deletePerson} editingPerson={editingPerson} personForm={personForm} setPersonForm={setPersonForm} onSavePerson={savePerson} onCancelPerson={() => setEditingPerson(false)} editingRecord={editingRecord} recordForm={recordForm} setRecordForm={setRecordForm} addingRecord={addingRecord} onStartAdd={() => { setAddingRecord(true); setEditingRecord(null); setRecordForm({ service_year: selectedPerson?.service_year && selectedPerson.service_year <= 6 ? selectedPerson.service_year : 1, training_year: selectedPerson?.service_year ?? 1, training_type: '기본훈련', training_round: 1, attendance_status: 'postponed', training_hours: 0, notes: '' }) }} onCancelRecord={() => { setEditingRecord(null); setAddingRecord(false); setRecordForm(null) }} onEditRecord={startRecordEdit} onSaveRecord={saveRecord} onAddRecord={addRecord} onDeleteRecord={deleteRecord} actionError={actionError} />}<CreatePersonModal open={addingPerson} form={createPersonForm} setForm={setCreatePersonForm} loading={createPersonLoading} error={createPersonError} onClose={() => setAddingPerson(false)} onSubmit={submitCreatePerson} /></main>
 }
 
 function AssignmentView({ squads, candidates, squadId, setSquadId, quotas, setQuotas, allowBranchMerge, setAllowBranchMerge, result, loading, error, onSubmit }: { squads: Squad[]; candidates: AssignmentCandidates; squadId: string; setSquadId: (value: string) => void; quotas: AssignmentQuotas; setQuotas: (value: AssignmentQuotas) => void; allowBranchMerge: boolean; setAllowBranchMerge: (value: boolean) => void; result: AssignmentResult | null; loading: boolean; error: string; onSubmit: () => void }) {
@@ -335,10 +399,48 @@ function DetailModal(props: { person: Person | null; progress: TrainingProgress[
 function ProfileTab({ person }: { person: Person }) { return <div className="modal-body"><div className="profile-status"><StatusBadge status={person.status} /><span>{person.service_year}년차 · {person.mobilization_status ?? '상태 미지정'}</span></div><section className="info-grid"><InfoItem label="계급" value={person.rank} /><InfoItem label="군종" value={person.branch} /><InfoItem label="소속부대" value={person.unit} /><InfoItem label="특기" value={person.specialty} /><InfoItem label="직책" value={person.position} /><InfoItem label="등록구분" value={person.registration_type} /><InfoItem label="분대" value={person.squad_id ? `${person.squad_id}분대` : '-'} /></section></div> }
 function ProgressTab({ progress }: { progress: TrainingProgress[] }) { return <div className="modal-body"><div className="section-heading"><div><p className="eyebrow">ANNUAL TRAINING</p><h3>훈련 이수 현황</h3></div>{progress.some((item) => item.prosecution_risk) && <span className="risk-summary">고발 위험 연차 있음</span>}</div><TrainingTable progress={progress} /></div> }
 function RecordsTab({ records, editingRecord, recordForm, setRecordForm, addingRecord, onStartAdd, onEdit, onCancel, onSave, onAdd, onDelete }: { records: TrainingRecord[]; editingRecord: number | null; recordForm: TrainingRecordForm | null; setRecordForm: (form: TrainingRecordForm | null) => void; addingRecord: boolean; onStartAdd: () => void; onEdit: (record: TrainingRecord) => void; onCancel: () => void; onSave: (id: number) => void; onAdd: () => void; onDelete: (id: number) => void }) {
-  const update = (key: keyof TrainingRecordForm, value: string | number) => { if (recordForm) setRecordForm({ ...recordForm, [key]: value }) }
-  return <div className="modal-body"><div className="records-toolbar"><div className="records-note">훈련시간, 훈련연도, 종류, 차수, 출결을 관리합니다.</div><button className="button primary" type="button" onClick={onStartAdd}>+ 훈련 기록 추가</button></div>{(addingRecord || editingRecord !== null) && recordForm && <div className="record-editor"><label>의무연차<input type="number" min="1" max="6" value={recordForm.service_year} onChange={(event) => update('service_year', Number(event.target.value))} /></label><label>훈련연도<input type="number" min="1" max="8" value={recordForm.training_year} onChange={(event) => update('training_year', Number(event.target.value))} /></label><label>훈련 종류<select value={recordForm.training_type} onChange={(event) => update('training_type', event.target.value)}>{trainingTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select></label><label>차수<select value={recordForm.training_round} onChange={(event) => update('training_round', Number(event.target.value))}><option value="1">1차</option><option value="2">2차</option><option value="3">3차</option></select></label><label>출결<select value={recordForm.attendance_status} onChange={(event) => update('attendance_status', event.target.value)}><option value="completed">이수</option><option value="무단불참">무단불참</option><option value="postponed">연기</option></select></label><label>훈련시간<input type="number" min="0" value={recordForm.training_hours} onChange={(event) => update('training_hours', Number(event.target.value))} /></label><label className="record-notes">메모<input value={recordForm.notes} onChange={(event) => update('notes', event.target.value)} /></label><div className="form-actions"><button className="button secondary" type="button" onClick={onCancel}>취소</button><button className="button primary" type="button" onClick={addingRecord ? onAdd : () => onSave(editingRecord as number)}>저장</button></div></div>}{records.length === 0 ? <div className="state-panel empty-state"><strong>훈련 기록이 없습니다</strong><span>위의 추가 버튼으로 기록을 등록하세요.</span></div> : <div className="table-wrap"><table><thead><tr><th>의무연차</th><th>훈련연도</th><th>훈련 종류</th><th>차수</th><th>출결</th><th>시간</th><th>관리</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td>{record.education_year}년차</td><td>{record.training_year ?? '-' }년</td><td>{record.training_type}</td><td>{record.training_round}차</td><td>{record.attendance_status}</td><td>{record.training_hours}시간</td><td className="row-actions"><button className="text-button" onClick={() => onEdit(record)}>수정</button><button className="text-button danger" onClick={() => onDelete(record.id)}>삭제</button></td></tr>)}</tbody></table></div>}</div>
+  const update = (key: keyof TrainingRecordForm, value: string | number) => {
+    if (!recordForm) return
+    setRecordForm({ ...recordForm, [key]: value })
+  }
+
+  const getCompletionState = (serviceYear: number, trainingHours: number) => {
+    const requiredHours = getRequiredTrainingHoursForYear(serviceYear)
+    return requiredHours > 0 && trainingHours >= requiredHours ? 'completed' : 'postponed'
+  }
+
+  const updateHours = (value: number) => {
+    if (!recordForm) return
+    setRecordForm({
+      ...recordForm,
+      training_hours: value,
+      attendance_status: getCompletionState(recordForm.service_year, value),
+    })
+  }
+
+  const getStatusLabel = (record: TrainingRecord) => {
+    const requiredHours = getRequiredTrainingHoursForYear(record.education_year)
+    if (requiredHours > 0) {
+      const remaining = Math.max(requiredHours - record.training_hours, 0)
+      return record.attendance_status === 'completed' && record.training_hours >= requiredHours ? '이수 완료' : `남은 시간 ${remaining}시간`
+    }
+    return record.attendance_status === 'completed' ? '이수 완료' : '기준 없음'
+  }
+
+  return <div className="modal-body"><div className="records-toolbar"><div className="records-note">훈련시간, 훈련연도, 종류, 차수, 출결을 관리합니다.</div><button className="button primary" type="button" onClick={onStartAdd}>+ 훈련 기록 추가</button></div>{(addingRecord || editingRecord !== null) && recordForm && <div className="record-editor"><label>의무연차<input type="number" min="1" max="6" value={recordForm.service_year} onChange={(event) => update('service_year', Number(event.target.value))} /></label><label>훈련연도<input type="number" min="1" max="8" value={recordForm.training_year} onChange={(event) => update('training_year', Number(event.target.value))} /></label><label>훈련 종류<select value={recordForm.training_type} onChange={(event) => update('training_type', event.target.value)}>{trainingTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select></label><label>차수<select value={recordForm.training_round} onChange={(event) => update('training_round', Number(event.target.value))}><option value="1">1차</option><option value="2">2차</option><option value="3">3차</option></select></label><label>출결<select value={recordForm.attendance_status} onChange={(event) => update('attendance_status', event.target.value)}><option value="completed">이수</option><option value="무단불참">무단불참</option><option value="postponed">연기</option></select></label><label>훈련시간<input type="number" min="0" value={recordForm.training_hours} onChange={(event) => updateHours(Number(event.target.value))} /><small className="field-hint">{getCompletionState(recordForm.service_year, recordForm.training_hours) === 'completed' ? '이수 완료' : `남은 시간 ${Math.max(getRequiredTrainingHoursForYear(recordForm.service_year) - recordForm.training_hours, 0)}시간`}</small></label><label className="record-notes">메모<input value={recordForm.notes} onChange={(event) => update('notes', event.target.value)} /></label><div className="form-actions"><button className="button secondary" type="button" onClick={onCancel}>취소</button><button className="button primary" type="button" onClick={addingRecord ? onAdd : () => onSave(editingRecord as number)}>저장</button></div></div>}{records.length === 0 ? <div className="state-panel empty-state"><strong>훈련 기록이 없습니다</strong><span>위의 추가 버튼으로 새 훈련 기록을 등록할 수 있습니다.</span></div> : <div className="table-wrap"><table><thead><tr><th>연차</th><th>훈련종류</th><th>차수</th><th>출결</th><th>시간</th><th>메모</th><th>관리</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td>{record.education_year}년차</td><td>{record.training_type}</td><td>{record.training_round}차</td><td>{getStatusLabel(record)}</td><td>{record.training_hours}시간</td><td>{record.notes ?? '-'}</td><td><div className="inline-actions"><button className="button small secondary" type="button" onClick={() => onEdit(record)}>수정</button><button className="button small danger-outline" type="button" onClick={() => onDelete(record.id)}>삭제</button></div></td></tr>)}</tbody></table></div>}</div>
 }
-function PersonEditor({ form, setForm, onSave, onCancel }: { form: Partial<Person>; setForm: (form: Partial<Person>) => void; onSave: () => void; onCancel: () => void }) { const update = (key: keyof Person, value: string | number | null) => setForm({ ...form, [key]: value }); return <div className="modal-body"><div className="edit-grid"><label>이름<input value={form.name ?? ''} onChange={(event) => update('name', event.target.value)} /></label><label>계급<input value={form.rank ?? ''} onChange={(event) => update('rank', event.target.value)} /></label><label>군종<input value={form.branch ?? ''} onChange={(event) => update('branch', event.target.value)} /></label><label>소속부대<input value={form.unit ?? ''} onChange={(event) => update('unit', event.target.value)} /></label><label>특기<input value={form.specialty ?? ''} onChange={(event) => update('specialty', event.target.value)} /></label><label>직책<input value={form.position ?? ''} onChange={(event) => update('position', event.target.value)} /></label><label>복무연도<input type="number" min="0" max="8" value={form.service_year ?? ''} onChange={(event) => update('service_year', Number(event.target.value))} /></label><label>출신 유형<input value={form.origin_type ?? ''} placeholder="예: 공중보건의출신" onChange={(event) => update('origin_type', event.target.value || null)} /></label><label>상태<select value={form.status ?? 'active'} onChange={(event) => update('status', event.target.value)}><option value="active">복무 중</option><option value="on_leave">휴가 중</option></select></label></div><div className="form-actions"><button className="button secondary" onClick={onCancel}>취소</button><button className="button primary" onClick={onSave}>저장</button></div></div> }
+function PersonEditor({ form, setForm, onSave, onCancel }: { form: Partial<Person>; setForm: (form: Partial<Person>) => void; onSave: () => void; onCancel: () => void }) {
+  const update = (key: keyof Person, value: string | number | null) => setForm({ ...form, [key]: value })
+  const updateSpecialty = (value: string) => {
+    const suggestedPosition = suggestPositionForSpecialty(value)
+    setForm({
+      ...form,
+      specialty: value,
+      position: suggestedPosition && (!form.position || form.position === '소총수' || form.position === '보충') ? suggestedPosition : form.position,
+    })
+  }
+
+  return <div className="modal-body"><div className="edit-grid"><label>이름<input value={form.name ?? ''} onChange={(event) => update('name', event.target.value)} /></label><label>계급<input value={form.rank ?? ''} onChange={(event) => update('rank', event.target.value)} /></label><label>군종<input value={form.branch ?? ''} onChange={(event) => update('branch', event.target.value)} /></label><label>소속부대<input value={form.unit ?? ''} onChange={(event) => update('unit', event.target.value)} /></label><label>특기<input value={form.specialty ?? ''} placeholder="예: 통신, 의무, 운전 / 또는 171101" onChange={(event) => updateSpecialty(event.target.value)} /></label><label>직책<input value={form.position ?? ''} onChange={(event) => update('position', event.target.value)} /></label><label>복무연도<input type="number" min="0" max="8" value={form.service_year ?? ''} onChange={(event) => update('service_year', Number(event.target.value))} /></label><label>출신 유형<input value={form.origin_type ?? ''} placeholder="예: 공중보건의출신" onChange={(event) => update('origin_type', event.target.value || null)} /></label><label>상태<select value={form.status ?? 'active'} onChange={(event) => update('status', event.target.value)}><option value="active">복무 중</option><option value="on_leave">휴가 중</option></select></label></div><div className="form-actions"><button className="button secondary" onClick={onCancel}>취소</button><button className="button primary" onClick={onSave}>저장</button></div></div> }
 function Header() { return <header className="topbar"><div className="brand-lockup"><span className="brand-mark">31</span><div><p className="eyebrow">31사단 AI TF</p><h1>예비군 관리 대시보드</h1></div></div><span className="system-status"><i /> 운영 중</span></header> }
 function StatusBadge({ status }: { status: string }) { return <span className={`status-badge ${status === 'active' ? 'active' : 'leave'}`}>{status === 'active' ? '복무 중' : '휴가 중'}</span> }
 function InfoItem({ label, value }: { label: string; value: string | number | null | undefined }) { return <div className="info-item"><span>{label}</span><strong>{value || '-'}</strong></div> }
@@ -357,9 +459,34 @@ function CreatePersonModal(props: {
   const { open, form, setForm, loading, error, onClose, onSubmit } = props
   if (!open) return null
 
+  const [showSpecialtyInput, setShowSpecialtyInput] = useState(false)
+
   const update = (key: keyof CreatePersonForm, value: string | number) => {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
+
+  const updateSpecialty = (value: string) => {
+    setForm((prev) => {
+      const suggestedPosition = suggestPositionForSpecialty(value)
+      return {
+        ...prev,
+        specialty: value,
+        position: suggestedPosition && (!prev.position || prev.position === '소총수' || prev.position === '보충') ? suggestedPosition : prev.position,
+      }
+    })
+  }
+
+  const setRankCategory = (category: string) => {
+    const nextRank = rankCategoryMap[category]?.[0] ?? ''
+    setForm((prev) => ({
+      ...prev,
+      origin_type: category,
+      rank: nextRank,
+    }))
+  }
+
+  const selectedRankCategory = originTypeOptions.includes(form.origin_type) ? form.origin_type : '병사'
+  const rankOptions = rankCategoryMap[selectedRankCategory] ?? rankCategoryMap.병사
 
   const hoursValue = form.previous_training_hours.trim()
   const classification = hoursValue === '' || Number(hoursValue) <= 0 ? '신규' : '예비군 전입'
@@ -388,21 +515,8 @@ function CreatePersonModal(props: {
                 {branches.map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
             </label>
-            <label>계급
-              <input value={form.rank} placeholder="예: 병장, 하사" onChange={(e) => update('rank', e.target.value)} />
-            </label>
             <label>소속부대
               <input value={form.unit} placeholder="예: 31사단 100연대" onChange={(e) => update('unit', e.target.value)} />
-            </label>
-            <label>특기
-              <input value={form.specialty} placeholder="예: 3111 101" onChange={(e) => update('specialty', e.target.value)} />
-            </label>
-            <label>직책
-              <select value={form.position} onChange={(e) => update('position', e.target.value)}>
-                {assignmentPositions.map((pos) => <option key={pos} value={pos}>{pos}</option>)}
-                <option value="소총수">소총수</option>
-                <option value="보충">보충</option>
-              </select>
             </label>
             <label>복무연차
               <input type="number" min="0" max="8" value={form.service_year} onChange={(e) => update('service_year', Number(e.target.value))} />
@@ -412,8 +526,54 @@ function CreatePersonModal(props: {
                 {mobilizationStatuses.map((st) => <option key={st} value={st}>{st}</option>)}
               </select>
             </label>
-            <label>출신 유형
-              <input value={form.origin_type} placeholder="예: 병사, 부사관" onChange={(e) => update('origin_type', e.target.value)} />
+            <div className="full-width-field">
+              <span>출신 유형</span>
+              <div className="button-group">
+                {originTypeOptions.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={selectedRankCategory === option ? 'button small primary' : 'button small secondary'}
+                    onClick={() => setRankCategory(option)}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+              <div className="button-group sub-button-group">
+                {rankOptions.map((rank) => (
+                  <button
+                    key={rank}
+                    type="button"
+                    className={form.rank === rank ? 'button small primary' : 'button small secondary'}
+                    onClick={() => update('rank', rank)}
+                  >
+                    {rank}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="full-width-field">
+              <div className="inline-row-between">
+                <span>특기</span>
+                {!showSpecialtyInput && (
+                  <button type="button" className="button small secondary" onClick={() => setShowSpecialtyInput(true)}>
+                    특기 입력
+                  </button>
+                )}
+              </div>
+              {showSpecialtyInput ? (
+                <input value={form.specialty} placeholder="예: 통신, 의무, 운전 / 또는 171101" onChange={(e) => updateSpecialty(e.target.value)} />
+              ) : (
+                <div className="field-hint muted">특기를 입력하면 직책이 자동으로 추천됩니다.</div>
+              )}
+            </div>
+            <label>직책
+              <select value={form.position} onChange={(e) => update('position', e.target.value)}>
+                {assignmentPositions.map((pos) => <option key={pos} value={pos}>{pos}</option>)}
+                <option value="소총수">소총수</option>
+                <option value="보충">보충</option>
+              </select>
             </label>
             <label className="full-width-field">
               이전 부대 이수 훈련시간 (previous_training_hours)

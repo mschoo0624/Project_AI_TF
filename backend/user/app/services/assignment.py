@@ -23,6 +23,44 @@ POSITION_SPECIALTIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 	"보급병": (("231101",), ("231103", "231104", "231105")),
 }
 
+SPECIALTY_TO_POSITION: dict[str, str] = {
+	"행정": "행정병",
+	"행정병": "행정병",
+	"3111101": "행정병",
+	"311102": "행정병",
+	"병기": "병기취급병",
+	"병기취급": "병기취급병",
+	"병기취급병": "병기취급병",
+	"222101": "병기취급병",
+	"222102": "병기취급병",
+	"통신": "통신병",
+	"통신병": "통신병",
+	"171101": "통신병",
+	"171102": "통신병",
+	"171104": "통신병",
+	"171106": "통신병",
+	"의무": "의무병",
+	"의무병": "의무병",
+	"411101": "의무병",
+	"411102": "의무병",
+	"411103": "의무병",
+	"411104": "의무병",
+	"411105": "의무병",
+	"411106": "의무병",
+	"운전": "운전병",
+	"운전병": "운전병",
+	"241102": "운전병",
+	"241103": "운전병",
+	"241104": "운전병",
+	"231101": "운전병",
+	"보급": "보급병",
+	"보급병": "보급병",
+	"231101": "보급병",
+	"231103": "보급병",
+	"231104": "보급병",
+	"231105": "보급병",
+}
+
 SOLDIER_RANKS = {"이병", "일병", "상병", "병장"}
 NCO_RANKS = {"하사", "중사", "상사", "원사"}
 OFFICER_RANKS = {"소위", "중위", "대위", "소령", "중령", "대령"}
@@ -39,6 +77,28 @@ class AssignmentCandidate:
 
 def normalize_specialty(specialty: str | None) -> str:
 	return re.sub(r"\D", "", specialty or "")
+
+
+def suggest_position_for_specialty(specialty: str | None) -> str | None:
+	if specialty is None:
+		return None
+	candidate = specialty.strip()
+	if not candidate:
+		return None
+	for value in (candidate, candidate.replace(" ", ""), re.sub(r"\D", "", candidate)):
+		if not value:
+			continue
+		compact = re.sub(r"[^가-힣a-zA-Z0-9]", "", value).lower()
+		match = SPECIALTY_TO_POSITION.get(compact)
+		if match:
+			return match
+		match = SPECIALTY_TO_POSITION.get(value)
+		if match:
+			return match
+	match = SPECIALTY_TO_POSITION.get(candidate.lower())
+	if match:
+		return match
+	return None
 
 
 def classify_specialty(position: str, specialty: str | None) -> str:
