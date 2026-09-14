@@ -25,9 +25,13 @@ class PersonBase(BaseModel):
 			"동원미지정",
 			"학생",
 			"학생예비군",
+			"보류",
+			"일부보류",
+			"훈련일부보류",
 			"designated",
 			"non_designated",
 			"student",
+			"partial_hold",
 		}:
 			raise ValueError("1-4 year reservists require a mobilization status")
 		return self

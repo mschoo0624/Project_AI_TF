@@ -24,6 +24,7 @@ from user.app.models.person import Person
 from user.app.schemas.person import PersonCreate, PersonRead, PersonUpdate
 from user.app.services.assignment import grouped_candidates
 from user.app.services.person import create_person
+from user.app.services.training import apply_mobilization_status_change
 
 router = APIRouter(prefix="/reservists", tags=["reservists"])
 persons_router = APIRouter(prefix="/persons", tags=["persons"])
@@ -108,8 +109,12 @@ def update_reservist(
 	if person is None:
 		raise HTTPException(status_code=404, detail="Reservist not found")
 
-	for field, value in payload.model_dump(exclude_unset=True).items():
+	updates = payload.model_dump(exclude_unset=True)
+	new_mobilization_status = updates.pop("mobilization_status", None)
+	for field, value in updates.items():
 		setattr(person, field, value)
+	if new_mobilization_status is not None and new_mobilization_status != person.mobilization_status:
+		apply_mobilization_status_change(db, person, new_mobilization_status)
 	db.commit()
 	db.refresh(person)
 	return person

@@ -47,7 +47,7 @@ def create_person(db: Session, payload: PersonCreate) -> Person:
             if remaining_hours <= 0:
                 break
 
-            target = target_training_hours(y, person.mobilization_status, person.branch)
+            target = target_training_hours(y, person.mobilization_status, person.branch, person.rank)
             if target <= 0:
                 continue
 
