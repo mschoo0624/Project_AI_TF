@@ -43,6 +43,121 @@ def init_db() -> None:
                 """
             )
         )
+        mixed_squad_count = connection.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM (
+                    SELECT squad_id
+                    FROM person
+                    WHERE squad_id IS NOT NULL
+                    GROUP BY squad_id
+                    HAVING COUNT(DISTINCT branch || ':' || CASE
+                        WHEN rank IN ('이병', '일병', '상병', '병장') THEN '병사'
+                        WHEN rank IN ('하사', '중사', '상사', '원사') THEN '부사관'
+                        WHEN rank IN ('소위', '중위', '대위', '소령', '중령', '대령') THEN '장교'
+                        ELSE '기타'
+                    END) > 1
+                )
+                """
+            )
+        ).scalar_one()
+        if mixed_squad_count:
+            connection.execute(
+                text(
+                    """
+                    WITH categorized AS (
+                        SELECT military_number, branch,
+                            CASE
+                                WHEN rank IN ('이병', '일병', '상병', '병장') THEN '병사'
+                                WHEN rank IN ('하사', '중사', '상사', '원사') THEN '부사관'
+                                WHEN rank IN ('소위', '중위', '대위', '소령', '중령', '대령') THEN '장교'
+                                ELSE '기타'
+                            END AS category
+                        FROM person
+                        WHERE squad_id IS NOT NULL
+                    ), group_squads AS (
+                        SELECT branch, category,
+                            DENSE_RANK() OVER (ORDER BY branch, category) AS squad_id
+                        FROM categorized
+                        GROUP BY branch, category
+                    )
+                    UPDATE person
+                    SET squad_id = (
+                        SELECT group_squads.squad_id
+                        FROM categorized
+                        JOIN group_squads
+                          ON group_squads.branch = categorized.branch
+                         AND group_squads.category = categorized.category
+                        WHERE categorized.military_number = person.military_number
+                    )
+                    WHERE squad_id IS NOT NULL
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    UPDATE assignment
+                    SET squad_id = (
+                        SELECT person.squad_id
+                        FROM person
+                        WHERE person.military_number = assignment.person_id
+                    )
+                    WHERE person_id IN (SELECT military_number FROM person WHERE squad_id IS NOT NULL)
+                    """
+                )
+            )
+        legacy_assignment_count = connection.execute(
+            text("SELECT COUNT(*) FROM person WHERE squad_id >= 10")
+        ).scalar_one()
+        person_count = connection.execute(
+            text("SELECT COUNT(*) FROM person WHERE status = 'active'")
+        ).scalar_one()
+        if person_count and legacy_assignment_count == 0:
+            connection.execute(
+                text(
+                    """
+                    WITH ranked_people AS (
+                        SELECT
+                            military_number,
+                            ((ROW_NUMBER() OVER (
+                                PARTITION BY branch,
+                                    CASE
+                                        WHEN rank IN ('이병', '일병', '상병', '병장') THEN '병사'
+                                        WHEN rank IN ('하사', '중사', '상사', '원사') THEN '부사관'
+                                        WHEN rank IN ('소위', '중위', '대위', '소령', '중령', '대령') THEN '장교'
+                                        ELSE '기타'
+                                    END
+                                ORDER BY military_number
+                            ) - 1) % 20) + 1 AS squad_id
+                        FROM person
+                        WHERE status = 'active'
+                    )
+                    UPDATE person
+                    SET squad_id = (
+                        SELECT ranked_people.squad_id
+                        FROM ranked_people
+                        WHERE ranked_people.military_number = person.military_number
+                    )
+                    WHERE military_number IN (SELECT military_number FROM ranked_people)
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    UPDATE assignment
+                    SET squad_id = (
+                        SELECT person.squad_id
+                        FROM person
+                        WHERE person.military_number = assignment.person_id
+                    )
+                    WHERE person_id IN (
+                        SELECT military_number FROM person WHERE status = 'active'
+                    )
+                    """
+                )
+            )
         if "branch" not in person_columns:
             connection.execute(
                 text("ALTER TABLE person ADD COLUMN branch VARCHAR(50) NOT NULL DEFAULT '육군'")
@@ -108,6 +223,17 @@ def init_db() -> None:
         )
         connection.execute(
             text(
+                "UPDATE person SET mobilization_status = '동원미지정' "
+                "WHERE service_year BETWEEN 1 AND 4 "
+                "AND mobilization_status NOT IN ("
+                "'지정', '동원지정', '미지정', '동원미지정', '학생', '학생예비군', "
+                "'보류', '일부보류', '훈련일부보류', 'designated', 'non_designated', "
+                "'student', 'partial_hold'"
+                ")"
+            )
+        )
+        connection.execute(
+            text(
                 """
                 INSERT OR IGNORE INTO annual_status (
                     person_id, service_year, mobilization_status
@@ -115,6 +241,20 @@ def init_db() -> None:
                 SELECT military_number, service_year, mobilization_status
                 FROM person
                 WHERE service_year IS NOT NULL AND mobilization_status IS NOT NULL
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                INSERT OR IGNORE INTO squad (id, name, description)
+                SELECT id, printf('%d분대', id), printf('제%d분대', id)
+                FROM (
+                    SELECT 10 AS id UNION ALL SELECT 11 UNION ALL SELECT 12 UNION ALL
+                    SELECT 13 UNION ALL SELECT 14 UNION ALL SELECT 15 UNION ALL
+                    SELECT 16 UNION ALL SELECT 17 UNION ALL SELECT 18 UNION ALL
+                    SELECT 19 UNION ALL SELECT 20
+                )
                 """
             )
         )

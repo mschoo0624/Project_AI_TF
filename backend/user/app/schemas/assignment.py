@@ -1,6 +1,15 @@
 from pydantic import BaseModel, Field
 
 
+class AssignmentSelection(BaseModel):
+    person_id: str
+    squad_id: int
+
+
+class AssignmentConfirmation(BaseModel):
+    assignments: list[AssignmentSelection]
+
+
 class AssignmentPlan(BaseModel):
     position_quotas: dict[str, int | dict[str, int]]
     branch_order: list[str] = Field(default_factory=lambda: ["육군", "해군", "해병대", "공군"])

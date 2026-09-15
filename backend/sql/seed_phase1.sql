@@ -19,7 +19,18 @@ INSERT INTO squad (id, name, description) VALUES
     (6, '6분대', '제6분대'),
     (7, '7분대', '제7분대'),
     (8, '8분대', '제8분대'),
-    (9, '9분대', '제9분대');
+    (9, '9분대', '제9분대'),
+    (10, '10분대', '제10분대'),
+    (11, '11분대', '제11분대'),
+    (12, '12분대', '제12분대'),
+    (13, '13분대', '제13분대'),
+    (14, '14분대', '제14분대'),
+    (15, '15분대', '제15분대'),
+    (16, '16분대', '제16분대'),
+    (17, '17분대', '제17분대'),
+    (18, '18분대', '제18분대'),
+    (19, '19분대', '제19분대'),
+    (20, '20분대', '제20분대');
 
 /* Generate 500 people with unique military numbers and names. */
 WITH RECURSIVE numbers(number) AS (
@@ -93,8 +104,33 @@ SELECT
         ELSE '해당없음'
     END,
     CASE WHEN number % 10 = 0 THEN 'on_leave' ELSE 'active' END,
-    CASE WHEN number % 10 = 0 THEN NULL ELSE ((number - 1) % 9) + 1 END
+    NULL
 FROM numbers;
+
+/* Spread active people from each branch/personnel category across 20 squads. */
+WITH ranked_people AS (
+    SELECT
+        military_number,
+        ((ROW_NUMBER() OVER (
+            PARTITION BY branch,
+                CASE
+                    WHEN rank IN ('이병', '일병', '상병', '병장') THEN '병사'
+                    WHEN rank IN ('하사', '중사', '상사', '원사') THEN '부사관'
+                    WHEN rank IN ('소위', '중위', '대위', '소령', '중령', '대령') THEN '장교'
+                    ELSE '기타'
+                END
+            ORDER BY military_number
+        ) - 1) % 20) + 1 AS squad_id
+    FROM person
+    WHERE status = 'active'
+)
+UPDATE person
+SET squad_id = (
+    SELECT ranked_people.squad_id
+    FROM ranked_people
+    WHERE ranked_people.military_number = person.military_number
+)
+WHERE military_number IN (SELECT military_number FROM ranked_people);
 
 /* Mobilization status is assigned independently for each service year. */
 WITH RECURSIVE people(number) AS (
@@ -127,7 +163,7 @@ WITH RECURSIVE numbers(number) AS (
 INSERT INTO assignment (person_id, squad_id, assigned_date, status)
 SELECT
     printf('26-%08d', 72000000 + number),
-    ((number - 1) % 9) + 1,
+    (SELECT squad_id FROM person WHERE military_number = printf('26-%08d', 72000000 + number)),
     date('2026-09-01', printf('+%d day', (number - 1) % 30)),
     'assigned'
 FROM numbers

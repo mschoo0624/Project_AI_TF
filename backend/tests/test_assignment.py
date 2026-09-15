@@ -7,7 +7,13 @@ from sqlalchemy.pool import StaticPool
 from user.app.models.assignment import Assignment
 from user.app.models.person import Person
 from user.app.models.squad import Squad
-from user.app.services.assignment import fill_squad_positions, suggest_position_for_specialty
+from user.app.services.assignment import (
+    confirm_assignment_selections,
+    fill_squad_positions,
+    rank_candidates_for_position,
+    recommend_squads_for_person,
+    suggest_position_for_specialty,
+)
 
 
 def make_session() -> Session:
@@ -110,3 +116,74 @@ def test_suggest_position_for_specialty_accepts_readable_name_and_code() -> None
     assert suggest_position_for_specialty("3111 101") == "행정병"
     assert suggest_position_for_specialty("171101") == "통신병"
     assert suggest_position_for_specialty("기타") is None
+
+
+def test_confirm_assignment_selections_persists_reviewed_squad_choice() -> None:
+    db = make_session()
+    db.add_all([Squad(id=1, name="1분대"), Squad(id=2, name="2분대")])
+    add_person(db, "reviewed", "행정병", "3111 101")
+    db.commit()
+
+    result = confirm_assignment_selections(db, [("reviewed", 2)])
+
+    assert result["total_assigned"] == 1
+    assert db.get(Person, "reviewed").squad_id == 2
+    assert db.scalars(select(Assignment)).one().squad_id == 2
+    db.close()
+
+
+def test_rank_candidates_prioritizes_soldier_year_and_public_health_medic() -> None:
+    db = make_session()
+    older_soldier = add_person(db, "older-soldier", "행정병", "3111 101", service_year=4)
+    priority_soldier = add_person(db, "priority-soldier", "행정병", "999 999", service_year=5)
+    older_soldier.rank = "병장"
+    priority_soldier.rank = "병장"
+    medic = add_person(db, "medic", "의무병", "411 101", service_year=5)
+    medic.origin_type = "공중보건의출신"
+    other_medic = add_person(db, "other-medic", "의무병", "411 101", service_year=5)
+    db.commit()
+
+    admin_ranked = rank_candidates_for_position([older_soldier, priority_soldier], "행정병")
+    medic_ranked = rank_candidates_for_position([other_medic, medic], "의무병")
+
+    assert admin_ranked[0].person.military_number == "priority-soldier"
+    assert medic_ranked[0].person.military_number == "medic"
+    db.close()
+
+
+def test_confirm_rejects_mixed_branch_or_personnel_category_squad() -> None:
+    db = make_session()
+    db.add(Squad(id=1, name="육군 병사 분대"))
+    first = add_person(db, "first", "행정병", "3111 101")
+    first.rank = "병장"
+    db.commit()
+    confirm_assignment_selections(db, [("first", 1)])
+    second = add_person(db, "second", "행정병", "3111 101")
+    second.branch = "해군"
+    db.commit()
+
+    try:
+        confirm_assignment_selections(db, [("second", 1)])
+        raise AssertionError("mixed squad assignment should fail")
+    except ValueError as error:
+        assert "cannot mix" in str(error)
+    db.close()
+
+
+def test_recommend_squads_returns_only_compatible_top_three() -> None:
+    db = make_session()
+    db.add_all([Squad(id=1, name="육군 병사 1"), Squad(id=2, name="해군 병사 1"), Squad(id=3, name="육군 병사 2"), Squad(id=4, name="육군 병사 3")])
+    new_person = add_person(db, "new-person", "행정병", "3111 101")
+    new_person.rank = "병장"
+    member = add_person(db, "member", "통신병", "171 101", squad_id=1)
+    member.rank = "병장"
+    member.branch = "육군"
+    other = add_person(db, "other", "행정병", "3111 101", squad_id=2)
+    other.rank = "병장"
+    other.branch = "해군"
+    db.commit()
+
+    recommendations = recommend_squads_for_person(db, "new-person")
+
+    assert [item["squad_id"] for item in recommendations] == [3, 4, 1]
+    db.close()
