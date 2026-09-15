@@ -80,7 +80,9 @@ def normalize_specialty(specialty: str | None) -> str:
 def suggest_position_for_specialty(specialty: str | None) -> str | None:
 	if specialty is None:
 		return None
+
 	candidate = specialty.strip()
+
 	if not candidate:
 		return None
 	for value in (candidate, candidate.replace(" ", ""), re.sub(r"\D", "", candidate)):
@@ -132,7 +134,7 @@ def rank_candidates(
 	position: str,
 	branch: str | None = None,
 ) -> list[AssignmentCandidate]:
-	"""Prioritize 5-6 year reservists, then specialty-match tiers."""
+	"""Prioritize soldier service years, then specialty-match tiers."""
 	candidates = [
 		AssignmentCandidate(
 			person,
@@ -143,9 +145,15 @@ def rank_candidates(
 		if branch is None or person.branch == branch
 	]
 
-	def sort_key(candidate: AssignmentCandidate) -> tuple[int, int, str]:
-		year_priority = 0 if candidate.person.service_year in (5, 6) else 1
-		return (year_priority, specialty_priority(candidate.tier), candidate.person.military_number)
+	def sort_key(candidate: AssignmentCandidate) -> tuple[int, int, int, str]:
+		year_priority = 0 if candidate.personnel_category == "병사" and candidate.person.service_year in (5, 6) else 1
+		service_year = candidate.person.service_year if candidate.person.service_year is not None else 99
+		return (
+			year_priority,
+			specialty_priority(candidate.tier),
+		service_year,
+			candidate.person.military_number,
+		)
 
 	return sorted(candidates, key=sort_key)
 
@@ -158,13 +166,14 @@ def is_priority_medic_origin(person: Person) -> bool:
 def rank_candidates_for_position(
 	people: Iterable[Person], position: str
 ) -> list[AssignmentCandidate]:
-	"""Rank candidates for one position using the existing specialty rules."""
+	"""Rank one position with the medic origin exception applied."""
 	ranked = rank_candidates(people, position)
 	if position != "의무병":
 		return ranked
 	return sorted(ranked, key=lambda candidate: (
-		0 if candidate.person.service_year in (5, 6) else 1,
-		0 if candidate.person.service_year in (5, 6) and is_priority_medic_origin(candidate.person) else 1,
+		0 if candidate.personnel_category == "병사" and candidate.person.service_year in (5, 6) else 1,
+		0 if candidate.personnel_category == "병사" and candidate.person.service_year in (5, 6) and is_priority_medic_origin(candidate.person) else 1,
+		candidate.person.service_year if candidate.person.service_year is not None else 99,
 		specialty_priority(candidate.tier),
 		candidate.person.military_number,
 	))
@@ -177,7 +186,7 @@ def fill_squad_positions(
 	branch_order: tuple[str, ...] = BRANCHES,
 	allow_branch_merge: bool = True,
 ) -> dict[str, object]:
-	"""Fill one squad from the shared, unassigned 5-6 year candidate pool."""
+	"""Fill one squad from the shared, unassigned candidate pool."""
 	for quota in position_quotas.values():
 		values = (quota,) if isinstance(quota, int) else quota.values()
 		if any(value < 0 for value in values):
@@ -189,7 +198,6 @@ def fill_squad_positions(
 		remaining = list(
 			db.scalars(
 				select(Person).where(
-					Person.service_year.in_((5, 6)),
 					Person.status == "active",
 					Person.squad_id.is_(None),
 				)
@@ -197,6 +205,10 @@ def fill_squad_positions(
 		)
 		positions: dict[str, object] = {}
 		assigned_total = 0
+		squad_group = {
+			(member.branch, personnel_category(member.rank))
+			for member in db.scalars(select(Person).where(Person.squad_id == squad_id)).all()
+		}
 		for position, quota_spec in position_quotas.items():
 			quotas_by_category = {"전체": quota_spec} if isinstance(quota_spec, int) else quota_spec
 			selected: list[AssignmentCandidate] = []
@@ -213,8 +225,6 @@ def fill_squad_positions(
 						key=lambda candidate: (
 							branch_order.index(candidate.person.branch)
 							if candidate.person.branch in branch_order else len(branch_order),
-							specialty_priority(candidate.tier),
-							candidate.person.military_number,
 						),
 					)
 				selected.extend(ranked[:quota])
@@ -223,6 +233,10 @@ def fill_squad_positions(
 			assigned = []
 			for candidate in selected:
 				person = candidate.person
+				person_group = (person.branch, personnel_category(person.rank))
+				if squad_group and squad_group != {person_group}:
+					raise ValueError("A squad cannot mix branches or personnel categories")
+				squad_group.add(person_group)
 				person.squad_id = squad_id
 				db.add(
 					Assignment(
@@ -265,7 +279,6 @@ def available_assignment_candidates(
 	people = list(
 		db.scalars(
 			select(Person).where(
-				Person.service_year.in_((5, 6)),
 				Person.status == "active",
 				Person.squad_id.is_(None),
 			)
@@ -285,9 +298,112 @@ def available_assignment_candidates(
 					"position": current_position,
 					"specialty": candidate.person.specialty,
 					"service_year": candidate.person.service_year,
+					"origin_type": candidate.person.origin_type,
+					"personnel_category": candidate.personnel_category,
 					"tier": candidate.tier,
 				})
 	return result
+
+
+def confirm_assignment_selections(
+	db: Session,
+	selections: Iterable[tuple[str, int]],
+) -> dict[str, object]:
+	"""Persist a reviewed assignment proposal as one atomic operation."""
+	selection_list = list(selections)
+	if len({person_id for person_id, _ in selection_list}) != len(selection_list):
+		raise ValueError("The same person cannot be selected more than once")
+
+	try:
+		assigned = []
+		selected_groups: dict[int, tuple[str | None, str]] = {}
+		for person_id, squad_id in selection_list:
+			if db.get(Squad, squad_id) is None:
+				raise ValueError(f"Squad {squad_id} not found")
+			person = db.get(Person, person_id)
+			if person is None:
+				raise ValueError(f"Person {person_id} not found")
+			if person.service_year is None or person.status != "active":
+				raise ValueError(f"Person {person_id} is not eligible for assignment")
+			if person.squad_id is not None:
+				raise ValueError(f"Person {person_id} is already assigned")
+			person_group = (person.branch, personnel_category(person.rank))
+			known_group = selected_groups.get(squad_id)
+			if known_group is not None and known_group != person_group:
+				raise ValueError("A squad cannot mix branches or personnel categories")
+			existing_groups = {
+				(member.branch, personnel_category(member.rank))
+				for member in db.scalars(select(Person).where(Person.squad_id == squad_id)).all()
+			}
+			if existing_groups and existing_groups != {person_group}:
+				raise ValueError("A squad cannot mix branches or personnel categories")
+			selected_groups[squad_id] = person_group
+			person.squad_id = squad_id
+			db.add(
+				Assignment(
+					person_id=person_id,
+					squad_id=squad_id,
+					assigned_date=date.today(),
+					status="assigned",
+				)
+			)
+			assigned.append({"military_number": person_id, "name": person.name, "squad_id": squad_id})
+		db.commit()
+		return {"total_assigned": len(assigned), "assigned": assigned}
+	except Exception:
+		db.rollback()
+		raise
+
+
+def reset_assignment_pool(db: Session) -> dict[str, int]:
+	"""Move all active reservists back to the temporary, unassigned pool."""
+	try:
+		reset_people = db.query(Person).filter(Person.status == "active", Person.squad_id.is_not(None)).all()
+		person_ids = [person.military_number for person in reset_people]
+		if person_ids:
+			db.query(Assignment).filter(Assignment.person_id.in_(person_ids)).delete(
+				synchronize_session=False
+			)
+			for person in reset_people:
+				person.squad_id = None
+		db.commit()
+		return {"reset_count": len(reset_people)}
+	except Exception:
+		db.rollback()
+		raise
+
+
+def recommend_squads_for_person(db: Session, person_id: str) -> list[dict[str, object]]:
+	"""Recommend up to three compatible squads for an unassigned transfer-in."""
+	person = db.get(Person, person_id)
+	if person is None:
+		raise ValueError(f"Person {person_id} not found")
+	if person.squad_id is not None:
+		raise ValueError(f"Person {person_id} is already assigned")
+	group = (person.branch, personnel_category(person.rank))
+	candidates = []
+	for squad in db.scalars(select(Squad).order_by(Squad.id)).all():
+		members = list(squad.persons)
+		groups = {(member.branch, personnel_category(member.rank)) for member in members}
+		if groups and groups != {group}:
+			continue
+		position_count = sum(member.position == person.position for member in members)
+		tier = classify_specialty(person.position or "", person.specialty)
+		matching_specialty_count = sum(
+			classify_specialty(person.position or "", member.specialty) == tier
+			for member in members
+			if member.position == person.position
+		)
+		candidates.append({
+			"squad_id": squad.id,
+			"squad_name": squad.name,
+			"current_count": len(members),
+			"same_position_count": position_count,
+			"same_tier_count": matching_specialty_count,
+			"reason": f"{person.branch} {personnel_category(person.rank)} 호환 · {person.position or '직책 미지정'} 균형",
+			"score": (len(members), position_count, matching_specialty_count, squad.id),
+		})
+	return sorted(candidates, key=lambda item: item["score"])[:3]
 
 
 def grouped_candidates(

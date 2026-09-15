@@ -12,8 +12,15 @@ from sqlalchemy.orm import Session, selectinload
 
 from user.app.database import get_db
 from user.app.models.squad import Squad
-from user.app.schemas.assignment import AssignmentPlan
-from user.app.services.assignment import available_assignment_candidates, fill_squad_positions
+from user.app.schemas.assignment import AssignmentConfirmation, AssignmentPlan
+from user.app.services.assignment import (
+	available_assignment_candidates,
+	confirm_assignment_selections,
+	fill_squad_positions,
+	personnel_category,
+	recommend_squads_for_person,
+	reset_assignment_pool,
+)
 
 router = APIRouter(prefix="/squads", tags=["squads"])
 
@@ -43,6 +50,33 @@ def assignment_candidates(
 ) -> dict[str, dict[str, list[dict[str, object]]]]:
 	return available_assignment_candidates(db, position)
 
+
+@router.post("/assignments/confirm")
+def confirm_assignments(
+	payload: AssignmentConfirmation,
+	db: Session = Depends(get_db),
+) -> dict[str, object]:
+	try:
+		return confirm_assignment_selections(
+			db,
+			((selection.person_id, selection.squad_id) for selection in payload.assignments),
+		)
+	except ValueError as error:
+		raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.post("/assignments/reset")
+def reset_assignments(db: Session = Depends(get_db)) -> dict[str, int]:
+	return reset_assignment_pool(db)
+
+
+@router.get("/assignments/recommendations/{person_id}")
+def assignment_recommendations(person_id: str, db: Session = Depends(get_db)) -> list[dict[str, object]]:
+	try:
+		return recommend_squads_for_person(db, person_id)
+	except ValueError as error:
+		raise HTTPException(status_code=400, detail=str(error)) from error
+
 @router.get("")
 def list_squads(db: Session = Depends(get_db)) -> list[dict[str, object]]:
 	squads = db.scalars(
@@ -54,6 +88,14 @@ def list_squads(db: Session = Depends(get_db)) -> list[dict[str, object]]:
 			"name": squad.name,
 			"description": squad.description,
 			"person_count": len(squad.persons),
+			"breakdown": {
+				f"{person.branch}-{personnel_category(person.rank)}": sum(
+					1 for member in squad.persons
+					if member.branch == person.branch
+					and personnel_category(member.rank) == personnel_category(person.rank)
+				)
+				for person in squad.persons
+			},
 		}
 		for squad in squads
 	]

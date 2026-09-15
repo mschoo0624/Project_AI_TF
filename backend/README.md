@@ -15,31 +15,14 @@ source venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-SQLite is included with Python. The `sqlite3` command-line tool is optional and
-is only needed for manually running SQL files.
-
-## Database
-The backend uses SQLite. The database file is created at
-`backend/project_ai_tf.db` when the application starts.
-
-To initialize the schema manually from the `backend` directory:
+## Add Assignment Test Data
+기존 데이터를 지우지 않고 전입·전투편성 테스트 인원 60명을 추가하려면 backend 디렉터리에서 실행합니다.
 
 ```bash
-sqlite3 project_ai_tf.db < sql/init_phase1.sql
-sqlite3 project_ai_tf.db < sql/seed_phase1.sql
+sqlite3 project_ai_tf.db < sql/sample_transfer_60.sql
 ```
 
-You can use a different database file by setting `DB_PATH`:
-
-```bash
-DB_PATH=/path/to/project_ai_tf.db uv run uvicorn user.app.main:app --reload --port 8001
-```
-
-## Run the server
-1. Activate the virtual environment: `source venv/bin/activate`
-2. Run `uv run uvicorn user.app.main:app --reload --port 8001`
-
-The application creates missing tables automatically on startup.
+샘플 군번은 `26-TEST-001`부터 `26-TEST-060`까지이며, 모두 미배정 상태로 생성됩니다. SQL은 `INSERT OR IGNORE`를 사용하므로 여러 번 실행해도 중복되지 않습니다.
 
 ## Development Roadmap
 ### Phase 1 — Database
@@ -88,26 +71,6 @@ The application creates missing tables automatically on startup.
  Logging
  Deployment
 
-
- Updating to the new SQL database file.
-
- rm -f /tmp/project_ai_tf_test.db
-
-DB_PATH=/tmp/project_ai_tf_test.db \
-sqlite3 /tmp/project_ai_tf_test.db < sql/init_phase1.sql
-
-DB_PATH=/tmp/project_ai_tf_test.db \
-sqlite3 /tmp/project_ai_tf_test.db < sql/seed_phase1.sql
-
-
-심 파일은 다음과 같습니다.
-
-업무 로직: assignment.py
-API: squads.py
-DB 배정 모델: assignment.py
-테스트 데이터: randomize_assignment_test.sql
-자동 테스트: test_assignment.py
-
 ## The Checklists:
 1. 전투편성
 전투편성은 현재 자동 테스트가 가장 잘 마련된 부분입니다. 다음을 추가로 확인하세요.
@@ -129,3 +92,50 @@ quota가 음수이거나 비정상적인 값인 경우
 - in the dashboard, I want to show the graph, data results, resluts and current situations, as a 자원 현항, 훈련 관리등등. 
 2. 📝 보류 및 연기 (Postponements) 신청/결재 관리 UI
 백엔드 /postponements API와 연동하여 예비군의 연기/보류 신청 등록 및 담당자 승인/반려(Workflow) 화면을 구현합니다.
+
+### Core API Examples
+예비군
+GET    /persons
+GET    /persons/{id}
+POST   /persons
+PATCH  /persons/{id}
+DELETE /persons/{id}
+
+편성
+GET  /assignments
+POST /assignments
+PATCH /assignments/{id}
+
+보류 / 연기
+GET   /postponements
+POST  /postponements
+PATCH /postponements/{id}/approve
+PATCH /postponements/{id}/reject
+
+Dashboard
+GET /dashboard/summary
+GET /dashboard/statistics
+
+Data Model
+주요 데이터는 다음과 같이 구성합니다.
+
+User
+ │
+ ├── Permission / Role
+ │
+ └── AuditLog
+
+Person
+ │
+ ├── Assignment
+ ├── Education
+ └── Postponement
+
+Squad
+ │
+ └── Assignment
+
+Postponement
+ │
+ ├── Approval
+ └── Notification
