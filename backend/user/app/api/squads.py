@@ -12,8 +12,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from user.app.database import get_db
 from user.app.models.squad import Squad
-from user.app.schemas.assignment import AssignmentConfirmation, AssignmentPlan
+from user.app.schemas.assignment import AssignmentConfirmation, AssignmentPlan, AutomaticAssignmentPlan
 from user.app.services.assignment import (
+	auto_assign_people,
 	available_assignment_candidates,
 	confirm_assignment_selections,
 	fill_squad_positions,
@@ -70,6 +71,18 @@ def reset_assignments(db: Session = Depends(get_db)) -> dict[str, int]:
 	return reset_assignment_pool(db)
 
 
+@router.post("/assignments/auto")
+def auto_assignments(
+	plan: AutomaticAssignmentPlan,
+	db: Session = Depends(get_db),
+) -> dict[str, object]:
+	try:
+		return auto_assign_people(db, plan.limit)
+	
+	except ValueError as error:
+		raise HTTPException(status_code=400, detail=str(error)) from error
+
+
 @router.get("/assignments/recommendations/{person_id}")
 def assignment_recommendations(person_id: str, db: Session = Depends(get_db)) -> list[dict[str, object]]:
 	try:
@@ -88,6 +101,18 @@ def list_squads(db: Session = Depends(get_db)) -> list[dict[str, object]]:
 			"name": squad.name,
 			"description": squad.description,
 			"person_count": len(squad.persons),
+			"roster": [
+				{
+					"military_number": person.military_number,
+					"name": person.name,
+					"branch": person.branch,
+					"category": personnel_category(person.rank),
+					"position": person.position,
+					"specialty": person.specialty,
+					"service_year": person.service_year,
+				}
+				for person in sorted(squad.persons, key=lambda item: item.military_number)
+			],
 			"breakdown": {
 				f"{person.branch}-{personnel_category(person.rank)}": sum(
 					1 for member in squad.persons

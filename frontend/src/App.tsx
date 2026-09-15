@@ -75,6 +75,16 @@ type Squad = {
   description: string | null
   person_count: number
   breakdown?: Record<string, number>
+  roster?: SquadMember[]
+}
+type SquadMember = {
+  military_number: string
+  name: string
+  branch: string
+  category: string
+  position: string | null
+  specialty: string | null
+  service_year: number | null
 }
 type AssignmentRecommendation = {
   squad_id: number
@@ -355,14 +365,27 @@ function ResourceModule() {
 
   const prepareAssignment = () => {
     const next: ProposedAssignment[] = []; const used = new Set<string>()
-    assignmentBranches.forEach(b => assignmentPositions.forEach(p => personnelCategories.forEach(c => {
-      const requested = quotas[b]?.[p]?.[c] ?? 0
-      ;(candidates[b]?.[c] ?? []).filter(x => x.position === p).slice(0, requested).forEach(x => {
+    const [selectedBranch, selectedCategory] = assignmentTab.split('-')
+    assignmentPositions.forEach(p => {
+      const requested = quotas[selectedBranch]?.[p]?.[selectedCategory] ?? 0
+      ;(candidates[selectedBranch]?.[selectedCategory] ?? []).filter(x => x.position === p).slice(0, requested).forEach(x => {
         if (used.has(x.military_number)) return
-        used.add(x.military_number); next.push({ ...x, branch: b, category: c, squad_id: Number(assignmentSquad) })
+        used.add(x.military_number); next.push({ ...x, branch: selectedBranch, category: selectedCategory, squad_id: Number(assignmentSquad) })
       })
-    })))
+    })
     setProposal(next); setAssignmentResult(null); setAssignmentError('')
+  }
+  const toggleAssignmentCandidate = (candidate: AssignmentCandidate) => {
+    const [selectedBranch, selectedCategory] = assignmentTab.split('-')
+    setProposal(items => {
+      const existing = items.find(item => item.military_number === candidate.military_number)
+      if (existing) return items.filter(item => item.military_number !== candidate.military_number)
+      const requested = quotas[selectedBranch]?.[candidate.position]?.[selectedCategory] ?? 0
+      const selectedForPosition = items.filter(item => item.branch === selectedBranch && item.category === selectedCategory && item.position === candidate.position).length
+      if (selectedForPosition >= requested) return items
+      return [...items, { ...candidate, branch: selectedBranch, category: selectedCategory, squad_id: Number(assignmentSquad) }]
+    })
+    setAssignmentResult(null); setAssignmentError('')
   }
   const confirmAssignments = async () => {
     setAssignmentLoading(true); setAssignmentError('')
@@ -372,6 +395,27 @@ function ResourceModule() {
       setAssignmentResult({ squad_id: Number(assignmentSquad), positions: {}, total_requested: proposal.length, total_assigned: proposal.length, total_shortfall: 0 })
       setProposal([]); setRefreshKey(k => k + 1)
     } catch (e) { setAssignmentError(e instanceof Error ? e.message : '전투편성에 실패했습니다.') }
+    finally { setAssignmentLoading(false) }
+  }
+  const resetAssignments = async () => {
+    if (!window.confirm('모든 예비군의 현재 분대와 배정 기록을 초기화하시겠습니까?')) return
+    setAssignmentLoading(true); setAssignmentError('')
+    try {
+      const r = await fetch(`${API_BASE}/squads/assignments/reset`, { method: 'POST' })
+      if (!r.ok) throw new Error(await responseError(r, '전투편성 초기화에 실패했습니다.'))
+      setProposal([]); setAssignmentResult(null); setRefreshKey(k => k + 1)
+    } catch (e) { setAssignmentError(e instanceof Error ? e.message : '전투편성 초기화에 실패했습니다.') }
+    finally { setAssignmentLoading(false) }
+  }
+  const autoAssign300 = async () => {
+    setAssignmentLoading(true); setAssignmentError('')
+    try {
+      const r = await fetch(`${API_BASE}/squads/assignments/auto`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit: 300 }) })
+      if (!r.ok) throw new Error(await responseError(r, '300명 자동 편성에 실패했습니다.'))
+      const data = await r.json() as { total_assigned: number }
+      setAssignmentResult({ squad_id: 0, positions: {}, total_requested: data.total_assigned, total_assigned: data.total_assigned, total_shortfall: 0 })
+      setProposal([]); setRefreshKey(k => k + 1)
+    } catch (e) { setAssignmentError(e instanceof Error ? e.message : '300명 자동 편성에 실패했습니다.') }
     finally { setAssignmentLoading(false) }
   }
   const confirmNewArrival = async (squadId: number) => {
@@ -401,7 +445,7 @@ function ResourceModule() {
         {!listLoading && !listError && people.length === 0 && <State><strong>검색 결과가 없습니다</strong><span>검색어나 필터를 바꿔 다시 시도해 보세요.</span></State>}
         {!listLoading && !listError && people.length > 0 && <div className="table-wrap"><table><thead><tr><th>군번</th><th>이름</th><th>군종</th><th>계급</th><th>소속부대</th><th>분대</th><th>상태</th></tr></thead><tbody>{people.map(p => <tr key={p.military_number} onClick={() => openDetail(p)} tabIndex={0} onKeyDown={e => e.key === 'Enter' && openDetail(p)}><td className="mono">{p.military_number}</td><td className="person-name">{p.name}</td><td>{p.branch}</td><td>{p.rank ?? '-'}</td><td>{p.unit ?? '-'}</td><td>{p.squad_id ? `${p.squad_id}분대` : '-'}</td><td><StatusBadge status={p.status} /></td></tr>)}</tbody></table></div>}
       </section>
-    </> : <AssignmentReviewView squads={squads} candidates={candidates} squadId={assignmentSquad} setSquadId={setAssignmentSquad} quotas={quotas} setQuotas={setQuotas} result={assignmentResult} proposal={proposal} setProposal={setProposal} tab={assignmentTab} setTab={setAssignmentTab} loading={assignmentLoading} error={assignmentError} onPrepare={prepareAssignment} onConfirm={confirmAssignments} />}
+    </> : <AssignmentReviewView squads={squads} candidates={candidates} squadId={assignmentSquad} setSquadId={setAssignmentSquad} quotas={quotas} setQuotas={setQuotas} result={assignmentResult} proposal={proposal} setProposal={setProposal} tab={assignmentTab} setTab={setAssignmentTab} loading={assignmentLoading} error={assignmentError} onPrepare={prepareAssignment} onToggleCandidate={toggleAssignmentCandidate} onConfirm={confirmAssignments} onReset={resetAssignments} onAutoAssign={autoAssign300} />}
 
     {selectedId && <DetailModal person={selectedPerson} progress={progress} records={records} loading={detailLoading} error={detailError} tab={detailTab} setTab={setDetailTab} onClose={closeDetail}
       onEdit={() => { if (selectedPerson) { setPersonForm(selectedPerson); setEditingPerson(true) } }} onDelete={deletePerson}
@@ -415,31 +459,32 @@ function ResourceModule() {
   </div>
 }
 
-function AssignmentReviewView({ squads, candidates, squadId, setSquadId, quotas, setQuotas, result, proposal, setProposal, tab, setTab, loading, error, onPrepare, onConfirm }: {
+function AssignmentReviewView({ squads, candidates, squadId, setSquadId, quotas, setQuotas, result, proposal, setProposal, tab, setTab, loading, error, onPrepare, onToggleCandidate, onConfirm, onReset, onAutoAssign }: {
   squads: Squad[]; candidates: AssignmentCandidates; squadId: string; setSquadId: (v: string) => void; quotas: AssignmentQuotas; setQuotas: (v: AssignmentQuotas) => void;
-  result: AssignmentResult | null; proposal: ProposedAssignment[]; setProposal: Dispatch<SetStateAction<ProposedAssignment[]>>; tab: string; setTab: (v: string) => void; loading: boolean; error: string; onPrepare: () => void; onConfirm: () => void
+  result: AssignmentResult | null; proposal: ProposedAssignment[]; setProposal: Dispatch<SetStateAction<ProposedAssignment[]>>; tab: string; setTab: (v: string) => void; loading: boolean; error: string; onPrepare: () => void; onToggleCandidate: (candidate: AssignmentCandidate) => void; onConfirm: () => void; onReset: () => void; onAutoAssign: () => void
 }) {
   const tabs = assignmentBranches.flatMap(b => personnelCategories.map(c => `${b}-${c}`))
   const [selectedBranch, selectedCategory] = tab.split('-')
   const tabCandidates = candidates[selectedBranch]?.[selectedCategory] ?? []
   const tabProposal = proposal.filter(p => p.branch === selectedBranch && p.category === selectedCategory)
   const required = assignmentPositions.reduce((s, p) => s + (quotas[selectedBranch]?.[p]?.[selectedCategory] ?? 0), 0)
-  const totalRequested = assignmentBranches.reduce((s, b) => s + assignmentPositions.reduce((s2, p) => s2 + personnelCategories.reduce((s3, c) => s3 + (quotas[b]?.[p]?.[c] ?? 0), 0), 0), 0)
+  const branchRequested = assignmentPositions.reduce((s, p) => s + personnelCategories.reduce((s2, c) => s2 + (quotas[selectedBranch]?.[p]?.[c] ?? 0), 0), 0)
   const selectedSquad = squads.find(s => String(s.id) === squadId)
 
   return <div className="assignment-page">
     <div className="page-intro"><div><h2>전투편성 검토</h2><p>군별·인원유형별·직책별로 후보를 분리해 확인한 뒤 확정합니다.</p></div></div>
     <div className="squad-profile-layout">
-      <section className="assignment-panel"><label className="assignment-select">대상 분대<select value={squadId} onChange={e => setSquadId(e.target.value)}>{squads.map(s => <option key={s.id} value={s.id}>{s.name} · 현재 {s.person_count}명</option>)}</select></label>{selectedSquad && <SquadProfile squad={selectedSquad} />}</section>
-      <section className="assignment-panel"><div className="section-heading"><h3>{selectedBranch} 필요 인원</h3><span>{totalRequested}명 전체 요청</span></div><div className="quota-table"><div className="quota-row quota-head"><span>직책</span>{personnelCategories.map(c => <span key={c}>{c}</span>)}</div>{assignmentPositions.map(p => <div className="quota-row" key={p}><strong>{p}</strong>{personnelCategories.map(c => <label key={c}><input type="number" min="0" value={quotas[selectedBranch][p][c]} onChange={e => setQuotas({ ...quotas, [selectedBranch]: { ...quotas[selectedBranch], [p]: { ...quotas[selectedBranch][p], [c]: Number(e.target.value) } } })} /></label>)}</div>)}</div></section>
+      <section className="assignment-panel"><div className="assignment-toolbar"><button className="button secondary" disabled={loading} onClick={onReset}>편성 초기화</button><button className="button primary" disabled={loading} onClick={onAutoAssign}>300명 자동 편성</button></div><label className="assignment-select">대상 분대<select value={squadId} onChange={e => setSquadId(e.target.value)}>{squads.map(s => <option key={s.id} value={s.id}>{s.name} · 현재 {s.person_count}명</option>)}</select></label>{selectedSquad && <SquadProfile squad={selectedSquad} />}</section>
+      <section className="assignment-panel"><div className="section-heading"><h3>{selectedBranch} 필요 인원</h3><span>{branchRequested}명 요청</span></div><div className="quota-table"><div className="quota-row quota-head"><span>직책</span>{personnelCategories.map(c => <span key={c}>{c}</span>)}</div>{assignmentPositions.map(p => <div className="quota-row" key={p}><strong>{p}</strong>{personnelCategories.map(c => <label key={c}><input type="number" min="0" value={quotas[selectedBranch][p][c]} onChange={e => setQuotas({ ...quotas, [selectedBranch]: { ...quotas[selectedBranch], [p]: { ...quotas[selectedBranch][p], [c]: Number(e.target.value) } } })} /></label>)}</div>)}</div></section>
     </div>
     <section className="assignment-panel review-panel">
       <div className="assignment-tabs">{tabs.map(t => <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>{t.replace('-', ' · ')}</button>)}</div>
       <div className="review-heading"><div><h3>{selectedBranch} · {selectedCategory}</h3><p>가용 {tabCandidates.filter(p => assignmentPositions.includes(p.position)).length}명 · 필요 {required}명 · 검토안 {tabProposal.length}명</p></div><span className={tabProposal.length < required ? 'shortfall-label' : 'ready-label'}>{Math.max(required - tabProposal.length, 0)}명 부족</span></div>
-      <div className="candidate-list">{tabCandidates.length === 0 && <State>현재 조건에 맞는 후보가 없습니다.</State>}{tabCandidates.map(c => { const proposed = proposal.find(p => p.military_number === c.military_number); return <article className={`candidate-row ${proposed ? 'proposed' : ''}`} key={c.military_number}><div><strong>{c.name}</strong><span>{c.military_number} · {c.position} · {c.specialty ?? '특기 없음'} · {c.service_year ?? '-'}년차</span></div><span className="tier-badge">{c.tier}</span>{proposed ? <select value={String(proposed.squad_id)} onChange={e => setProposal(items => items.map(p => p.military_number === c.military_number ? { ...p, squad_id: Number(e.target.value) } : p))}>{squads.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <span className="candidate-status">후보</span>}</article> })}</div>
+      <div className="candidate-list">{tabCandidates.length === 0 && <State>현재 조건에 맞는 후보가 없습니다.</State>}{tabCandidates.map(c => { const proposed = proposal.find(p => p.military_number === c.military_number); return <article className={`candidate-row ${proposed ? 'proposed' : ''}`} key={c.military_number} onClick={() => onToggleCandidate(c)}><div><strong>{c.name}</strong><span>{c.military_number} · {c.position} · {c.specialty ?? '특기 없음'} · {c.service_year ?? '-'}년차</span></div><span className="tier-badge">{c.tier}</span>{proposed ? <select value={String(proposed.squad_id)} onClick={e => e.stopPropagation()} onChange={e => setProposal(items => items.map(p => p.military_number === c.military_number ? { ...p, squad_id: Number(e.target.value) } : p))}>{squads.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <span className="candidate-status">후보 · 클릭하여 선택</span>}</article> })}</div>
       <div className="review-actions"><button className="button secondary" onClick={onPrepare}>편성안 만들기</button><button className="button primary" disabled={loading || proposal.length === 0} onClick={onConfirm}>{loading ? '확정 중...' : '검토안 확정 배정'}</button></div>
       {error && <div className="inline-error">{error}</div>}{result && <div className="confirmation-note">{result.total_assigned}명이 확정 배정되었습니다.</div>}
     </section>
+    {selectedSquad && <section className="assignment-panel roster-panel"><div className="section-heading"><h3>{selectedSquad.name} 전투편성표</h3><span>{selectedSquad.person_count}명</span></div>{selectedSquad.roster?.length ? <div className="table-wrap"><table><thead><tr><th>군번</th><th>성명</th><th>군종</th><th>인원유형</th><th>직책</th><th>주특기</th><th>연차</th></tr></thead><tbody>{selectedSquad.roster.map(person => <tr key={person.military_number}><td className="mono">{person.military_number}</td><td className="person-name">{person.name}</td><td>{person.branch}</td><td>{person.category}</td><td>{person.position ?? '-'}</td><td>{person.specialty ?? '-'}</td><td>{person.service_year ?? '-'}년차</td></tr>)}</tbody></table></div> : <State>현재 배정된 인원이 없습니다.</State>}</section>}
   </div>
 }
 

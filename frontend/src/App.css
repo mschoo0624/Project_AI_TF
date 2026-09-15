@@ -84,6 +84,7 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
 
 .squad-profile-layout { display:grid; grid-template-columns:minmax(240px,.8fr) minmax(0,1.5fr); gap:16px; margin-top:28px; }
 .assignment-panel { margin-top:16px; padding:20px; }
+.assignment-toolbar { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
 .assignment-select { display:grid; gap:7px; max-width:360px; color:var(--muted); font-size:12px; }
 .assignment-select select,.quota-row input,.candidate-row select { padding:8px; border:1px solid var(--line); border-radius:5px; background:#fbfdfb; }
 .quota-table { margin-top:16px; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
@@ -102,7 +103,7 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
 .shortfall-label { color:var(--red); background:var(--red-bg); }
 .ready-label { color:var(--green); background:var(--mint); }
 .candidate-list { border-top:1px solid var(--line); }
-.candidate-row { display:grid; grid-template-columns:minmax(0,1fr) auto 150px; align-items:center; gap:14px; padding:12px 20px; border-bottom:1px solid #edf1ed; }
+.candidate-row { display:grid; grid-template-columns:minmax(0,1fr) auto 150px; align-items:center; gap:14px; padding:12px 20px; border-bottom:1px solid #edf1ed; cursor:pointer; }
 .candidate-row.proposed { background:#f4faf6; }
 .candidate-row div span { display:block; margin-top:4px; color:var(--muted); font-size:11px; }
 .tier-badge { padding:4px 7px; border-radius:4px; background:var(--mint); color:var(--green); font-size:10px; }

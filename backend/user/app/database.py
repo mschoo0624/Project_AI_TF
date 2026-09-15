@@ -107,57 +107,6 @@ def init_db() -> None:
                     """
                 )
             )
-        legacy_assignment_count = connection.execute(
-            text("SELECT COUNT(*) FROM person WHERE squad_id >= 10")
-        ).scalar_one()
-        person_count = connection.execute(
-            text("SELECT COUNT(*) FROM person WHERE status = 'active'")
-        ).scalar_one()
-        if person_count and legacy_assignment_count == 0:
-            connection.execute(
-                text(
-                    """
-                    WITH ranked_people AS (
-                        SELECT
-                            military_number,
-                            ((ROW_NUMBER() OVER (
-                                PARTITION BY branch,
-                                    CASE
-                                        WHEN rank IN ('이병', '일병', '상병', '병장') THEN '병사'
-                                        WHEN rank IN ('하사', '중사', '상사', '원사') THEN '부사관'
-                                        WHEN rank IN ('소위', '중위', '대위', '소령', '중령', '대령') THEN '장교'
-                                        ELSE '기타'
-                                    END
-                                ORDER BY military_number
-                            ) - 1) % 20) + 1 AS squad_id
-                        FROM person
-                        WHERE status = 'active'
-                    )
-                    UPDATE person
-                    SET squad_id = (
-                        SELECT ranked_people.squad_id
-                        FROM ranked_people
-                        WHERE ranked_people.military_number = person.military_number
-                    )
-                    WHERE military_number IN (SELECT military_number FROM ranked_people)
-                    """
-                )
-            )
-            connection.execute(
-                text(
-                    """
-                    UPDATE assignment
-                    SET squad_id = (
-                        SELECT person.squad_id
-                        FROM person
-                        WHERE person.military_number = assignment.person_id
-                    )
-                    WHERE person_id IN (
-                        SELECT military_number FROM person WHERE status = 'active'
-                    )
-                    """
-                )
-            )
         if "branch" not in person_columns:
             connection.execute(
                 text("ALTER TABLE person ADD COLUMN branch VARCHAR(50) NOT NULL DEFAULT '육군'")

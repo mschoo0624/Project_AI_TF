@@ -134,7 +134,7 @@ def rank_candidates(
 	position: str,
 	branch: str | None = None,
 ) -> list[AssignmentCandidate]:
-	"""Prioritize soldier service years, then specialty-match tiers."""
+	"""Prioritize eligible soldiers and then specialty-match tiers."""
 	candidates = [
 		AssignmentCandidate(
 			person,
@@ -145,12 +145,13 @@ def rank_candidates(
 		if branch is None or person.branch == branch
 	]
 
-	def sort_key(candidate: AssignmentCandidate) -> tuple[int, int, int, str]:
+	def sort_key(candidate: AssignmentCandidate) -> tuple[int, int, int, int, str]:
 		year_priority = 0 if candidate.personnel_category == "병사" and candidate.person.service_year in (5, 6) else 1
 		service_year = candidate.person.service_year if candidate.person.service_year is not None else 99
 		return (
 			year_priority,
 			specialty_priority(candidate.tier),
+		0 if candidate.personnel_category == "병사" else 1,
 		service_year,
 			candidate.person.military_number,
 		)
@@ -173,8 +174,8 @@ def rank_candidates_for_position(
 	return sorted(ranked, key=lambda candidate: (
 		0 if candidate.personnel_category == "병사" and candidate.person.service_year in (5, 6) else 1,
 		0 if candidate.personnel_category == "병사" and candidate.person.service_year in (5, 6) and is_priority_medic_origin(candidate.person) else 1,
-		candidate.person.service_year if candidate.person.service_year is not None else 99,
 		specialty_priority(candidate.tier),
+		candidate.person.service_year if candidate.person.service_year is not None else 99,
 		candidate.person.military_number,
 	))
 
@@ -356,18 +357,87 @@ def confirm_assignment_selections(
 
 
 def reset_assignment_pool(db: Session) -> dict[str, int]:
-	"""Move all active reservists back to the temporary, unassigned pool."""
+	"""Move every reservist back to the temporary, unassigned pool."""
 	try:
-		reset_people = db.query(Person).filter(Person.status == "active", Person.squad_id.is_not(None)).all()
-		person_ids = [person.military_number for person in reset_people]
-		if person_ids:
-			db.query(Assignment).filter(Assignment.person_id.in_(person_ids)).delete(
-				synchronize_session=False
-			)
-			for person in reset_people:
-				person.squad_id = None
+		reset_count = db.query(Person).filter(Person.squad_id.is_not(None)).update(
+			{Person.squad_id: None}, synchronize_session=False
+		)
+		db.query(Assignment).delete(synchronize_session=False)
 		db.commit()
-		return {"reset_count": len(reset_people)}
+		return {"reset_count": reset_count}
+	except Exception:
+		db.rollback()
+		raise
+
+
+def auto_assign_people(
+	db: Session,
+	limit: int | None = None,
+) -> dict[str, object]:
+	"""Reset assignments and distribute people by branch and personnel category."""
+	if limit is not None and limit < 1:
+		raise ValueError("Assignment limit must be positive")
+
+	try:
+		reset_assignment_pool(db)
+		people = list(
+			db.scalars(
+				select(Person).where(Person.status == "active").order_by(Person.military_number)
+			).all()
+		)
+		squads = list(db.scalars(select(Squad).order_by(Squad.id)).all())
+		if not squads:
+			raise ValueError("No squads are available")
+
+		groups: dict[tuple[str, str], list[Person]] = {}
+		for person in people:
+			groups.setdefault((person.branch, personnel_category(person.rank)), []).append(person)
+		if len(groups) > len(squads):
+			raise ValueError("There are not enough squads to keep branches and personnel categories separate")
+
+		position_order = {position: index for index, position in enumerate(POSITION_SPECIALTIES)}
+		assigned: list[dict[str, object]] = []
+		assigned_count = 0
+		for group_index, (group, group_people) in enumerate(sorted(groups.items())):
+			squad = squads[group_index]
+			ordered: list[AssignmentCandidate] = []
+			for position in sorted(
+				{person.position for person in group_people},
+				key=lambda value: position_order.get(value or "", len(position_order)),
+			):
+				position_people = [person for person in group_people if person.position == position]
+				ordered.extend(rank_candidates_for_position(position_people, position or ""))
+			ordered.extend(
+				AssignmentCandidate(person, classify_specialty(person.position or "", person.specialty), group[1])
+				for person in group_people
+				if person.position is None
+			)
+			for candidate in ordered:
+				if limit is not None and assigned_count >= limit:
+					break
+				person = candidate.person
+				person.squad_id = squad.id
+				db.add(
+					Assignment(
+						person_id=person.military_number,
+						squad_id=squad.id,
+						assigned_date=date.today(),
+						status="assigned",
+					)
+				)
+				assigned.append({
+					"military_number": person.military_number,
+					"name": person.name,
+					"squad_id": squad.id,
+					"branch": person.branch,
+					"category": group[1],
+					"position": person.position,
+					"specialty": person.specialty,
+					"tier": candidate.tier,
+				})
+				assigned_count += 1
+		db.commit()
+		return {"total_assigned": len(assigned), "assigned": assigned}
 	except Exception:
 		db.rollback()
 		raise

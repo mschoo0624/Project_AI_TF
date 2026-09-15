@@ -8,10 +8,12 @@ from user.app.models.assignment import Assignment
 from user.app.models.person import Person
 from user.app.models.squad import Squad
 from user.app.services.assignment import (
+    auto_assign_people,
     confirm_assignment_selections,
     fill_squad_positions,
     rank_candidates_for_position,
     recommend_squads_for_person,
+    personnel_category,
     suggest_position_for_specialty,
 )
 
@@ -186,4 +188,35 @@ def test_recommend_squads_returns_only_compatible_top_three() -> None:
     recommendations = recommend_squads_for_person(db, "new-person")
 
     assert [item["squad_id"] for item in recommendations] == [3, 4, 1]
+    db.close()
+
+
+def test_auto_assign_resets_everyone_and_keeps_branch_category_groups_separate() -> None:
+    db = make_session()
+    db.add_all([Squad(id=1, name="1분대"), Squad(id=2, name="2분대")])
+    first = add_person(db, "first", "행정병", "3111 101", squad_id=1)
+    first.rank = "병장"
+    second = add_person(db, "second", "행정병", "311 102", service_year=4)
+    second.rank = "병장"
+    third = add_person(db, "third", "통신병", "171 101")
+    third.rank = "하사"
+    inactive = add_person(db, "inactive", "의무병", "411 101", squad_id=1)
+    inactive.status = "on_leave"
+    db.commit()
+
+    result = auto_assign_people(db)
+
+    assert result["total_assigned"] == 3
+    assert db.get(Person, "inactive").squad_id is None
+    assigned_groups = {
+        squad_id: {
+            (person.branch, personnel_category(person.rank))
+            for person in db.scalars(select(Person).where(Person.squad_id == squad_id)).all()
+        }
+        for squad_id in (1, 2)
+    }
+    assert all(len(groups) <= 1 for groups in assigned_groups.values())
+    assert db.get(Person, "first").squad_id == 1
+    assert db.get(Person, "second").squad_id == 1
+    assert db.get(Person, "third").squad_id == 2
     db.close()
