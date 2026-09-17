@@ -21,11 +21,9 @@ UNEXCUSED_ABSENCE = {"무단불참", "무단_불참", "unexcused_absence"}
 # 부사관/장교는 6년차까지 동원훈련Ⅰ형 대상, 병은 4년차까지만 해당.
 OFFICER_CATEGORIES = {"부사관", "장교"}
 
-
 def is_officer_reservist(rank: str | None) -> bool:
     """Return whether a rank belongs to the officer/NCO cadre (간부)."""
     return personnel_category(rank) in OFFICER_CATEGORIES
-
 
 def target_training_hours(
     service_year: int,
@@ -37,7 +35,6 @@ def target_training_hours(
     # 간부(부사관/장교)는 동원상태와 무관하게 1~6년차 항상 동원훈련Ⅰ형만 대상이다.
     if is_officer_reservist(rank) and 1 <= service_year <= 6:
         return 28
-    # 학생예비군은 연차와 무관하게 1~6년차 매년 기본훈련 8시간 고정이다.
     if mobilization_status in STUDENT and 1 <= service_year <= 6:
         return 8
     if 1 <= service_year <= 4:
