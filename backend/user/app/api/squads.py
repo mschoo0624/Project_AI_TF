@@ -110,6 +110,7 @@ def list_squads(db: Session = Depends(get_db)) -> list[dict[str, object]]:
 					"position": person.position,
 					"specialty": person.specialty,
 					"service_year": person.service_year,
+					"status": person.status,
 				}
 				for person in sorted(squad.persons, key=lambda item: item.military_number)
 			],

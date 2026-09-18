@@ -15,3 +15,6 @@ __all__ = [
     "Squad",
     "User",
 ]
+from user.app.models.organization import OrganizationNode
+
+__all__.append("OrganizationNode")
