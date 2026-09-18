@@ -3,183 +3,133 @@ import {
   acceptDocument, fetchBootstrap, rejectDocument, verifyDocument,
   type Bootstrap, type Person, type QueueItem,
 } from './api'
+import './ReviewManagement.css'
 
-const CLASS_STYLE: Record<string, string> = {
-  법규보류: 'text-emerald-800 border-emerald-800',
-  방침보류: 'text-emerald-800 border-emerald-800',
-  후순위조정: 'text-emerald-800 border-emerald-800',
-  연기: 'text-amber-800 border-amber-800',
-  일반: 'text-slate-500 border-slate-300',
+// Only the appearance of the existing review feature is changed here.
+// Its data source and document-action implementations remain in ./api.ts.
+type ReviewTab = 'roster' | 'inbox'
+type QueuedRow = QueueItem & { done: string | null }
+type DatedQueueItem = QueueItem & {
+  application_date?: string | null
+  applied_at?: string | null
+  submitted_at?: string | null
+}
+
+function applicationDate(item: QueueItem): string {
+  const dated = item as DatedQueueItem
+  // The current API exports `issued`, not the date of an application.
+  const value = dated.application_date ?? dated.applied_at ?? dated.submitted_at
+  return value ? value.slice(0, 10).replace(/-/g, '.') : '—'
+}
+
+function reviewReason(item: QueueItem): string {
+  const classification = item.if_accepted_classification || item.current_classification || ''
+  if (classification.includes('연기')) return '연기자'
+  if (classification.includes('보류') || classification.includes('후순위')) return '보류자'
+  return item.type
 }
 
 function ClassChip({ label }: { label: string }) {
-  const cls = CLASS_STYLE[label] ?? 'text-slate-500 border-slate-300'
-  return <span className={`inline-block rounded border px-2 py-0.5 text-[12px] font-semibold ${cls}`}>{label}</span>
+  const tone = label.includes('연기') ? 'postponed' : label.includes('보류') || label.includes('후순위') ? 'deferred' : 'normal'
+  return <span className={`review-class-chip ${tone}`}>{label}</span>
 }
 
-function Tabs({ tab, setTab, queueLeft }: { tab: 'roster' | 'inbox'; setTab: (t: 'roster' | 'inbox') => void; queueLeft: number }) {
-  const base = 'px-3 py-1.5 text-[13.5px] border-b-2'
+function Tabs({ tab, setTab }: { tab: ReviewTab; setTab: (tab: ReviewTab) => void }) {
   return (
-    <nav className="flex gap-1">
-      <button className={`${base} ${tab === 'inbox' ? 'border-emerald-800 text-slate-900 font-semibold' : 'border-transparent text-slate-500'}`}
-              onClick={() => setTab('inbox')}>
-        검토함
-        <span className="ml-1.5 rounded-full bg-slate-700 px-1.5 text-[11px] font-semibold text-white">{queueLeft}</span>
+    <nav className="review-inner-tabs" aria-label="보류·연기 페이지">
+      <button type="button" className={`review-inner-tab ${tab === 'roster' ? 'active' : ''}`}
+        aria-current={tab === 'roster' ? 'page' : undefined} onClick={() => setTab('roster')}>
+        보류/연기자 명부
       </button>
-      <button className={`${base} ${tab === 'roster' ? 'border-emerald-800 text-slate-900 font-semibold' : 'border-transparent text-slate-500'}`}
-              onClick={() => setTab('roster')}>
-        명부
+      <button type="button" className={`review-inner-tab ${tab === 'inbox' ? 'active' : ''}`}
+        aria-current={tab === 'inbox' ? 'page' : undefined} onClick={() => setTab('inbox')}>
+        검토함
       </button>
     </nav>
   )
 }
 
-function ReasonList({ title, items, tone }: { title: string; items: string[]; tone?: 'alert' }) {
-  if (items.length === 0) return null
-  return (
-    <div className="mt-4">
-      <h3 className={`mb-2 text-[12.5px] font-semibold ${tone === 'alert' ? 'text-amber-700' : 'text-slate-500'}`}>{title}</h3>
-      <ul className={`space-y-1 text-[13px] ${tone === 'alert' ? 'text-amber-700' : 'text-slate-700'}`}>
-        {items.map((r, i) => <li key={i}>{tone === 'alert' ? '! ' : '· '}{r}</li>)}
-      </ul>
-    </div>
-  )
+function ReasonList({ title, items, alert = false }: { title: string; items: string[]; alert?: boolean }) {
+  if (!items.length) return null
+  return <section className={`review-reasons ${alert ? 'alert' : ''}`}>
+    <h3>{title}</h3>
+    <ul>{items.map((reason, index) => <li key={index}>{alert ? '! ' : '· '}{reason}</li>)}</ul>
+  </section>
 }
 
 function PersonDetail({ person, onClose }: { person: Person; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-10 grid place-items-center bg-slate-900/45 p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <section className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-slate-300 bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4">
-          <div>
-            <p className="mb-0.5 text-[11px] font-semibold tracking-wide text-emerald-800">RESERVIST</p>
-            <h2 className="text-2xl font-semibold tracking-tight">{person.name}</h2>
-            <p className="num mt-1 text-[13px] text-slate-500">{person.person_id} · {person.occupation ?? '직업 미상'} · {person.branch}</p>
+    <div className="review-modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
+      <section className="review-person-modal" role="dialog" aria-modal="true" aria-label={`${person.name} 상세 정보`}>
+        <header className="review-person-modal-header">
+          <div><p className="review-modal-eyebrow">RESERVIST</p><h2>{person.name}</h2>
+            <p className="review-muted">{person.person_id} · {person.occupation ?? '직업 미상'} · {person.branch}</p></div>
+          <button type="button" className="review-close" aria-label="상세창 닫기" onClick={onClose}>×</button>
+        </header>
+        <div className="review-person-modal-body">
+          <div className="review-person-summary"><ClassChip label={person.classification} />
+            {person.rule_code && <span className="review-muted">{person.rule_code}</span>}
+            <span className="review-muted">{person.resource_year}년차 · 동원지정 {person.mobilization_designated ? 'O' : 'X'}</span>
           </div>
-          <button className="rounded p-1 text-2xl leading-none text-slate-400 hover:text-slate-700" onClick={onClose}>×</button>
-        </div>
-
-        <div className="px-6 py-5">
-          <div className="mb-4 flex flex-wrap items-center gap-3">
-            <ClassChip label={person.classification} />
-            {person.rule_code && <span className="num text-[12px] text-slate-400">{person.rule_code}</span>}
-            <span className="text-[13px] text-slate-500">{person.resource_year}년차 · 동원지정 {person.mobilization_designated ? 'O' : 'X'}</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="review-stat-grid">
             {[
               ['동원훈련', person.mobilization],
               ['교육훈련', person.training],
               ['부과 시간', `${person.hours}h${person.makeup_hours ? ` +보충${person.makeup_hours}` : ''}`],
               ['이월', `${person.carryover}h`],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded border border-slate-200 p-3">
-                <div className="text-[11.5px] text-slate-400">{label}</div>
-                <div className="num mt-0.5 font-semibold">{value}</div>
-              </div>
-            ))}
+            ].map(([label, value]) => <div className="review-stat" key={label}><small>{label}</small><strong>{value}</strong></div>)}
           </div>
-
           <ReasonList title="판정 근거" items={person.reasons} />
-          <ReasonList title="알람" items={person.alerts} tone="alert" />
-
-          {person.documents.length > 0 && (
-            <div className="mt-5">
-              <h3 className="mb-2 text-[12.5px] font-semibold text-slate-500">제출 서류</h3>
-              <div className="divide-y divide-slate-100 rounded border border-slate-200">
-                {person.documents.map((d) => (
-                  <div key={d.id} className="flex items-center justify-between px-3 py-2 text-[13px]">
-                    <div>
-                      <span className="font-medium">{d.type}</span>
-                      <span className="ml-2 text-slate-400">{d.owner}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="num text-slate-400">발급 {d.issued}</span>
-                      <span className={`rounded px-1.5 py-0.5 text-[11.5px] font-semibold ${
-                        d.status === '승인' ? 'bg-emerald-50 text-emerald-800'
-                        : d.status === '반려' ? 'bg-rose-50 text-rose-700'
-                        : d.status === '확인요청' ? 'bg-amber-50 text-amber-800'
-                        : 'bg-slate-100 text-slate-600'}`}>{d.status}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <ReasonList title="알람" items={person.alerts} alert />
+          {person.documents.length > 0 && <section className="review-person-documents"><h3>제출 서류</h3>
+            <div className="review-document-list">{person.documents.map(doc => <div className="review-document-row" key={doc.id}>
+              <div><strong>{doc.type}</strong><span className="review-muted">{doc.owner}</span></div>
+              <div><span className="review-muted">발급 {doc.issued}</span><span className="review-document-status">{doc.status}</span></div>
+            </div>)}</div>
+          </section>}
         </div>
       </section>
     </div>
   )
 }
 
-function RosterView({ people, onSelect }: { people: Person[]; onSelect: (p: Person) => void }) {
+function RosterView({ people, onSelect }: { people: Person[]; onSelect: (person: Person) => void }) {
   const [search, setSearch] = useState('')
-  const [cls, setCls] = useState('')
+  const [classification, setClassification] = useState('')
   const [onlyPending, setOnlyPending] = useState(false)
-
-  const filtered = useMemo(() => people.filter((p) => {
+  const filtered = useMemo(() => people.filter(person => {
     const term = search.trim().toLowerCase()
-    if (term && !p.name.toLowerCase().includes(term) && !p.person_id.includes(term)) return false
-    if (cls && p.classification !== cls) return false
-    if (onlyPending && p.pending_count === 0) return false
+    if (term && !person.name.toLowerCase().includes(term) && !person.person_id.toLowerCase().includes(term)) return false
+    if (classification && person.classification !== classification) return false
+    if (onlyPending && person.pending_count === 0) return false
     return true
-  }), [people, search, cls, onlyPending])
+  }), [people, search, classification, onlyPending])
 
-  return (
-    <section className="rounded border border-slate-300 bg-white">
-      <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-4 py-3">
-        <input
-          value={search} onChange={(e) => setSearch(e.target.value)}
-          placeholder="성명 또는 군번 검색"
-          className="w-56 rounded border border-slate-300 px-2.5 py-1.5 text-[13px] outline-emerald-800"
-        />
-        <select value={cls} onChange={(e) => setCls(e.target.value)} className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-[13px]">
-          <option value="">전체 분류</option>
-          {['법규보류', '방침보류', '후순위조정', '연기', '일반'].map((c) => <option key={c}>{c}</option>)}
-        </select>
-        <label className="flex items-center gap-1.5 text-[13px] text-slate-600">
-          <input type="checkbox" checked={onlyPending} onChange={(e) => setOnlyPending(e.target.checked)} />
-          검토 대기만
-        </label>
-        <span className="ml-auto text-[12.5px] text-slate-500 num">{filtered.length}명 표시 / 전체 {people.length}명</span>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="bg-slate-50 text-left text-[12px] font-semibold text-slate-500">
-              {['군번', '성명', '직업', '연차', '분류', '훈련', '시간', '검토'].map((h) => (
-                <th key={h} className="whitespace-nowrap border-b border-slate-200 px-3 py-2">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((p) => (
-              <tr key={p.person_id} className="cursor-pointer border-b border-slate-100 hover:bg-slate-50" onClick={() => onSelect(p)}>
-                <td className="num px-3 py-2">{p.person_id}</td>
-                <td className="px-3 py-2 font-medium">{p.name}</td>
-                <td className="px-3 py-2 text-slate-600">{p.occupation ?? '—'}</td>
-                <td className="num px-3 py-2">{p.resource_year}년차</td>
-                <td className="px-3 py-2"><ClassChip label={p.classification} /></td>
-                <td className="px-3 py-2 text-slate-600">{p.training}</td>
-                <td className="num px-3 py-2">{p.total_hours}h</td>
-                <td className="px-3 py-2">
-                  {p.pending_count > 0
-                    ? <span className="rounded border border-slate-700 px-2 py-0.5 text-[11.5px] font-semibold text-slate-700">대기 {p.pending_count}</span>
-                    : <span className="text-slate-300">—</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  )
+  return <section className="review-roster">
+    <div className="review-roster-filters">
+      <input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="성명 또는 군번 검색" aria-label="성명 또는 군번 검색" />
+      <select value={classification} onChange={event => setClassification(event.target.value)} aria-label="분류">
+        <option value="">전체 분류</option>
+        {['법규보류', '방침보류', '후순위조정', '연기', '일반'].map(value => <option key={value}>{value}</option>)}
+      </select>
+      <label><input type="checkbox" checked={onlyPending} onChange={event => setOnlyPending(event.target.checked)} /> 검토 대기만</label>
+      <span className="review-roster-total">{filtered.length}명 표시 / 전체 {people.length}명</span>
+    </div>
+    <div className="review-roster-table-wrap"><table className="review-roster-table"><thead><tr>
+      {['군번', '성명', '직업', '연차', '분류', '훈련', '시간', '검토'].map(label => <th key={label}>{label}</th>)}
+    </tr></thead><tbody>{filtered.map(person => <tr key={person.person_id} tabIndex={0}
+      onClick={() => onSelect(person)} onKeyDown={event => { if (event.key === 'Enter') onSelect(person) }}>
+      <td>{person.person_id}</td><td><strong>{person.name}</strong></td><td>{person.occupation ?? '—'}</td>
+      <td>{person.resource_year}년차</td><td><ClassChip label={person.classification} /></td>
+      <td>{person.training}</td><td>{person.total_hours}h</td>
+      <td>{person.pending_count > 0 ? `대기 ${person.pending_count}` : '—'}</td>
+    </tr>)}</tbody></table>
+      {!filtered.length && <p className="review-empty-state">검색 결과가 없습니다.</p>}
+    </div>
+  </section>
 }
 
-function ReviewPanel({
-  item, reasons, verifyReasons, onDone,
-}: {
+function ReviewPanel({ item, reasons, verifyReasons, onDone }: {
   item: QueueItem
   reasons: Bootstrap['reject_reasons']
   verifyReasons: Bootstrap['verify_reasons']
@@ -188,206 +138,160 @@ function ReviewPanel({
   const [mode, setMode] = useState<'none' | 'reject' | 'verify'>('none')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
-
+  const [error, setError] = useState('')
   const runAccept = async () => {
-    setBusy(true)
-    await acceptDocument(item.id, {})
-    setBusy(false)
-    onDone('승인', item.current_classification !== item.if_accepted_classification)
+    setBusy(true); setError('')
+    try {
+      await acceptDocument(item.id, {})
+      onDone('승인', item.current_classification !== item.if_accepted_classification)
+    } catch (e) { setError(e instanceof Error ? e.message : '승인하지 못했습니다.') }
+    finally { setBusy(false) }
   }
   const runReject = async (code: string, message?: string) => {
-    setBusy(true)
-    await rejectDocument(item.id, code, message)
-    setBusy(false)
-    onDone('반려', false, message)
+    setBusy(true); setError('')
+    try { await rejectDocument(item.id, code, message); onDone('반려', false, message) }
+    catch (e) { setError(e instanceof Error ? e.message : '반려하지 못했습니다.') }
+    finally { setBusy(false) }
   }
   const runVerify = async (code: string, message?: string) => {
-    setBusy(true)
-    await verifyDocument(item.id, code, message)
-    setBusy(false)
-    onDone('확인요청', false, message)
+    setBusy(true); setError('')
+    try { await verifyDocument(item.id, code, message); onDone('확인요청', false, message) }
+    catch (e) { setError(e instanceof Error ? e.message : '확인을 요청하지 못했습니다.') }
+    finally { setBusy(false) }
   }
 
-  return (
-    <aside className="w-[340px] shrink-0 overflow-y-auto border-l border-slate-300 bg-white p-4">
-      <dl className="mb-4 grid grid-cols-[60px_1fr] gap-y-1.5 text-[13px]">
-        <dt className="text-slate-500">성명</dt><dd>{item.person_name}</dd>
-        <dt className="text-slate-500">군번</dt><dd className="num">{item.person_id}</dd>
-        <dt className="text-slate-500">직업</dt><dd>{item.occupation ?? '—'}</dd>
-        <dt className="text-slate-500">구분</dt><dd>{item.owner}</dd>
-        <dt className="text-slate-500">현재</dt><dd><ClassChip label={item.current_classification} /></dd>
-      </dl>
-
-      {item.verify_number ? (
-        <div className="mb-4 rounded border border-emerald-200 bg-emerald-50 p-3 text-[12.5px]">
-          <b className="mb-0.5 block">문서확인번호 {item.verify_number}</b>
-          발급처에서 진위를 확인할 수 있습니다.
-        </div>
-      ) : (
-        <div className="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-[12.5px]">
-          <b className="mb-0.5 block">문서확인번호 없음</b>
-          발급처 대조가 불가능합니다. 의심되면 확인요청으로 넘기세요.
-        </div>
-      )}
-
-      {item.file_path && (
-        <a href={item.file_path} target="_blank" rel="noopener noreferrer"
-           className="mb-4 block rounded border border-slate-300 px-3 py-2 text-center text-[13px] text-emerald-800 hover:bg-slate-50">
-          원본 서류 열기 ↗
-        </a>
-      )}
-
-      <div className="flex flex-col gap-2">
-        <button disabled={busy} onClick={runAccept}
-                className="rounded bg-emerald-800 px-3 py-2 text-[13.5px] font-semibold text-white disabled:opacity-50">
-          승인
-        </button>
-        <button disabled={busy} onClick={() => setMode(mode === 'reject' ? 'none' : 'reject')}
-                className="rounded border border-rose-700 px-3 py-2 text-[13.5px] font-semibold text-rose-700">
-          반려
-        </button>
-        <button disabled={busy} onClick={() => setMode(mode === 'verify' ? 'none' : 'verify')}
-                className="rounded border border-amber-700 px-3 py-2 text-[13.5px] font-semibold text-amber-800">
-          확인요청
-        </button>
-      </div>
-
-      {mode === 'reject' && (
-        <div className="mt-3 space-y-1.5 rounded border border-slate-200 bg-slate-50 p-3">
-          <p className="mb-2 text-[12.5px] text-slate-500">사유를 고르면 안내 문구가 함께 발송됩니다.</p>
-          {reasons.map((r) => (
-            <button key={r.code} onClick={() => r.code === 'OTHER' ? undefined : runReject(r.code, r.message)}
-                    className="block w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-left text-[13px] hover:bg-slate-100">
-              <span className="flex items-baseline justify-between gap-2">
-                <span>{r.label}</span>
-                <span className="shrink-0 text-[11px] text-slate-400">{r.can_resubmit ? '재제출 가능' : '재제출 불가'}</span>
-              </span>
-              {r.message && <small className="mt-0.5 block text-[11.5px] text-slate-500">{r.message}</small>}
-            </button>
-          ))}
-          <div className="pt-1">
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="기타 사유 설명"
-                      className="w-full rounded border border-slate-300 p-2 text-[13px]" rows={2} />
-            <button disabled={!note.trim()} onClick={() => runReject('OTHER', note)}
-                    className="mt-1.5 w-full rounded border border-slate-300 bg-white py-1.5 text-[13px] disabled:opacity-40">
-              기타 사유로 반려
-            </button>
-          </div>
-        </div>
-      )}
-
-      {mode === 'verify' && (
-        <div className="mt-3 space-y-1.5 rounded border border-slate-200 bg-slate-50 p-3">
-          <p className="mb-2 text-[12.5px] text-slate-500">판단하지 않고 발급기관 확인 대상으로 넘깁니다.</p>
-          {verifyReasons.map((r) => (
-            <button key={r.code} onClick={() => r.code === 'OTHER' ? undefined : runVerify(r.code)}
-                    className="block w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-left text-[13px] hover:bg-slate-100">
-              {r.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </aside>
-  )
+  return <div className="review-action-body">
+    <dl className="review-person-fields">
+      <dt>성명</dt><dd>{item.person_name}</dd>
+      <dt>군번</dt><dd>{item.person_id}</dd>
+      <dt>직업</dt><dd>{item.occupation ?? '—'}</dd>
+      <dt>구분</dt><dd>{item.owner}</dd>
+      <dt>현재</dt><dd><ClassChip label={item.current_classification} /></dd>
+    </dl>
+    <div className={`review-verify-notice ${item.verify_number ? 'has-number' : 'no-number'}`}>
+      <strong>{item.verify_number ? `문서확인번호 ${item.verify_number}` : '문서확인번호 없음'}</strong>
+      <span>{item.verify_number ? '발급처에서 진위를 확인할 수 있습니다.' : '발급처 대조가 불가능합니다. 의심되면 확인요청으로 넘기세요.'}</span>
+    </div>
+    {item.file_path && <a className="review-document-link" href={item.file_path} target="_blank" rel="noopener noreferrer">원본 서류 열기 ↗</a>}
+    <div className="review-actions">
+      <button type="button" className="approve" disabled={busy} onClick={runAccept}>승인</button>
+      <button type="button" className="reject" disabled={busy} onClick={() => setMode(current => current === 'reject' ? 'none' : 'reject')}>반려</button>
+      <button type="button" className="verify" disabled={busy} onClick={() => setMode(current => current === 'verify' ? 'none' : 'verify')}>확인요청</button>
+    </div>
+    {mode === 'reject' && <div className="review-reason-picker">
+      <p>사유를 고르면 안내 문구가 함께 발송됩니다.</p>
+      {reasons.map(reason => <button type="button" key={reason.code} disabled={busy || reason.code === 'OTHER'}
+        onClick={() => void runReject(reason.code, reason.message)}>
+        <span>{reason.label}</span><small>{reason.can_resubmit ? '재제출 가능' : '재제출 불가'}</small>
+        {reason.message && <em>{reason.message}</em>}
+      </button>)}
+      <textarea rows={2} value={note} onChange={event => setNote(event.target.value)} placeholder="기타 사유 설명" aria-label="기타 반려 사유" />
+      <button type="button" disabled={busy || !note.trim()} onClick={() => void runReject('OTHER', note)}>기타 사유로 반려</button>
+    </div>}
+    {mode === 'verify' && <div className="review-reason-picker">
+      <p>판단하지 않고 발급기관 확인 대상으로 넘깁니다.</p>
+      {verifyReasons.map(reason => <button type="button" key={reason.code} disabled={busy || reason.code === 'OTHER'}
+        onClick={() => void runVerify(reason.code)}>{reason.label}</button>)}
+    </div>}
+    {error && <p role="alert" className="review-action-error">{error}</p>}
+  </div>
 }
 
 function InboxView({ queue, bootstrap }: { queue: QueueItem[]; bootstrap: Bootstrap }) {
-  const [items, setItems] = useState(queue.map((q) => ({ ...q, done: null as null | string })))
-  const [selectedId, setSelectedId] = useState<string | null>(items[0]?.id ?? null)
-  const selected = items.find((i) => i.id === selectedId) ?? null
-
-  const handleDone = (label: string, changed: boolean, message?: string) => {
+  const [items, setItems] = useState<QueuedRow[]>(() => queue.map(item => ({ ...item, done: null })))
+  const [selectedId, setSelectedId] = useState<string | null>(queue[0]?.id ?? null)
+  const [search, setSearch] = useState('')
+  const [checkedIds, setCheckedIds] = useState<string[]>([])
+  const [page, setPage] = useState(1)
+  const [showReview, setShowReview] = useState(false)
+  const pageSize = 20
+  const selected = items.find(item => item.id === selectedId) ?? null
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    return term ? items.filter(item => item.person_name.toLowerCase().includes(term) || item.person_id.toLowerCase().includes(term)) : items
+  }, [items, search])
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const currentPage = Math.min(page, pageCount)
+  const pageRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  const allChecked = pageRows.length > 0 && pageRows.every(item => checkedIds.includes(item.id))
+  const left = items.filter(item => !item.done).length
+  const onDone = (label: string, changed: boolean, message?: string) => {
     if (!selectedId) return
-    setItems((prev) => prev.map((i) => i.id === selectedId ? { ...i, done: label } : i))
-    const next = items.find((i) => i.id !== selectedId && !i.done)
-    setTimeout(() => setSelectedId(next?.id ?? null), 700)
+    setItems(prev => prev.map(item => item.id === selectedId ? { ...item, done: label } : item))
+    const next = items.find(item => item.id !== selectedId && !item.done)
+    window.setTimeout(() => setSelectedId(next?.id ?? null), 700)
     if (message) console.log('발송 안내:', message)
     void changed
   }
+  const chooseRow = (id: string) => { setSelectedId(id); setShowReview(true) }
 
-  const left = items.filter((i) => !i.done).length
-
-  return (
-    <div className="flex h-[calc(100vh-180px)] min-h-[480px] overflow-hidden rounded border border-slate-300 bg-white">
-      <div className="w-[280px] shrink-0 overflow-y-auto border-r border-slate-300">
-        <div className="border-b border-slate-200 px-3.5 py-2.5 text-[12.5px] text-slate-500">
-          검토 대기 <b className="num text-slate-900">{left}</b>건 · 제출 오래된 순
-        </div>
-        {items.length === 0 && <p className="p-4 text-[13px] text-slate-400">대기 중인 서류가 없습니다.</p>}
-        {items.map((it) => (
-          <button key={it.id} onClick={() => setSelectedId(it.id)}
-                  className={`block w-full border-b border-slate-100 px-3.5 py-2.5 text-left ${
-                    it.done ? 'opacity-40' : ''} ${selectedId === it.id ? 'bg-slate-50 border-l-2 border-l-emerald-800' : 'border-l-2 border-l-transparent hover:bg-slate-50'}`}>
-            <div className="flex items-baseline gap-1.5">
-              <span className={`text-[13.5px] font-semibold ${it.done ? 'line-through' : ''}`}>{it.person_name}</span>
-              <span className="num text-[11.5px] text-slate-400">{it.person_id}</span>
-            </div>
-            <div className="text-[12.5px] text-slate-500">{it.type}</div>
-            <div className="num text-[11.5px] text-slate-400">
-              발급 {it.issued} · 대기 {it.waiting_days}일{it.done ? ` · ${it.done}` : ''}
-            </div>
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-1 items-center justify-center bg-slate-100">
-        {selected?.file_path ? (
-          <iframe title="서류 원본" src={selected.file_path} className="h-full w-full bg-white" />
-        ) : (
-          <p className="p-10 text-center text-[13.5px] text-slate-400">왼쪽에서 서류를 선택하세요.</p>
-        )}
-      </div>
-
-      {selected && (
-        <ReviewPanel key={selected.id} item={selected} reasons={bootstrap.reject_reasons} verifyReasons={bootstrap.verify_reasons} onDone={handleDone} />
-      )}
-    </div>
-  )
+  return <div className="review-inbox-grid">
+    <section className="review-list-panel" aria-label="검토 대상자 목록">
+      <header className="review-list-title">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="3" width="19" height="18" rx="1.5"/><path d="M3 16h5l2 3h4l2-3h5"/></svg>
+        <h2>검토 대상자 목록</h2>
+      </header>
+      <label className="review-search-box">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><circle cx="10.8" cy="10.8" r="6.2"/><path d="m15.7 15.7 4.5 4.5"/></svg>
+        <input type="search" value={search} onChange={event => { setSearch(event.target.value); setPage(1) }} placeholder="이름,군번을 입력하세요." aria-label="이름, 군번 검색" />
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><circle cx="10.8" cy="10.8" r="6.2"/><path d="m15.7 15.7 4.5 4.5"/></svg>
+      </label>
+      <div className="review-list-scroll"><table className="review-list-table">
+        <colgroup><col className="review-col-check"/><col className="review-col-number"/><col className="review-col-name"/><col className="review-col-reason"/><col className="review-col-date"/></colgroup>
+        <thead><tr>
+          <th><input type="checkbox" checked={allChecked} aria-label="현재 페이지 전체 선택" onChange={event => setCheckedIds(prev => event.target.checked ? [...new Set([...prev, ...pageRows.map(item => item.id)])] : prev.filter(id => !pageRows.some(item => item.id === id)))} /></th>
+          <th>No.</th><th>이름</th><th>검토 사유</th><th>신청일자</th>
+        </tr></thead>
+        <tbody>{pageRows.map((item, index) => <tr key={item.id} className={`${selectedId === item.id ? 'selected' : ''} ${item.done ? 'done' : ''}`}
+          onClick={() => chooseRow(item.id)} onKeyDown={event => { if (event.key === 'Enter') chooseRow(item.id) }} tabIndex={0} aria-selected={selectedId === item.id}>
+          <td><input type="checkbox" checked={checkedIds.includes(item.id)} aria-label={`${item.person_name} 체크`} onClick={event => event.stopPropagation()} onChange={event => setCheckedIds(prev => event.target.checked ? [...new Set([...prev, item.id])] : prev.filter(id => id !== item.id))} /></td>
+          <td>{(currentPage - 1) * pageSize + index + 1}</td>
+          <td title={`${item.person_name} · ${item.person_id}`}>{item.person_name}</td>
+          <td title={reviewReason(item)}>{reviewReason(item)}</td>
+          <td title={applicationDate(item)}>{applicationDate(item)}</td>
+        </tr>)}</tbody>
+      </table>{!pageRows.length && <p className="review-empty-state">{items.length ? '검색 결과가 없습니다.' : '검토 대기 중인 서류가 없습니다.'}</p>}</div>
+      <footer className="review-list-footer"><span>전체 {filtered.length}명{checkedIds.length ? ` · 선택 ${checkedIds.length}명` : ''}</span>
+        <nav aria-label="검토 목록 페이지"><button type="button" aria-label="이전 페이지" disabled={currentPage === 1} onClick={() => setPage(current => current - 1)}>‹</button>
+          <span className="review-page-number">{currentPage}</span>
+          <button type="button" aria-label="다음 페이지" disabled={currentPage === pageCount} onClick={() => setPage(current => current + 1)}>›</button></nav>
+      </footer>
+    </section>
+    <section className="review-pdf-panel" aria-label="제출 서류 미리보기">
+      <div className="review-pdf-cap" />
+      {selected?.file_path ? <iframe key={selected.id} title={`${selected.person_name} 제출 서류`} src={selected.file_path} /> :
+        <div className="review-pdf-empty">{selected ? '이 서류에는 PDF 경로가 등록되어 있지 않습니다.' : '왼쪽에서 서류를 선택하세요.'}</div>}
+    </section>
+    <aside className="review-confirm-panel" aria-label="검토 대상자 확인">
+      <button type="button" className="review-confirm-title" aria-expanded={showReview} onClick={() => setShowReview(current => !current)}>
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M6 2.5h8l5 5V21H6z"/><path d="M14 2.5V8h5M9 14l2 2 4-5"/></svg>
+        <span>검토대상자확인</span><small>{showReview ? '접기' : '펼치기'}</small>
+      </button>
+      {showReview && (selected ? <ReviewPanel key={selected.id} item={selected} reasons={bootstrap.reject_reasons} verifyReasons={bootstrap.verify_reasons} onDone={onDone} /> :
+        <p className="review-empty-state">검토 대기 서류가 없습니다.</p>)}
+    </aside>
+    <span className="review-visually-hidden" aria-live="polite">검토 대기 {left}건</span>
+  </div>
 }
 
 export default function ReviewManagement() {
   const [data, setData] = useState<Bootstrap | null>(null)
   const [error, setError] = useState('')
-  const [tab, setTab] = useState<'roster' | 'inbox'>('inbox')
+  const [tab, setTab] = useState<ReviewTab>('inbox')
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null)
 
   useEffect(() => {
     fetchBootstrap().then(setData).catch((e: unknown) => setError(e instanceof Error ? e.message : '불러오지 못했습니다'))
   }, [])
 
-  if (error) {
-    return (
-      <div className="grid min-h-full place-items-center p-6">
-        <div className="max-w-md rounded border border-rose-200 bg-white p-5">
-          <p className="font-semibold text-rose-700">데이터를 불러오지 못했습니다</p>
-          <p className="mt-1 text-[13px] text-slate-500">{error}</p>
-        </div>
-      </div>
-    )
-  }
-  if (!data) return <div className="grid min-h-full place-items-center text-slate-400">불러오는 중…</div>
+  if (error) return <div className="review-management review-loading"><div role="alert" className="review-load-error"><strong>데이터를 불러오지 못했습니다</strong><p>{error}</p></div></div>
+  if (!data) return <div className="review-management review-loading">불러오는 중…</div>
 
-  return (
-    <div className="min-h-full text-slate-900">
-      <header className="flex items-center gap-6 border-b border-slate-300 bg-white px-6 py-3">
-        <div className="flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center rounded-md bg-emerald-800 font-mono text-[15px] font-bold text-white">31</span>
-          <div>
-            <p className="text-[11px] font-semibold tracking-wide text-emerald-800">RESERVE FORCE</p>
-            <h1 className="text-[16px] font-semibold">보류·연기 판정 시스템</h1>
-          </div>
-        </div>
-        <Tabs tab={tab} setTab={setTab} queueLeft={data.queue.length} />
-        <span className="num ml-auto text-[12.5px] text-slate-500">기준일 {data.as_of} · 훈련일 {data.training_date}</span>
-      </header>
-
-      <main className="mx-auto max-w-6xl px-6 py-6">
-        {tab === 'roster'
-          ? <RosterView people={data.people} onSelect={setSelectedPerson} />
-          : <InboxView queue={data.queue} bootstrap={data} />}
-      </main>
-
-      {selectedPerson && <PersonDetail person={selectedPerson} onClose={() => setSelectedPerson(null)} />}
-    </div>
-  )
+  return <div className="review-management">
+    <Tabs tab={tab} setTab={setTab} />
+    <main className="review-main-content">
+      {tab === 'roster' ? <RosterView people={data.people} onSelect={setSelectedPerson} /> : <InboxView queue={data.queue} bootstrap={data} />}
+    </main>
+    {selectedPerson && <PersonDetail person={selectedPerson} onClose={() => setSelectedPerson(null)} />}
+  </div>
 }

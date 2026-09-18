@@ -3,11 +3,13 @@ import './App.css'
 import ReserveManagement from './features/reserve/ReserveManagement'
 import ResourceManagement from './features/resource/ResourceManagement'
 import ReviewManagement from './features/review/ReviewManagement'
+import WorkLogManagement from './features/worklog/WorkLogManagement'
 
 const featureTabs = [
   { id: 'reserve', label: '예비군관리', Component: ReserveManagement },
   { id: 'resource', label: '자원관리', Component: ResourceManagement },
   { id: 'review', label: '보류·연기 검토', Component: ReviewManagement },
+  { id: 'worklog', label: '업무일지', Component: WorkLogManagement },
 ] as const
 
 type FeatureTabId = typeof featureTabs[number]['id']
