@@ -1,5 +1,0 @@
-# Operational records and PDFs (keep these out of source control)
-ML/uploads/
-ML/submissions.jsonl
-__pycache__/
-*.py[cod]
