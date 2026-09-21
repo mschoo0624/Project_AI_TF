@@ -139,3 +139,23 @@ Postponement
  │
  ├── Approval
  └── Notification
+
+## Run Backend (Windows PowerShell)
+
+VS Code의 PowerShell 터미널에서 프로젝트 최상위 `AITF` 폴더를 기준으로 실행합니다.
+
+```powershell
+cd .\backend
+.\.venv\Scripts\python.exe -m uvicorn user.app.main:app --host 127.0.0.1 --port 8002
+```
+
+이미 `backend` 폴더에 있다면 `cd .\backend`는 생략합니다. `backend\.venv`에 의존성이 설치되어 있어야 하며, 가상환경을 별도로 활성화할 필요는 없습니다.
+
+가상환경이나 라이브러리가 아직 준비되지 않았다면 `backend` 폴더에서 한 번만 다음을 실행합니다.
+
+```powershell
+uv venv --python 3.14
+uv pip install --python .\.venv\Scripts\python.exe -r .\requirements.txt
+```
+
+서버가 실행된 동안 <http://127.0.0.1:8002/docs>에서 API 문서를 확인할 수 있습니다. 종료하려면 서버 터미널에서 `Ctrl + C`를 누릅니다.
