@@ -4,6 +4,7 @@ from sqlalchemy import inspect, text
 # Importing the files from the other folders. 
 from user.app.database import engine, init_db
 from user.app.api.dashboard import router as dashboard_router
+from user.app.api.postponements import router as postponements_router
 from user.app.api.reservists import persons_router, router as reservists_router
 from user.app.api.squads import router as squads_router
 from user.app.api.training import (
@@ -23,6 +24,7 @@ app.include_router(reservists_router)
 app.include_router(persons_router)
 app.include_router(squads_router)
 app.include_router(dashboard_router)
+app.include_router(postponements_router)
 app.include_router(training_router)
 app.include_router(persons_training_router)
 

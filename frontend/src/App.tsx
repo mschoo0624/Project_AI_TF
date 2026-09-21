@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
+import type { Dispatch, FormEvent, SetStateAction } from 'react'
 import './App.css'
 
-type TabId = 'home' | 'reserve' | 'resource'
+type TabId = 'home' | 'reserve' | 'resource' | 'classifier'
 type ResourcePage = 'lookup' | 'assignment'
 type DetailTab = 'profile' | 'progress' | 'records'
 
@@ -116,6 +116,9 @@ type AssignmentCandidate = {
 }
 type AssignmentCandidates = Record<string, Record<string, AssignmentCandidate[]>>
 type ProposedAssignment = AssignmentCandidate & { squad_id: number }
+type ClassifierExtraction = { name?: string; valid_until?: string; document_type?: string; stamp_present?: boolean; confidence?: number; anomaly_flags?: string[]; error?: string }
+type ClassifierSubmission = { id: string; filename: string; saved_path: string; military_number: string | null; extraction: ClassifierExtraction; reason_category: string | null; status: 'pending' | 'approved' | 'declined'; note: string | null; created_at: string; decided_at: string | null; projectPostponementId?: number }
+type ProjectPostponement = { id: number; person_id: string; status: string; category: string | null; classifier_submission_id: string | null }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
 const branches = ['육군', '해군', '공군', '해병대']
@@ -157,14 +160,16 @@ function suggestPositionForSpecialty(specialty: string): string | null {
 
 async function responseError(response: Response, fallback: string) {
   try {
-    const data = await response.json() as { detail?: string }
-    return data.detail ?? fallback
+    const data = await response.json() as { detail?: string | { loc?: (string | number)[]; msg?: string }[] }
+    if (typeof data.detail === 'string') return data.detail
+    if (Array.isArray(data.detail)) return data.detail.map(item => item.msg ?? '입력값을 확인해 주세요.').join(' ')
+    return fallback
   } catch { return fallback }
 }
 
 function App() {
-  const [openTabs, setOpenTabs] = useState<TabId[]>(['home'])
-  const [activeTab, setActiveTab] = useState<TabId>('home')
+  const [openTabs, setOpenTabs] = useState<TabId[]>(['home', 'resource', 'classifier'])
+  const [activeTab, setActiveTab] = useState<TabId>('classifier')
 
   const openReserve = () => {
     setOpenTabs(t => t.includes('reserve') ? t : [...t, 'reserve'])
@@ -173,6 +178,10 @@ function App() {
   const openResource = () => {
     setOpenTabs(t => t.includes('resource') ? t : [...t, 'resource'])
     setActiveTab('resource')
+  }
+  const openClassifier = () => {
+    setOpenTabs(t => t.includes('classifier') ? t : [...t, 'classifier'])
+    setActiveTab('classifier')
   }
   const closeTab = (tab: Exclude<TabId, 'home'>) => {
     setOpenTabs(t => t.filter(item => item !== tab))
@@ -186,6 +195,7 @@ function App() {
         <div className="user-icon">♙</div>
         <button className={`side-button ${activeTab === 'reserve' ? 'active' : ''}`} onClick={openReserve}>예비군관리</button>
         <button className={`side-button ${activeTab === 'resource' ? 'active' : ''}`} onClick={openResource}>자원관리</button>
+        <button className={`side-button ${activeTab === 'classifier' ? 'active' : ''}`} onClick={openClassifier}>연기판정</button>
       </aside>
       <main className="workspace">
         <div className="workspace-tabs">
@@ -198,8 +208,12 @@ function App() {
             <button className="tab-main" onClick={() => setActiveTab('resource')}>자원관리</button>
             <button className="tab-close" onClick={() => closeTab('resource')} aria-label="자원관리 탭 닫기">×</button>
           </div>}
+          {openTabs.includes('classifier') && <div className={`workspace-tab compound ${activeTab === 'classifier' ? 'selected' : ''}`}>
+            <button className="tab-main" onClick={() => setActiveTab('classifier')}>연기판정</button>
+            <button className="tab-close" onClick={() => closeTab('classifier')} aria-label="연기판정 탭 닫기">×</button>
+          </div>}
         </div>
-        {activeTab === 'home' ? <Home onOpen={openResource} /> : activeTab === 'reserve' ? <div /> : <ResourceModule />}
+        {activeTab === 'home' ? <Home onOpen={openResource} /> : activeTab === 'reserve' ? <div /> : activeTab === 'classifier' ? <PostponementModule /> : <ResourceModule />}
       </main>
     </div>
   </div>
@@ -208,6 +222,117 @@ function App() {
 function Home({ onOpen }: { onOpen: () => void }) {
   return <section className="home"><div className="home-box"><h1>홈화면입니다</h1><button onClick={onOpen}>자원관리</button></div></section>
 }
+
+function PostponementModule() {
+  const [file, setFile] = useState<File | null>(null)
+  const [militaryNumber, setMilitaryNumber] = useState('')
+  const [matchedPerson, setMatchedPerson] = useState<Person | null>(null)
+  const [matching, setMatching] = useState(false)
+  const [personNames, setPersonNames] = useState<Record<string, string>>({})
+  const [submissions, setSubmissions] = useState<ClassifierSubmission[]>([])
+  const [selected, setSelected] = useState<ClassifierSubmission | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [loadingList, setLoadingList] = useState(true)
+  const [error, setError] = useState('')
+
+  const loadSubmissions = async () => {
+    setLoadingList(true)
+    try {
+      const response = await fetch('/classifier-api/submissions')
+      if (!response.ok) throw new Error(await responseError(response, '분류기 제출 목록을 불러오지 못했습니다.'))
+      const loaded = await response.json() as ClassifierSubmission[]
+      const projectResponse = await fetch(`${API_BASE}/postponements`)
+      const projectItems = projectResponse.ok ? await projectResponse.json() as ProjectPostponement[] : []
+      const linked = loaded.map(item => ({ ...item, projectPostponementId: projectItems.find(project => project.classifier_submission_id === item.id)?.id }))
+      setSubmissions(linked)
+      const matches = await Promise.all(loaded.filter(item => item.military_number).map(async item => {
+        const response = await fetch(`${API_BASE}/persons/${encodeURIComponent(item.military_number!)}`)
+        return response.ok ? [item.military_number!, (await response.json() as Person).name] as const : null
+      }))
+      setPersonNames(Object.fromEntries(matches.filter((match): match is readonly [string, string] => match !== null)))
+    } catch (e) { setError(e instanceof Error ? e.message : '분류기 제출 목록을 불러오지 못했습니다.') }
+    finally { setLoadingList(false) }
+  }
+
+  useEffect(() => { void loadSubmissions() }, [])
+
+  const findPerson = async (value: string) => {
+    setMilitaryNumber(value); setMatchedPerson(null)
+    if (!value.trim()) return
+    setMatching(true); setError('')
+    try {
+      const response = await fetch(`${API_BASE}/persons/${encodeURIComponent(value.trim())}`)
+      if (response.ok) setMatchedPerson(await response.json() as Person)
+    } catch { setError('군번 확인에 실패했습니다.') }
+    finally { setMatching(false) }
+  }
+
+  const chooseFile = (candidate: File | undefined) => {
+    if (!candidate) return
+    if (!candidate.name.toLowerCase().endsWith('.pdf')) {
+      setFile(null); setError('PDF 파일만 업로드할 수 있습니다.'); return
+    }
+    setError(''); setFile(candidate)
+  }
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!file || !matchedPerson || matching) { setError('유효한 PDF와 등록된 군번을 먼저 입력해 주세요.'); return }
+    setLoading(true); setError('')
+    try {
+      const form = new FormData(); form.append('file', file)
+      if (militaryNumber.trim()) form.append('military_number', militaryNumber.trim())
+      const response = await fetch('/classifier-api/submissions', { method: 'POST', body: form })
+      if (!response.ok) throw new Error(await responseError(response, 'PDF 분석에 실패했습니다.'))
+      const submission = await response.json() as ClassifierSubmission
+      const projectResponse = await fetch(`${API_BASE}/postponements`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ person_id: matchedPerson.military_number, reason: submission.reason_category ?? submission.extraction.document_type ?? '서류 제출', category: submission.reason_category, training_year: matchedPerson.service_year, source_file: submission.filename, classifier_submission_id: submission.id }) })
+      if (!projectResponse.ok) throw new Error(await responseError(projectResponse, 'Project backend 연기 기록 연결에 실패했습니다.'))
+      const projectItem = await projectResponse.json() as ProjectPostponement
+      const linkedSubmission = { ...submission, projectPostponementId: projectItem.id }
+      setSubmissions(items => [linkedSubmission, ...items]); setPersonNames(names => ({ ...names, [matchedPerson.military_number]: matchedPerson.name })); setSelected(linkedSubmission); setFile(null)
+    } catch (e) { setError(e instanceof Error ? e.message : 'PDF 분석에 실패했습니다.') }
+    finally { setLoading(false) }
+  }
+
+  const decide = async (submission: ClassifierSubmission, decision: 'approved' | 'declined') => {
+    setError('')
+    try {
+      if (!submission.projectPostponementId) throw new Error('Project backend에 연결된 연기 기록이 없습니다.')
+      const action = decision === 'approved' ? 'approve' : 'reject'
+      const response = await fetch(`${API_BASE}/postponements/${submission.projectPostponementId}/${action}`, { method: 'PATCH' })
+      if (!response.ok) throw new Error(await responseError(response, '제출 건 처리에 실패했습니다.'))
+      await response.json()
+      const nextStatus: ClassifierSubmission['status'] = decision === 'approved' ? 'approved' : 'declined'
+      const updated = { ...submission, status: nextStatus }
+      setSubmissions(items => items.map(item => item.id === submission.id ? updated : item)); setSelected(updated)
+    } catch (e) { setError(e instanceof Error ? e.message : '제출 건 처리에 실패했습니다.') }
+  }
+
+  return <section className="classifier-module">
+    <div className="page-intro"><div><p className="eyebrow">CLASSIFIER_AITF API TEST</p><h2>서류 AI 판정</h2><p>PDF를 업로드하고 군번을 연결해 추출·분류·검토 결과를 확인합니다.</p></div><button className="button secondary" onClick={() => void loadSubmissions()}>목록 새로고침</button></div>
+    <form className="classifier-form" onSubmit={submit}>
+      <label>군번<span className="field-hint">등록된 예비군만 업로드할 수 있습니다.</span><input value={militaryNumber} onChange={e => void findPerson(e.target.value)} placeholder="예: 26-72000500" /></label>
+      <label>PDF 파일<span className="field-hint">PDF 형식만 가능</span><input type="file" accept="application/pdf,.pdf" onChange={e => chooseFile(e.target.files?.[0])} /></label>
+      <div className={`classifier-match wide ${matchedPerson ? 'matched' : militaryNumber && !matching ? 'unmatched' : ''}`}>{matching ? <span>군번을 확인하는 중입니다...</span> : matchedPerson ? <><strong>매칭됨: {matchedPerson.name}</strong><span>{matchedPerson.military_number} · {matchedPerson.branch} · {matchedPerson.status}</span></> : militaryNumber ? <span>등록된 예비군을 찾지 못했습니다. 군번을 확인해 주세요.</span> : <span>군번을 입력하면 등록된 예비군과 매칭합니다.</span>}</div>
+      {file && <div className="selected-file wide"><span className="file-icon">PDF</span><div><strong>{file.name}</strong><small>{(file.size / 1024 / 1024).toFixed(2)} MB · 업로드 준비 완료</small></div><button type="button" className="file-remove" onClick={() => setFile(null)} aria-label="선택한 PDF 제거">×</button></div>}
+      <div className="form-actions wide"><button className="button primary" disabled={!file || !matchedPerson || matching || loading}>{loading ? 'AI 분석 중...' : 'PDF 업로드 및 분석'}</button></div>
+    </form>
+    {error && <div className="inline-error">{error}</div>}
+    <div className="classifier-layout">
+      <section className="list-card"><div className="list-caption"><h3>제출 목록</h3><span>{submissions.filter(item => item.status === 'pending').length}건 검토대기</span></div>{loadingList ? <State>제출 목록을 불러오는 중입니다...</State> : submissions.length === 0 ? <State>아직 업로드된 PDF가 없습니다.</State> : <div className="classifier-submission-list">{submissions.map(item => <button key={item.id} className={`classifier-submission ${selected?.id === item.id ? 'selected' : ''}`} onClick={() => setSelected(item)}><strong>{personNames[item.military_number ?? ''] ?? item.extraction.name ?? '이름 미확인'}</strong><span>{item.military_number ?? '군번 미기재'} · {item.filename}</span><em className={`submission-status ${item.status}`}>{item.status === 'pending' ? '검토대기' : item.status === 'approved' ? '승인' : '반려'}</em></button>)}</div>}</section>
+      <ClassifierResult submission={selected} onDecision={decide} />
+    </div>
+  </section>
+}
+
+function ClassifierResult({ submission, onDecision }: { submission: ClassifierSubmission | null; onDecision: (submission: ClassifierSubmission, decision: 'approved' | 'declined') => void }) {
+  if (!submission) return <section className="classifier-result state-panel">목록에서 제출 건을 선택하세요.</section>
+  const extraction = submission.extraction
+  const originalPdfUrl = `/classifier-api${submission.saved_path}`
+  return <section className="classifier-result"><div className="section-heading"><h3>AI 분석 결과</h3><span className={`submission-status ${submission.status}`}>{submission.status === 'pending' ? '검토대기' : submission.status === 'approved' ? '승인' : '반려'}</span></div><div className="original-pdf-panel"><div className="original-pdf-heading"><div><strong>원본 PDF</strong><span>{submission.filename}</span></div><a className="button small secondary" href={originalPdfUrl} target="_blank" rel="noreferrer">새 탭에서 열기 ↗</a></div><iframe className="original-pdf-viewer" title={`${submission.filename} 원본 PDF`} src={originalPdfUrl} /></div><div className="classifier-facts"><Fact label="성명" value={extraction.name ?? '-'} /><Fact label="서류종류" value={extraction.document_type ?? '-'} /><Fact label="유효기간" value={extraction.valid_until ?? '-'} /><Fact label="사유 분류" value={submission.reason_category ?? '모델 미학습'} /><Fact label="신뢰도" value={extraction.confidence != null ? `${Math.round(extraction.confidence * 100)}%` : '-'} /><Fact label="도장/서명" value={extraction.stamp_present ? '있음' : '없음'} /></div>{extraction.anomaly_flags?.length ? <div className="classifier-alerts"><strong>이상 신호</strong>{extraction.anomaly_flags.map(flag => <span key={flag}>! {flag}</span>)}</div> : <p className="classifier-ok">문서 이상 신호가 없습니다.</p>}<p className="classifier-file">원본: {submission.filename}</p>{submission.status === 'pending' && (submission.projectPostponementId ? <div className="review-actions"><button className="button primary" onClick={() => onDecision(submission, 'approved')}>승인</button><button className="button danger-outline" onClick={() => onDecision(submission, 'declined')}>반려</button></div> : <p className="classifier-unlinked">기존 제출 건입니다. Project 연기 기록과 연결되지 않아 새 업로드부터 통합 결재를 사용할 수 있습니다.</p>)}</section>
+}
+
+function Fact({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value}</strong></div> }
 
 function ResourceModule() {
   const [page, setPage] = useState<ResourcePage>('lookup')
@@ -451,8 +576,8 @@ function ResourceModule() {
       onEdit={() => { if (selectedPerson) { setPersonForm(selectedPerson); setEditingPerson(true) } }} onDelete={deletePerson}
       editingPerson={editingPerson} personForm={personForm} setPersonForm={setPersonForm} onSavePerson={savePerson} onCancelPerson={() => setEditingPerson(false)}
       editingRecord={editingRecord} recordForm={recordForm} setRecordForm={setRecordForm} addingRecord={addingRecord}
-      onStartAdd={() => { setAddingRecord(true); setEditingRecord(null); setRecordForm({ service_year: selectedPerson?.service_year && selectedPerson.service_year <= 6 ? selectedPerson.service_year : 1, training_year: new Date().getFullYear(), training_type: '기본훈련', training_round: 1, attendance_status: 'postponed', training_hours: 0, notes: '' }) }}
-      onEditRecord={r => { setEditingRecord(r.id); setAddingRecord(false); setRecordForm({ service_year: r.education_year, training_year: r.training_year ?? new Date().getFullYear(), training_type: r.training_type, training_round: r.training_round, attendance_status: r.attendance_status, training_hours: r.training_hours, notes: r.notes ?? '' }) }}
+      onStartAdd={() => { setAddingRecord(true); setEditingRecord(null); setRecordForm({ service_year: selectedPerson?.service_year && selectedPerson.service_year <= 6 ? selectedPerson.service_year : 1, training_year: selectedPerson?.service_year && selectedPerson.service_year <= 8 ? selectedPerson.service_year : 1, training_type: '기본훈련', training_round: 1, attendance_status: 'postponed', training_hours: 0, notes: '' }) }}
+      onEditRecord={r => { setEditingRecord(r.id); setAddingRecord(false); setRecordForm({ service_year: r.education_year, training_year: r.training_year ?? r.education_year, training_type: r.training_type, training_round: r.training_round, attendance_status: r.attendance_status, training_hours: r.training_hours, notes: r.notes ?? '' }) }}
       onCancelRecord={() => { setEditingRecord(null); setAddingRecord(false); setRecordForm(null) }} onSaveRecord={saveRecord} onAddRecord={addRecord} onDeleteRecord={deleteRecord} actionError={actionError} />}
     <CreatePersonModal open={addingPerson} form={createPersonForm} setForm={setCreatePersonForm} loading={createPersonLoading} error={createPersonError} onClose={() => setAddingPerson(false)} onSubmit={submitCreatePerson} />
     <TransferAssignmentModal arrival={newArrival} error={createPersonError} onClose={() => setNewArrival(null)} onConfirm={confirmNewArrival} />

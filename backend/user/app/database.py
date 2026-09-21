@@ -29,6 +29,9 @@ def init_db() -> None:
 
     person_columns = {column["name"] for column in inspect(engine).get_columns("person")}
     education_columns = {column["name"] for column in inspect(engine).get_columns("education")}
+    postponement_columns = {
+        column["name"] for column in inspect(engine).get_columns("postponement")
+    }
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -148,6 +151,16 @@ def init_db() -> None:
             connection.execute(
                 text("ALTER TABLE education ADD COLUMN attendance_status VARCHAR(20) NOT NULL DEFAULT 'completed'")
             )
+        if "category" not in postponement_columns:
+            connection.execute(text("ALTER TABLE postponement ADD COLUMN category VARCHAR(50)"))
+        if "training_year" not in postponement_columns:
+            connection.execute(text("ALTER TABLE postponement ADD COLUMN training_year INTEGER"))
+        if "source_file" not in postponement_columns:
+            connection.execute(text("ALTER TABLE postponement ADD COLUMN source_file VARCHAR(255)"))
+        if "classifier_submission_id" not in postponement_columns:
+            connection.execute(text("ALTER TABLE postponement ADD COLUMN classifier_submission_id VARCHAR(64)"))
+        if "approved_at" not in postponement_columns:
+            connection.execute(text("ALTER TABLE postponement ADD COLUMN approved_at DATETIME"))
         connection.execute(
             text(
                 "UPDATE person SET service_year = 1 WHERE service_year IS NULL"
