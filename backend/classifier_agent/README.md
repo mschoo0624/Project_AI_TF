@@ -23,4 +23,12 @@ AITF는 별도 터미널에서 `backend` 폴더에서 8002 포트로, Vite는 `f
 - 기존 Classifier의 `ML/submissions.jsonl`과 `ML/uploads/`은 사용자 제출 자료를 복사하지 않기 위해 **옮기지 않았습니다.** 이 서버를 처음 실행하면 신규 저장소가 생성됩니다. 기존 제출 이력을 이전하려면 별도 마이그레이션이 필요합니다.
 - Ollama 모델 가중치 및 Python 가상환경은 이 ZIP에 포함하지 않습니다. API는 인식된 텍스트를 기반으로 추출하므로 이미지 전용 스캔 PDF의 OCR은 별도 준비가 필요합니다.
 - AITF의 `보류/연기자 명부`와 `검토함`은 아직 `frontend/public/data.json` 및 스텁 승인 함수에 연결되어 있습니다. **서류 AI 판정 서브탭**만 현재 Classifier 서버에 연결됩니다. AITF DB의 기존 인원·훈련 판정 상태를 자동 갱신하지 않습니다.
-- 이 버전은 로컬 개발용 구성입니다. 실명/군번 및 PDF를 다루는 서버의 인증·접근제어, 파일 검증, 저장소 동시성·일관성은 운영 배포 전에 보강해야 합니다.
+- 이 버전은 로컬 개발용 구성입니다. 실명/군번 및 PDF를 다루는 서버의 인증·접근제어, 파일 검증, 저장소 동시성·일관성은 운영 배포 전에 보강해야 합니다.\
+
+python -m venv .\backend\.venv
+.\backend\.venv\Scripts\python.exe -m pip install -r .\backend\classifier_agent\requirements.txt
+
+ollama pull qwen2.5:1.5b
+
+cd .\backend\classifier_agent
+..\ .venv\Scripts\python.exe -m uvicorn API:app --host 127.0.0.1 --port 8001
