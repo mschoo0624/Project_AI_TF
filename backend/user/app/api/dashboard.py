@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from prediction.cache import get_prediction_cache
 from user.app.database import get_db
 from user.app.models.person import Person
 from user.app.models.squad import Squad
@@ -48,3 +49,9 @@ def dashboard_summary(db: Session = Depends(get_db)) -> dict[str, object]:
 		"by_rank": grouped_counts(db, Person.rank),
 		"by_squad": squad_counts,
 	}
+
+
+@router.get("/forecast")
+def dashboard_forecast() -> dict[str, object]:
+	"""Return the startup-generated population forecast cache."""
+	return get_prediction_cache()

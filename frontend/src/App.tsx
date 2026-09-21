@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
 import ReserveManagement from './features/reserve/ReserveManagement'
@@ -268,11 +268,125 @@ function Home({ onNavigate }: { onNavigate: (page: HomeDestination) => void }) {
   </section>
 }
 
-// 추후 API 차트 컴포넌트로 바꿀 때 이 컴포넌트만 교체하면 됩니다.
-function HomeForecast() {
-  return <section className="home-forecast" aria-label="예비군 예상 추이 시안 이미지">
-    <img src="/home-forecast-sample.png" alt="예비군 예상 추이 시안: 2024년부터 2030년까지의 계획 인원과 실제 편성 예시 선 그래프. 실제 예측 자료가 아닙니다." />
-  </section>
+type ForecastScenario = 'outflow_down' | 'baseline' | 'outflow_up'
+type ForecastPayload = {
+  scenarios: ForecastScenario[]
+  years: number[]
+  hist_cutoff: number
+  regions: string[]
+  data: Record<ForecastScenario, Record<string, Record<string, number | null>>>
 }
 
+const forecastScenarioLabels: Record<ForecastScenario, string> = {
+  outflow_down: '유출 감소 (-5%)',
+  baseline: '현재 추세 (0%)',
+  outflow_up: '유출 심화 (+5%)',
+}
+
+function HomeForecast() {
+  const [forecast, setForecast] = useState<ForecastPayload | null>(null)
+  const [region, setRegion] = useState('전국')
+  const [scenario, setScenario] = useState<ForecastScenario>('baseline')
+  const [threshold, setThreshold] = useState<number | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/dashboard/forecast')
+      .then(async response => {
+        if (!response.ok) throw new Error(`예측 API 응답 오류 (${response.status})`)
+        return response.json() as Promise<ForecastPayload>
+      })
+      .then(payload => {
+        if (cancelled) return
+        setForecast(payload)
+        const initialRegion = payload.regions.includes('전국') ? '전국' : payload.regions[0]
+        setRegion(initialRegion)
+        const measured = payload.data.baseline[initialRegion]?.[String(payload.hist_cutoff)]
+        setThreshold(measured == null ? 0 : Math.round(measured * 0.45 * 10) / 10)
+      })
+      .catch(reason => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : '예측 데이터를 불러오지 못했습니다.')
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  const series = useMemo(() => {
+    if (!forecast) return []
+    return forecast.years.map(year => ({
+      year,
+      outflow_down: forecast.data.outflow_down[region]?.[String(year)] ?? null,
+      baseline: forecast.data.baseline[region]?.[String(year)] ?? null,
+      outflow_up: forecast.data.outflow_up[region]?.[String(year)] ?? null,
+    }))
+  }, [forecast, region])
+
+  if (error) return <section className="home-forecast home-forecast-status" aria-label="예비군 예상 추이"><strong>예측 데이터를 불러오지 못했습니다.</strong><span>{error}</span></section>
+  if (!forecast || threshold === null) return <section className="home-forecast home-forecast-status" aria-label="예비군 예상 추이"><strong>예측 데이터 로딩 중…</strong><span>서버 시작 시 생성된 캐시를 읽고 있습니다.</span></section>
+
+  const selectedValues = series.map(row => row[scenario])
+  const crossing = series.find(row => row[scenario] != null && (row[scenario] as number) < threshold)
+  const allValues = series.flatMap(row => [row.outflow_down, row.baseline, row.outflow_up]).filter((value): value is number => value != null)
+  const maxValue = Math.max(threshold, ...allValues, 1) * 1.08
+  const W = 760, H = 270, pad = { l: 42, r: 14, t: 12, b: 25 }
+  const x = (index: number) => pad.l + (W - pad.l - pad.r) * (index / Math.max(series.length - 1, 1))
+  const y = (value: number) => H - pad.b - (H - pad.t - pad.b) * (value / maxValue)
+  const points = (key: ForecastScenario) => series
+    .map((row, index) => row[key] == null ? null : `${x(index)},${y(row[key] as number)}`)
+    .filter(Boolean).join(' ')
+  const colors: Record<ForecastScenario, string> = { outflow_down: '#b9d9ee', baseline: '#5b9bd0', outflow_up: '#244f7d' }
+
+  const updateRegion = (nextRegion: string) => {
+    setRegion(nextRegion)
+    const measured = forecast.data.baseline[nextRegion]?.[String(forecast.hist_cutoff)]
+    setThreshold(measured == null ? 0 : Math.round(measured * 0.45 * 10) / 10)
+  }
+
+  return <section className="home-forecast" aria-label="예비군 예상 추이">
+    <div className="forecast-header">
+      <div>
+        <h2>예비군 정원 워치</h2>
+        <p>20~29세 남성 인구 기준 · {forecast.hist_cutoff}년 실측 + 이후 예측</p>
+      </div>
+      <div className="forecast-controls">
+        <label>지역<select value={region} onChange={e => updateRegion(e.target.value)}>{forecast.regions.map(item => <option key={item}>{item}</option>)}</select></label>
+        <label>기준선 (만명)<input type="number" min="0" step="0.1" value={threshold} onChange={e => setThreshold(Math.max(0, Number(e.target.value) || 0))} /></label>
+      </div>
+    </div>
+
+    <div className="forecast-scenario-row" role="group" aria-label="청년 유출입 강도 시나리오">
+      {forecast.scenarios.map(item => <button key={item} type="button" className={scenario === item ? 'active' : ''} onClick={() => setScenario(item)}>{forecastScenarioLabels[item]}</button>)}
+    </div>
+
+    <div className={`forecast-headline ${crossing ? 'danger' : 'safe'}`}>
+      <span>기준선 붕괴 시점</span>
+      <strong>{crossing ? `${crossing.year}년` : `${forecast.years.at(-1)}년까지 유지`}</strong>
+      <small>{region} · {forecastScenarioLabels[scenario]} · 기준선 {threshold.toFixed(1)}만명</small>
+    </div>
+
+    <div className="forecast-chart-wrap">
+      <svg className="forecast-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${region} 20~29세 남성 인구 예측 그래프`}>
+        {Array.from({ length: 6 }, (_, index) => {
+          const value = maxValue * index / 5
+          const yy = y(value)
+          return <g key={index}><line x1={pad.l} x2={W - pad.r} y1={yy} y2={yy} className="forecast-gridline" /><text x={pad.l - 6} y={yy + 3} className="forecast-axis" textAnchor="end">{Math.round(value)}</text></g>
+        })}
+        {series.map((row, index) => (row.year % 5 === 0 || index === 0 || index === series.length - 1) ? <text key={row.year} x={x(index)} y={H - 5} className="forecast-axis" textAnchor="middle">{row.year}</text> : null)}
+        {forecast.years.includes(forecast.hist_cutoff) && <line x1={x(forecast.years.indexOf(forecast.hist_cutoff))} x2={x(forecast.years.indexOf(forecast.hist_cutoff))} y1={pad.t} y2={H - pad.b} className="forecast-cutoff" />}
+        <line x1={pad.l} x2={W - pad.r} y1={y(threshold)} y2={y(threshold)} className="forecast-threshold" />
+        {forecast.scenarios.map(item => <polyline key={item} points={points(item)} fill="none" stroke={colors[item]} strokeWidth={scenario === item ? 3 : 1.6} opacity={scenario === item ? 1 : .55} strokeLinecap="round" strokeLinejoin="round" />)}
+        {crossing && (() => {
+          const index = forecast.years.indexOf(crossing.year)
+          const value = selectedValues[index] as number
+          return <g><line x1={x(index)} x2={x(index)} y1={pad.t} y2={H - pad.b} className="forecast-cross" /><circle cx={x(index)} cy={y(value)} r="5" className="forecast-cross-dot"><title>{crossing.year}년 {value.toFixed(2)}만명</title></circle></g>
+        })()}
+      </svg>
+    </div>
+
+    <div className="forecast-legend">
+      {forecast.scenarios.map(item => <span key={item} className={scenario === item ? 'selected' : ''}><i style={{ backgroundColor: colors[item] }} />{forecastScenarioLabels[item]}</span>)}
+      <span><i className="threshold" />기준선</span>
+    </div>
+  </section>
+}
 export default App
