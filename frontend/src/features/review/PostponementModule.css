@@ -1,0 +1,57 @@
+/* Classifier 제출·검토 UI: AITF 보류자/연기자 내부에서만 적용. */
+.review-ai-module { --ai-blue: var(--review-blue, #087af4); --ai-line: #d7e0eb; min-width:0; color:#192638; font-size:14px; }
+.review-ai-module button, .review-ai-module input { font:inherit; }
+.review-ai-top { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 3px 15px; }
+.review-ai-top h2 { margin:0 0 5px; font-size:23px; letter-spacing:-.04em; }
+.review-ai-top p { margin:0; color:#627287; font-size:13px; }
+.review-ai-secondary { flex-shrink:0; padding:8px 13px; border:1px solid #cbd7e8; border-radius:7px; background:#fff; color:#25476a; }
+.review-ai-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px 18px; padding:18px 20px; margin-bottom:16px; border:1px solid var(--ai-line); border-radius:8px; background:#fff; }
+.review-ai-form label { display:grid; min-width:0; gap:7px; font-size:14px; font-weight:600; }
+.review-ai-form label small { font-size:12px; font-weight:400; color:#6a788a; }
+.review-ai-form input { min-width:0; width:100%; height:39px; padding:7px 10px; border:1px solid #ccd6e3; border-radius:6px; background:#fff; font-size:13px; }
+.review-ai-form input[type='file'] { padding:7px; }
+.review-ai-form input:focus-visible { outline:2px solid var(--ai-blue); outline-offset:1px; }
+.review-ai-match { grid-column:1/-1; padding:10px 12px; border:1px solid #e0e7f0; border-radius:6px; background:#f5f8fd; color:#526478; }
+.review-ai-match.matched { border-color:#acd6c0; background:#effaf4; color:#176341; }
+.review-ai-form-actions { grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; }
+.review-ai-form-actions span { min-width:0; color:#68798e; overflow-wrap:anywhere; }
+.review-ai-form-actions button, .review-ai-actions button, .review-ai-unlinked button { flex-shrink:0; padding:9px 15px; border:1px solid #116cd4; border-radius:6px; background:var(--ai-blue); color:#fff; font-weight:600; }
+.review-ai-module button:disabled { opacity:.48; cursor:not-allowed; }
+.review-ai-feedback { padding:10px 13px; margin:0 0 13px; border:1px solid #b6d8c7; border-radius:6px; background:#f0faf4; color:#226243; overflow-wrap:anywhere; }
+.review-ai-feedback.error, .review-ai-alert { border-color:#f0b6ac; background:#fff4f1; color:#8c3829; }
+.review-ai-layout { display:grid; grid-template-columns:minmax(280px, .83fr) minmax(0, 1.35fr); gap:16px; align-items:start; }
+.review-ai-list, .review-ai-detail { min-width:0; overflow:hidden; border:1px solid var(--ai-line); border-radius:7px; background:#fff; }
+.review-ai-list>header { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:13px 15px; border-bottom:1px solid #dce4f0; }
+.review-ai-list h3, .review-ai-heading h3 { margin:0; font-size:18px; }
+.review-ai-list>header span { color:#5d7188; font-size:13px; }
+.review-ai-list-scroll { max-height:630px; overflow:auto; }
+.review-ai-item { display:grid; width:100%; grid-template-columns:minmax(0,1fr) auto; gap:5px 10px; padding:14px 15px; border:0; border-bottom:1px solid #e9eef5; background:#fff; text-align:left; }
+.review-ai-item:hover, .review-ai-item.selected { background:#eaf4ff; }
+.review-ai-item strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
+.review-ai-item small { grid-column:1/-1; min-width:0; color:#697a90; overflow-wrap:anywhere; font-size:12px; }
+.review-ai-status { display:inline-flex; align-items:center; justify-content:center; padding:3px 7px; border:1px solid transparent; border-radius:5px; white-space:nowrap; font-size:12px; font-weight:600; }
+.review-ai-status.pending { border-color:#f4d7a3; background:#fff5df; color:#8d6419; }
+.review-ai-status.approved { border-color:#bcdfc9; background:#edf8f0; color:#246d44; }
+.review-ai-status.declined { border-color:#f0c9c9; background:#fff0f0; color:#a73737; }
+.review-ai-detail { padding:17px; }
+.review-ai-detail-empty, .review-ai-empty { display:grid; place-items:center; min-height:132px; padding:20px; color:#66768a; text-align:center; }
+.review-ai-heading { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.review-ai-subtitle { margin:7px 0 16px; color:#6b7788; font-size:12px; }
+.review-ai-pdf { overflow:hidden; border:1px solid #d5deea; border-radius:6px; }
+.review-ai-pdf-header { display:flex; align-items:center; gap:10px; min-width:0; padding:10px 12px; border-bottom:1px solid #d5deea; background:#f7faff; font-size:12px; }
+.review-ai-pdf-header span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#66768a; }
+.review-ai-pdf-header a { flex-shrink:0; color:#116cd4; text-decoration:none; }
+.review-ai-pdf iframe { display:block; width:100%; height:460px; border:0; background:#fff; }
+.review-ai-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; margin:15px 0; border:1px solid #dce4ef; background:#dce4ef; }
+.review-ai-facts>div { min-width:0; padding:12px; background:#fff; overflow-wrap:anywhere; }
+.review-ai-facts dt { margin:0 0 6px; color:#738398; font-size:12px; }
+.review-ai-facts dd { margin:0; font-size:13px; font-weight:600; }
+.review-ai-alert, .review-ai-notice, .review-ai-unlinked { padding:10px 12px; margin:0 0 13px; border:1px solid #f0b6ac; border-radius:5px; font-size:13px; }
+.review-ai-alert p { margin:6px 0 0; }
+.review-ai-notice { border-color:#c2e0cc; background:#f2faf5; color:#2e6a45; }
+.review-ai-unlinked { border-color:#e9d5a8; background:#fff9e9; color:#775824; }
+.review-ai-unlinked p { margin:0 0 9px; }
+.review-ai-actions { display:flex; justify-content:flex-end; gap:9px; padding-top:8px; }
+.review-ai-actions .reject { border-color:#d6a3a1; background:#fff; color:#a52b32; }
+@media (max-width:1220px) { .review-ai-layout { grid-template-columns:1fr; } .review-ai-list-scroll { max-height:310px; } }
+@media (max-width:700px) { .review-ai-form { grid-template-columns:1fr; } .review-ai-form-actions { flex-wrap:wrap; } .review-ai-facts { grid-template-columns:repeat(2,minmax(0,1fr)); } .review-ai-top { align-items:flex-start; } }

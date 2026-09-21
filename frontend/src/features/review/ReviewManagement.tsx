@@ -4,10 +4,11 @@ import {
   type Bootstrap, type Person, type QueueItem,
 } from './api'
 import './ReviewManagement.css'
+import PostponementModule from './PostponementModule'
 
 // Only the appearance of the existing review feature is changed here.
 // Its data source and document-action implementations remain in ./api.ts.
-type ReviewTab = 'roster' | 'inbox'
+type ReviewTab = 'roster' | 'inbox' | 'ai'
 type QueuedRow = QueueItem & { done: string | null }
 type DatedQueueItem = QueueItem & {
   application_date?: string | null
@@ -44,6 +45,10 @@ function Tabs({ tab, setTab }: { tab: ReviewTab; setTab: (tab: ReviewTab) => voi
       <button type="button" className={`review-inner-tab ${tab === 'inbox' ? 'active' : ''}`}
         aria-current={tab === 'inbox' ? 'page' : undefined} onClick={() => setTab('inbox')}>
         검토함
+      </button>
+      <button type="button" className={`review-inner-tab ${tab === 'ai' ? 'active' : ''}`}
+        aria-current={tab === 'ai' ? 'page' : undefined} onClick={() => setTab('ai')}>
+        서류 AI 판정
       </button>
     </nav>
   )
@@ -284,13 +289,10 @@ export default function ReviewManagement() {
     fetchBootstrap().then(setData).catch((e: unknown) => setError(e instanceof Error ? e.message : '불러오지 못했습니다'))
   }, [])
 
-  if (error) return <div className="review-management review-loading"><div role="alert" className="review-load-error"><strong>데이터를 불러오지 못했습니다</strong><p>{error}</p></div></div>
-  if (!data) return <div className="review-management review-loading">불러오는 중…</div>
-
   return <div className="review-management">
     <Tabs tab={tab} setTab={setTab} />
     <main className="review-main-content">
-      {tab === 'roster' ? <RosterView people={data.people} onSelect={setSelectedPerson} /> : <InboxView queue={data.queue} bootstrap={data} />}
+      {tab === 'ai' ? <PostponementModule /> : error ? <div role="alert" className="review-load-error"><strong>데이터를 불러오지 못했습니다</strong><p>{error}</p></div> : !data ? <div className="review-loading">불러오는 중…</div> : tab === 'roster' ? <RosterView people={data.people} onSelect={setSelectedPerson} /> : <InboxView queue={data.queue} bootstrap={data} />}
     </main>
     {selectedPerson && <PersonDetail person={selectedPerson} onClose={() => setSelectedPerson(null)} />}
   </div>

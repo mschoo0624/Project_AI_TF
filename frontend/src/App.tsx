@@ -1,26 +1,15 @@
-<<<<<<< HEAD
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-=======
-import { useEffect, useState } from 'react'
-import type { Dispatch, FormEvent, SetStateAction } from 'react'
->>>>>>> main
 import './App.css'
 import ReserveManagement from './features/reserve/ReserveManagement'
 import ResourceManagement from './features/resource/ResourceManagement'
 import WorkLogManagement from './features/worklog/WorkLogManagement'
 
-<<<<<<< HEAD
 const featurePages = [
   { id: 'reserve', label: '부대관리', Component: ReserveManagement },
   { id: 'resource', label: '자원관리', Component: ResourceManagement },
   { id: 'worklog', label: '업무일지', Component: WorkLogManagement },
 ] as const
-=======
-type TabId = 'home' | 'reserve' | 'resource' | 'classifier'
-type ResourcePage = 'lookup' | 'assignment'
-type DetailTab = 'profile' | 'progress' | 'records'
->>>>>>> main
 
 type FeaturePageId = typeof featurePages[number]['id']
 type PageId = 'home' | FeaturePageId
@@ -51,7 +40,6 @@ function Icon({ name, size = 19 }: { name: IconName; size?: number }) {
   return <svg {...common}>{drawing}</svg>
 }
 
-<<<<<<< HEAD
 // 아래 숫자와 일정은 첨부된 Figma 시안의 예시값이며 서버 데이터가 아닙니다.
 // 추후 API 연결 시 이 객체를 API 응답으로 대체할 수 있습니다.
 const demoDashboard = {
@@ -99,172 +87,6 @@ function App() {
       setResourceLanding('roster')
       setActivePage(destination)
     }
-=======
-type TrainingPlanItem = { name: string; hours: number }
-type TrainingProgress = {
-  service_year: number
-  mobilization_status: string | null
-  personnel_category: string
-  training_plan: TrainingPlanItem[]
-  target_hours: number
-  carryover_hours?: number
-  required_hours?: number
-  completed_hours: number
-  remaining_hours: number
-  prosecution_risk: boolean
-  completed: boolean
-}
-type TrainingRecord = {
-  id: number
-  education_year: number
-  training_year: number | null
-  training_type: string
-  training_round: number
-  attendance_status: string
-  training_hours: number
-  notes: string | null
-}
-type TrainingRecordForm = {
-  service_year: number
-  training_year: number
-  training_type: string
-  training_round: number
-  attendance_status: string
-  training_hours: number
-  notes: string
-}
-type CreatePersonForm = {
-  military_number: string
-  name: string
-  branch: string
-  rank: string
-  unit: string
-  specialty: string
-  origin_type: string
-  service_year: number
-  position: string
-  mobilization_status: string
-  status: string
-  previous_training_hours: string
-}
-type Squad = {
-  id: number
-  name: string
-  description: string | null
-  person_count: number
-  breakdown?: Record<string, number>
-  roster?: SquadMember[]
-}
-type SquadMember = {
-  military_number: string
-  name: string
-  branch: string
-  category: string
-  position: string | null
-  specialty: string | null
-  service_year: number | null
-}
-type AssignmentRecommendation = {
-  squad_id: number
-  squad_name: string
-  current_count: number
-  same_position_count: number
-  same_tier_count: number
-  reason: string
-}
-type AssignmentResult = {
-  squad_id: number
-  positions: Record<string, { requested: number; assigned: { military_number: string; name: string }[]; shortfall: number }>
-  total_requested: number
-  total_assigned: number
-  total_shortfall: number
-}
-type AssignmentQuotas = Record<string, Record<string, Record<string, number>>>
-type AssignmentCandidate = {
-  military_number: string
-  name: string
-  position: string
-  specialty: string | null
-  service_year: number | null
-  origin_type?: string | null
-  personnel_category?: string
-  tier: string
-  branch: string
-  category: string
-}
-type AssignmentCandidates = Record<string, Record<string, AssignmentCandidate[]>>
-type ProposedAssignment = AssignmentCandidate & { squad_id: number }
-type ClassifierExtraction = { name?: string; valid_until?: string; document_type?: string; stamp_present?: boolean; confidence?: number; anomaly_flags?: string[]; error?: string }
-type ClassifierSubmission = { id: string; filename: string; saved_path: string; military_number: string | null; extraction: ClassifierExtraction; reason_category: string | null; status: 'pending' | 'approved' | 'declined'; note: string | null; created_at: string; decided_at: string | null; projectPostponementId?: number }
-type ProjectPostponement = { id: number; person_id: string; status: string; category: string | null; classifier_submission_id: string | null }
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
-const branches = ['육군', '해군', '공군', '해병대']
-const statuses = ['active', 'on_leave']
-const mobilizationStatuses = ['동원지정', '동원미지정', '학생예비군', '일부보류', '해당없음']
-const trainingTypes = ['기본훈련', '동원훈련Ⅰ형', '동원훈련Ⅱ형', '작계훈련(전·후반기)']
-const assignmentPositions = ['행정병', '통신병', '의무병', '운전병', '보급병']
-const personnelCategories = ['병사', '부사관', '장교']
-const assignmentBranches = ['육군', '해군', '해병대', '공군']
-const originTypeOptions = ['병사', '부사관', '장교']
-const rankCategoryMap: Record<string, string[]> = {
-  병사: ['이병', '일병', '상병', '병장'],
-  부사관: ['하사', '중사', '상사'],
-  장교: ['소위', '중위', '대위'],
-}
-const positionOptions = ['행정병', '병기취급병', '통신병', '의무병', '운전병', '보급병', '소총수', '보충']
-
-const initialCreatePersonForm: CreatePersonForm = {
-  military_number: '', name: '', branch: '육군', rank: '병장', unit: '', specialty: '',
-  origin_type: '병사', service_year: 1, position: '소총수',
-  mobilization_status: '동원지정', status: 'active', previous_training_hours: '',
-}
-
-function suggestPositionForSpecialty(specialty: string): string | null {
-  const normalized = specialty.trim()
-  if (!normalized) return null
-  const compact = normalized.replace(/\s+/g, '').toLowerCase()
-  const code = normalized.replace(/\D/g, '')
-  const mapping: Record<string, string> = {
-    행정: '행정병', 행정병: '행정병', '3111101': '행정병', '311102': '행정병',
-    병기: '병기취급병', 병기취급: '병기취급병', 병기취급병: '병기취급병', '222101': '병기취급병', '222102': '병기취급병',
-    통신: '통신병', 통신병: '통신병', '171101': '통신병', '171102': '통신병', '171104': '통신병', '171106': '통신병',
-    의무: '의무병', 의무병: '의무병', '411101': '의무병', '411102': '의무병', '411103': '의무병', '411104': '의무병', '411105': '의무병', '411106': '의무병',
-    운전: '운전병', 운전병: '운전병', '241102': '운전병', '241103': '운전병', '241104': '운전병', '231101': '운전병',
-    보급: '보급병', 보급병: '보급병', '231103': '보급병', '231104': '보급병', '231105': '보급병',
-  }
-  return mapping[normalized] ?? mapping[compact] ?? mapping[code] ?? null
-}
-
-async function responseError(response: Response, fallback: string) {
-  try {
-    const data = await response.json() as { detail?: string | { loc?: (string | number)[]; msg?: string }[] }
-    if (typeof data.detail === 'string') return data.detail
-    if (Array.isArray(data.detail)) return data.detail.map(item => item.msg ?? '입력값을 확인해 주세요.').join(' ')
-    return fallback
-  } catch { return fallback }
-}
-
-function App() {
-  const [openTabs, setOpenTabs] = useState<TabId[]>(['home', 'resource', 'classifier'])
-  const [activeTab, setActiveTab] = useState<TabId>('classifier')
-
-  const openReserve = () => {
-    setOpenTabs(t => t.includes('reserve') ? t : [...t, 'reserve'])
-    setActiveTab('reserve')
-  }
-  const openResource = () => {
-    setOpenTabs(t => t.includes('resource') ? t : [...t, 'resource'])
-    setActiveTab('resource')
-  }
-  const openClassifier = () => {
-    setOpenTabs(t => t.includes('classifier') ? t : [...t, 'classifier'])
-    setActiveTab('classifier')
-  }
-  const closeTab = (tab: Exclude<TabId, 'home'>) => {
-    setOpenTabs(t => t.filter(item => item !== tab))
-    if (activeTab === tab) setActiveTab('home')
->>>>>>> main
   }
   const activeFeature = featurePages.find(page => page.id === activePage)
   const ActiveComponent = activeFeature?.Component
@@ -275,7 +97,6 @@ function App() {
       <div className="account-area" />
     </header>
     <div className="system-body">
-<<<<<<< HEAD
       <aside className="sidebar" aria-label="주 메뉴">
         <button className={`user-icon ${activePage === 'home' ? 'active' : ''}`} type="button" onClick={() => navigate('home')} aria-label="홈으로 이동" title="홈으로 이동">
           <span className="user-icon-figure"><Icon name="person" size={28} /></span>
@@ -293,31 +114,6 @@ function App() {
             : activePage === 'resource' ? <ResourceManagement initialTab={resourceLanding} key="resource" />
             : ActiveComponent ? <ActiveComponent key={activePage} /> : null}
         </div>
-=======
-      <aside className="sidebar">
-        <div className="user-icon">♙</div>
-        <button className={`side-button ${activeTab === 'reserve' ? 'active' : ''}`} onClick={openReserve}>예비군관리</button>
-        <button className={`side-button ${activeTab === 'resource' ? 'active' : ''}`} onClick={openResource}>자원관리</button>
-        <button className={`side-button ${activeTab === 'classifier' ? 'active' : ''}`} onClick={openClassifier}>연기판정</button>
-      </aside>
-      <main className="workspace">
-        <div className="workspace-tabs">
-          <button className={`workspace-tab ${activeTab === 'home' ? 'selected' : ''}`} onClick={() => setActiveTab('home')}>홈</button>
-          {openTabs.includes('reserve') && <div className={`workspace-tab compound ${activeTab === 'reserve' ? 'selected' : ''}`}>
-            <button className="tab-main" onClick={() => setActiveTab('reserve')}>예비군관리</button>
-            <button className="tab-close" onClick={() => closeTab('reserve')} aria-label="예비군관리 탭 닫기">×</button>
-          </div>}
-          {openTabs.includes('resource') && <div className={`workspace-tab compound ${activeTab === 'resource' ? 'selected' : ''}`}>
-            <button className="tab-main" onClick={() => setActiveTab('resource')}>자원관리</button>
-            <button className="tab-close" onClick={() => closeTab('resource')} aria-label="자원관리 탭 닫기">×</button>
-          </div>}
-          {openTabs.includes('classifier') && <div className={`workspace-tab compound ${activeTab === 'classifier' ? 'selected' : ''}`}>
-            <button className="tab-main" onClick={() => setActiveTab('classifier')}>연기판정</button>
-            <button className="tab-close" onClick={() => closeTab('classifier')} aria-label="연기판정 탭 닫기">×</button>
-          </div>}
-        </div>
-        {activeTab === 'home' ? <Home onOpen={openResource} /> : activeTab === 'reserve' ? <div /> : activeTab === 'classifier' ? <PostponementModule /> : <ResourceModule />}
->>>>>>> main
       </main>
     </div>
   </div>
@@ -333,7 +129,6 @@ function Home({ onNavigate }: { onNavigate: (page: HomeDestination) => void }) {
   const [showScheduleInfo, setShowScheduleInfo] = useState(false)
   const [dayOffset, setDayOffset] = useState(0)
 
-<<<<<<< HEAD
   const editSchedule = (schedule?: Schedule) => {
     setEditingSchedule(schedule?.id ?? 'new')
     setDraftDate(schedule?.date ?? '')
@@ -360,129 +155,6 @@ function Home({ onNavigate }: { onNavigate: (page: HomeDestination) => void }) {
     date.setDate(date.getDate() + dayOffset)
     return `${date.getMonth() + 1}월 ${date.getDate()}일`
   })()
-=======
-function PostponementModule() {
-  const [file, setFile] = useState<File | null>(null)
-  const [militaryNumber, setMilitaryNumber] = useState('')
-  const [matchedPerson, setMatchedPerson] = useState<Person | null>(null)
-  const [matching, setMatching] = useState(false)
-  const [personNames, setPersonNames] = useState<Record<string, string>>({})
-  const [submissions, setSubmissions] = useState<ClassifierSubmission[]>([])
-  const [selected, setSelected] = useState<ClassifierSubmission | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [loadingList, setLoadingList] = useState(true)
-  const [error, setError] = useState('')
-
-  const loadSubmissions = async () => {
-    setLoadingList(true)
-    try {
-      const response = await fetch('/classifier-api/submissions')
-      if (!response.ok) throw new Error(await responseError(response, '분류기 제출 목록을 불러오지 못했습니다.'))
-      const loaded = await response.json() as ClassifierSubmission[]
-      const projectResponse = await fetch(`${API_BASE}/postponements`)
-      const projectItems = projectResponse.ok ? await projectResponse.json() as ProjectPostponement[] : []
-      const linked = loaded.map(item => ({ ...item, projectPostponementId: projectItems.find(project => project.classifier_submission_id === item.id)?.id }))
-      setSubmissions(linked)
-      const matches = await Promise.all(loaded.filter(item => item.military_number).map(async item => {
-        const response = await fetch(`${API_BASE}/persons/${encodeURIComponent(item.military_number!)}`)
-        return response.ok ? [item.military_number!, (await response.json() as Person).name] as const : null
-      }))
-      setPersonNames(Object.fromEntries(matches.filter((match): match is readonly [string, string] => match !== null)))
-    } catch (e) { setError(e instanceof Error ? e.message : '분류기 제출 목록을 불러오지 못했습니다.') }
-    finally { setLoadingList(false) }
-  }
-
-  useEffect(() => { void loadSubmissions() }, [])
-
-  const findPerson = async (value: string) => {
-    setMilitaryNumber(value); setMatchedPerson(null)
-    if (!value.trim()) return
-    setMatching(true); setError('')
-    try {
-      const response = await fetch(`${API_BASE}/persons/${encodeURIComponent(value.trim())}`)
-      if (response.ok) setMatchedPerson(await response.json() as Person)
-    } catch { setError('군번 확인에 실패했습니다.') }
-    finally { setMatching(false) }
-  }
-
-  const chooseFile = (candidate: File | undefined) => {
-    if (!candidate) return
-    if (!candidate.name.toLowerCase().endsWith('.pdf')) {
-      setFile(null); setError('PDF 파일만 업로드할 수 있습니다.'); return
-    }
-    setError(''); setFile(candidate)
-  }
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault()
-    if (!file || !matchedPerson || matching) { setError('유효한 PDF와 등록된 군번을 먼저 입력해 주세요.'); return }
-    setLoading(true); setError('')
-    try {
-      const form = new FormData(); form.append('file', file)
-      if (militaryNumber.trim()) form.append('military_number', militaryNumber.trim())
-      const response = await fetch('/classifier-api/submissions', { method: 'POST', body: form })
-      if (!response.ok) throw new Error(await responseError(response, 'PDF 분석에 실패했습니다.'))
-      const submission = await response.json() as ClassifierSubmission
-      const projectResponse = await fetch(`${API_BASE}/postponements`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ person_id: matchedPerson.military_number, reason: submission.reason_category ?? submission.extraction.document_type ?? '서류 제출', category: submission.reason_category, training_year: matchedPerson.service_year, source_file: submission.filename, classifier_submission_id: submission.id }) })
-      if (!projectResponse.ok) throw new Error(await responseError(projectResponse, 'Project backend 연기 기록 연결에 실패했습니다.'))
-      const projectItem = await projectResponse.json() as ProjectPostponement
-      const linkedSubmission = { ...submission, projectPostponementId: projectItem.id }
-      setSubmissions(items => [linkedSubmission, ...items]); setPersonNames(names => ({ ...names, [matchedPerson.military_number]: matchedPerson.name })); setSelected(linkedSubmission); setFile(null)
-    } catch (e) { setError(e instanceof Error ? e.message : 'PDF 분석에 실패했습니다.') }
-    finally { setLoading(false) }
-  }
-
-  const decide = async (submission: ClassifierSubmission, decision: 'approved' | 'declined') => {
-    setError('')
-    try {
-      if (!submission.projectPostponementId) throw new Error('Project backend에 연결된 연기 기록이 없습니다.')
-      const action = decision === 'approved' ? 'approve' : 'reject'
-      const response = await fetch(`${API_BASE}/postponements/${submission.projectPostponementId}/${action}`, { method: 'PATCH' })
-      if (!response.ok) throw new Error(await responseError(response, '제출 건 처리에 실패했습니다.'))
-      await response.json()
-      const nextStatus: ClassifierSubmission['status'] = decision === 'approved' ? 'approved' : 'declined'
-      const updated = { ...submission, status: nextStatus }
-      setSubmissions(items => items.map(item => item.id === submission.id ? updated : item)); setSelected(updated)
-    } catch (e) { setError(e instanceof Error ? e.message : '제출 건 처리에 실패했습니다.') }
-  }
-
-  return <section className="classifier-module">
-    <div className="page-intro"><div><p className="eyebrow">CLASSIFIER_AITF API TEST</p><h2>서류 AI 판정</h2><p>PDF를 업로드하고 군번을 연결해 추출·분류·검토 결과를 확인합니다.</p></div><button className="button secondary" onClick={() => void loadSubmissions()}>목록 새로고침</button></div>
-    <form className="classifier-form" onSubmit={submit}>
-      <label>군번<span className="field-hint">등록된 예비군만 업로드할 수 있습니다.</span><input value={militaryNumber} onChange={e => void findPerson(e.target.value)} placeholder="예: 26-72000500" /></label>
-      <label>PDF 파일<span className="field-hint">PDF 형식만 가능</span><input type="file" accept="application/pdf,.pdf" onChange={e => chooseFile(e.target.files?.[0])} /></label>
-      <div className={`classifier-match wide ${matchedPerson ? 'matched' : militaryNumber && !matching ? 'unmatched' : ''}`}>{matching ? <span>군번을 확인하는 중입니다...</span> : matchedPerson ? <><strong>매칭됨: {matchedPerson.name}</strong><span>{matchedPerson.military_number} · {matchedPerson.branch} · {matchedPerson.status}</span></> : militaryNumber ? <span>등록된 예비군을 찾지 못했습니다. 군번을 확인해 주세요.</span> : <span>군번을 입력하면 등록된 예비군과 매칭합니다.</span>}</div>
-      {file && <div className="selected-file wide"><span className="file-icon">PDF</span><div><strong>{file.name}</strong><small>{(file.size / 1024 / 1024).toFixed(2)} MB · 업로드 준비 완료</small></div><button type="button" className="file-remove" onClick={() => setFile(null)} aria-label="선택한 PDF 제거">×</button></div>}
-      <div className="form-actions wide"><button className="button primary" disabled={!file || !matchedPerson || matching || loading}>{loading ? 'AI 분석 중...' : 'PDF 업로드 및 분석'}</button></div>
-    </form>
-    {error && <div className="inline-error">{error}</div>}
-    <div className="classifier-layout">
-      <section className="list-card"><div className="list-caption"><h3>제출 목록</h3><span>{submissions.filter(item => item.status === 'pending').length}건 검토대기</span></div>{loadingList ? <State>제출 목록을 불러오는 중입니다...</State> : submissions.length === 0 ? <State>아직 업로드된 PDF가 없습니다.</State> : <div className="classifier-submission-list">{submissions.map(item => <button key={item.id} className={`classifier-submission ${selected?.id === item.id ? 'selected' : ''}`} onClick={() => setSelected(item)}><strong>{personNames[item.military_number ?? ''] ?? item.extraction.name ?? '이름 미확인'}</strong><span>{item.military_number ?? '군번 미기재'} · {item.filename}</span><em className={`submission-status ${item.status}`}>{item.status === 'pending' ? '검토대기' : item.status === 'approved' ? '승인' : '반려'}</em></button>)}</div>}</section>
-      <ClassifierResult submission={selected} onDecision={decide} />
-    </div>
-  </section>
-}
-
-function ClassifierResult({ submission, onDecision }: { submission: ClassifierSubmission | null; onDecision: (submission: ClassifierSubmission, decision: 'approved' | 'declined') => void }) {
-  if (!submission) return <section className="classifier-result state-panel">목록에서 제출 건을 선택하세요.</section>
-  const extraction = submission.extraction
-  const originalPdfUrl = `/classifier-api${submission.saved_path}`
-  return <section className="classifier-result"><div className="section-heading"><h3>AI 분석 결과</h3><span className={`submission-status ${submission.status}`}>{submission.status === 'pending' ? '검토대기' : submission.status === 'approved' ? '승인' : '반려'}</span></div><div className="original-pdf-panel"><div className="original-pdf-heading"><div><strong>원본 PDF</strong><span>{submission.filename}</span></div><a className="button small secondary" href={originalPdfUrl} target="_blank" rel="noreferrer">새 탭에서 열기 ↗</a></div><iframe className="original-pdf-viewer" title={`${submission.filename} 원본 PDF`} src={originalPdfUrl} /></div><div className="classifier-facts"><Fact label="성명" value={extraction.name ?? '-'} /><Fact label="서류종류" value={extraction.document_type ?? '-'} /><Fact label="유효기간" value={extraction.valid_until ?? '-'} /><Fact label="사유 분류" value={submission.reason_category ?? '모델 미학습'} /><Fact label="신뢰도" value={extraction.confidence != null ? `${Math.round(extraction.confidence * 100)}%` : '-'} /><Fact label="도장/서명" value={extraction.stamp_present ? '있음' : '없음'} /></div>{extraction.anomaly_flags?.length ? <div className="classifier-alerts"><strong>이상 신호</strong>{extraction.anomaly_flags.map(flag => <span key={flag}>! {flag}</span>)}</div> : <p className="classifier-ok">문서 이상 신호가 없습니다.</p>}<p className="classifier-file">원본: {submission.filename}</p>{submission.status === 'pending' && (submission.projectPostponementId ? <div className="review-actions"><button className="button primary" onClick={() => onDecision(submission, 'approved')}>승인</button><button className="button danger-outline" onClick={() => onDecision(submission, 'declined')}>반려</button></div> : <p className="classifier-unlinked">기존 제출 건입니다. Project 연기 기록과 연결되지 않아 새 업로드부터 통합 결재를 사용할 수 있습니다.</p>)}</section>
-}
-
-function Fact({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value}</strong></div> }
-
-function ResourceModule() {
-  const [page, setPage] = useState<ResourcePage>('lookup')
-  const [search, setSearch] = useState('')
-  const [branch, setBranch] = useState('')
-  const [status, setStatus] = useState('')
-  const [mobilizationStatus, setMobilizationStatus] = useState('')
-  const [people, setPeople] = useState<Person[]>([])
-  const [listLoading, setListLoading] = useState(true)
-  const [listError, setListError] = useState('')
-  const [refreshKey, setRefreshKey] = useState(0)
->>>>>>> main
 
   return <section className="home-dashboard" aria-label="홈 대시보드">
     <div className="home-left-column">
@@ -538,7 +210,6 @@ function ResourceModule() {
       </section>
     </div>
 
-<<<<<<< HEAD
     <section className="home-metrics-area" aria-label="대상자 통계 예시">
       <div className="home-metrics-grid">
         {demoDashboard.metrics.map(metric =>
@@ -552,60 +223,6 @@ function ResourceModule() {
           </article>
         )}
       </div>
-=======
-    {page === 'lookup' ? <>
-      <div className="page-intro"><div><h2>예비군 조회</h2><p>인원 정보를 검색하고 훈련 기록을 관리하세요.</p></div><div className="page-intro-actions"><button className="button primary" onClick={() => { setAddingPerson(true); setCreatePersonError(''); setCreatePersonForm(initialCreatePersonForm) }}>+ 신규 예비군 등록</button><div className="result-count"><strong>{people.length}</strong><span>조회 인원</span></div></div></div>
-      <section className="search-panel">
-        <label className="search-field"><span>⌕</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="이름 또는 군번으로 검색" /></label>
-        <Select label="군종" value={branch} options={branches} onChange={setBranch} />
-        <Select label="상태" value={status} options={statuses} labels={{ active: '복무 중', on_leave: '휴가 중' }} onChange={setStatus} />
-        <Select label="동원 상태" value={mobilizationStatus} options={mobilizationStatuses} onChange={setMobilizationStatus} />
-      </section>
-      <section className="list-card"><div className="list-caption"><h3>인원 목록</h3><span>{search || branch || status || mobilizationStatus ? '필터 적용 중' : '전체 인원'}</span></div>
-        {listLoading && <State>인원 목록을 불러오는 중입니다...</State>}
-        {listError && <State error>{listError}</State>}
-        {!listLoading && !listError && people.length === 0 && <State><strong>검색 결과가 없습니다</strong><span>검색어나 필터를 바꿔 다시 시도해 보세요.</span></State>}
-        {!listLoading && !listError && people.length > 0 && <div className="table-wrap"><table><thead><tr><th>군번</th><th>이름</th><th>군종</th><th>계급</th><th>소속부대</th><th>분대</th><th>상태</th></tr></thead><tbody>{people.map(p => <tr key={p.military_number} onClick={() => openDetail(p)} tabIndex={0} onKeyDown={e => e.key === 'Enter' && openDetail(p)}><td className="mono">{p.military_number}</td><td className="person-name">{p.name}</td><td>{p.branch}</td><td>{p.rank ?? '-'}</td><td>{p.unit ?? '-'}</td><td>{p.squad_id ? `${p.squad_id}분대` : '-'}</td><td><StatusBadge status={p.status} /></td></tr>)}</tbody></table></div>}
-      </section>
-    </> : <AssignmentReviewView squads={squads} candidates={candidates} squadId={assignmentSquad} setSquadId={setAssignmentSquad} quotas={quotas} setQuotas={setQuotas} result={assignmentResult} proposal={proposal} setProposal={setProposal} tab={assignmentTab} setTab={setAssignmentTab} loading={assignmentLoading} error={assignmentError} onPrepare={prepareAssignment} onToggleCandidate={toggleAssignmentCandidate} onConfirm={confirmAssignments} onReset={resetAssignments} onAutoAssign={autoAssign300} />}
-
-    {selectedId && <DetailModal person={selectedPerson} progress={progress} records={records} loading={detailLoading} error={detailError} tab={detailTab} setTab={setDetailTab} onClose={closeDetail}
-      onEdit={() => { if (selectedPerson) { setPersonForm(selectedPerson); setEditingPerson(true) } }} onDelete={deletePerson}
-      editingPerson={editingPerson} personForm={personForm} setPersonForm={setPersonForm} onSavePerson={savePerson} onCancelPerson={() => setEditingPerson(false)}
-      editingRecord={editingRecord} recordForm={recordForm} setRecordForm={setRecordForm} addingRecord={addingRecord}
-      onStartAdd={() => { setAddingRecord(true); setEditingRecord(null); setRecordForm({ service_year: selectedPerson?.service_year && selectedPerson.service_year <= 6 ? selectedPerson.service_year : 1, training_year: selectedPerson?.service_year && selectedPerson.service_year <= 8 ? selectedPerson.service_year : 1, training_type: '기본훈련', training_round: 1, attendance_status: 'postponed', training_hours: 0, notes: '' }) }}
-      onEditRecord={r => { setEditingRecord(r.id); setAddingRecord(false); setRecordForm({ service_year: r.education_year, training_year: r.training_year ?? r.education_year, training_type: r.training_type, training_round: r.training_round, attendance_status: r.attendance_status, training_hours: r.training_hours, notes: r.notes ?? '' }) }}
-      onCancelRecord={() => { setEditingRecord(null); setAddingRecord(false); setRecordForm(null) }} onSaveRecord={saveRecord} onAddRecord={addRecord} onDeleteRecord={deleteRecord} actionError={actionError} />}
-    <CreatePersonModal open={addingPerson} form={createPersonForm} setForm={setCreatePersonForm} loading={createPersonLoading} error={createPersonError} onClose={() => setAddingPerson(false)} onSubmit={submitCreatePerson} />
-    <TransferAssignmentModal arrival={newArrival} error={createPersonError} onClose={() => setNewArrival(null)} onConfirm={confirmNewArrival} />
-  </div>
-}
-
-function AssignmentReviewView({ squads, candidates, squadId, setSquadId, quotas, setQuotas, result, proposal, setProposal, tab, setTab, loading, error, onPrepare, onToggleCandidate, onConfirm, onReset, onAutoAssign }: {
-  squads: Squad[]; candidates: AssignmentCandidates; squadId: string; setSquadId: (v: string) => void; quotas: AssignmentQuotas; setQuotas: (v: AssignmentQuotas) => void;
-  result: AssignmentResult | null; proposal: ProposedAssignment[]; setProposal: Dispatch<SetStateAction<ProposedAssignment[]>>; tab: string; setTab: (v: string) => void; loading: boolean; error: string; onPrepare: () => void; onToggleCandidate: (candidate: AssignmentCandidate) => void; onConfirm: () => void; onReset: () => void; onAutoAssign: () => void
-}) {
-  const tabs = assignmentBranches.flatMap(b => personnelCategories.map(c => `${b}-${c}`))
-  const [selectedBranch, selectedCategory] = tab.split('-')
-  const tabCandidates = candidates[selectedBranch]?.[selectedCategory] ?? []
-  const tabProposal = proposal.filter(p => p.branch === selectedBranch && p.category === selectedCategory)
-  const required = assignmentPositions.reduce((s, p) => s + (quotas[selectedBranch]?.[p]?.[selectedCategory] ?? 0), 0)
-  const branchRequested = assignmentPositions.reduce((s, p) => s + personnelCategories.reduce((s2, c) => s2 + (quotas[selectedBranch]?.[p]?.[c] ?? 0), 0), 0)
-  const selectedSquad = squads.find(s => String(s.id) === squadId)
-
-  return <div className="assignment-page">
-    <div className="page-intro"><div><h2>전투편성 검토</h2><p>군별·인원유형별·직책별로 후보를 분리해 확인한 뒤 확정합니다.</p></div></div>
-    <div className="squad-profile-layout">
-      <section className="assignment-panel"><div className="assignment-toolbar"><button className="button secondary" disabled={loading} onClick={onReset}>편성 초기화</button><button className="button primary" disabled={loading} onClick={onAutoAssign}>300명 자동 편성</button></div><label className="assignment-select">대상 분대<select value={squadId} onChange={e => setSquadId(e.target.value)}>{squads.map(s => <option key={s.id} value={s.id}>{s.name} · 현재 {s.person_count}명</option>)}</select></label>{selectedSquad && <SquadProfile squad={selectedSquad} />}</section>
-      <section className="assignment-panel"><div className="section-heading"><h3>{selectedBranch} 필요 인원</h3><span>{branchRequested}명 요청</span></div><div className="quota-table"><div className="quota-row quota-head"><span>직책</span>{personnelCategories.map(c => <span key={c}>{c}</span>)}</div>{assignmentPositions.map(p => <div className="quota-row" key={p}><strong>{p}</strong>{personnelCategories.map(c => <label key={c}><input type="number" min="0" value={quotas[selectedBranch][p][c]} onChange={e => setQuotas({ ...quotas, [selectedBranch]: { ...quotas[selectedBranch], [p]: { ...quotas[selectedBranch][p], [c]: Number(e.target.value) } } })} /></label>)}</div>)}</div></section>
-    </div>
-    <section className="assignment-panel review-panel">
-      <div className="assignment-tabs">{tabs.map(t => <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>{t.replace('-', ' · ')}</button>)}</div>
-      <div className="review-heading"><div><h3>{selectedBranch} · {selectedCategory}</h3><p>가용 {tabCandidates.filter(p => assignmentPositions.includes(p.position)).length}명 · 필요 {required}명 · 검토안 {tabProposal.length}명</p></div><span className={tabProposal.length < required ? 'shortfall-label' : 'ready-label'}>{Math.max(required - tabProposal.length, 0)}명 부족</span></div>
-      <div className="candidate-list">{tabCandidates.length === 0 && <State>현재 조건에 맞는 후보가 없습니다.</State>}{tabCandidates.map(c => { const proposed = proposal.find(p => p.military_number === c.military_number); return <article className={`candidate-row ${proposed ? 'proposed' : ''}`} key={c.military_number} onClick={() => onToggleCandidate(c)}><div><strong>{c.name}</strong><span>{c.military_number} · {c.position} · {c.specialty ?? '특기 없음'} · {c.service_year ?? '-'}년차</span></div><span className="tier-badge">{c.tier}</span>{proposed ? <select value={String(proposed.squad_id)} onClick={e => e.stopPropagation()} onChange={e => setProposal(items => items.map(p => p.military_number === c.military_number ? { ...p, squad_id: Number(e.target.value) } : p))}>{squads.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <span className="candidate-status">후보 · 클릭하여 선택</span>}</article> })}</div>
-      <div className="review-actions"><button className="button secondary" onClick={onPrepare}>편성안 만들기</button><button className="button primary" disabled={loading || proposal.length === 0} onClick={onConfirm}>{loading ? '확정 중...' : '검토안 확정 배정'}</button></div>
-      {error && <div className="inline-error">{error}</div>}{result && <div className="confirmation-note">{result.total_assigned}명이 확정 배정되었습니다.</div>}
->>>>>>> main
     </section>
 
     <section className="home-alerts-card" aria-label="알림 예시">
