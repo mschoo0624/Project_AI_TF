@@ -1,0 +1,1 @@
+{"source_file": "재직증명서.pdf", "text": "", "fields": {"name": "환자의 성명", "valid_until": "", "document_type": "서류 최상단 제목에 적힌 서류 종류", "stamp_present": false, "confidence": 0.95, "anomaly_flags": ["직인/서명 표시 없음"], "source_file": "재직증명서.pdf"}}
