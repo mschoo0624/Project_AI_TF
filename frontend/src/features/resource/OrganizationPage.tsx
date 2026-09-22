@@ -59,9 +59,8 @@ type ScopedResult = {
   total_assigned: number
   total_shortfall: number
   scope_id: number
-  created_squads?: { id: number; squad_id: number; name: string }[]
-  created_platoons?: { id: number; name: string }[]
 }
+type ExpansionResult = { created_platoons: { id: number; name: string }[]; created_squads: { id: number; squad_id: number; name: string }[]; total_platoons: number; total_squads: number }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
 const assignmentPositions = ['행정병', '통신병', '의무병', '운전병', '보급병']
@@ -272,6 +271,7 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
   const [error, setError] = useState('')
   const [working, setWorking] = useState(false)
   const [result, setResult] = useState<ScopedResult | null>(null)
+  const [expansionResult, setExpansionResult] = useState<ExpansionResult | null>(null)
   const [draft, setDraft] = useState({ query: '', status: '', category: '', position: '' })
   const [applied, setApplied] = useState(draft)
   const [page, setPage] = useState(1)
@@ -347,7 +347,7 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
     setExpanded(current => new Set([...current, selected.id]))
   }
   const deleteSelected = () => {
-    if (!selected || selected.kind === 'root' || !window.confirm(`${selected.name}을(를) 삭제하시겠습니까?\n하위 단위나 배정 인원이 있는 경우 삭제되지 않습니다.`)) return
+    if (!selected || selected.kind === 'root' || !window.confirm(`${selected.name}을(를) 삭제하시겠습니까?\n분대인 경우 연결된 분대도 함께 삭제됩니다. 하위 단위나 배정 인원이 있는 경우 삭제되지 않습니다.`)) return
     void mutate(`/organization/${selected.id}`, { method: 'DELETE' }, '편제 삭제 실패')
   }
   const moveSelected = (parentId: number) => {
@@ -365,6 +365,17 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
       setResult(await response.json() as ScopedResult)
       onRefresh()
     } catch (cause) { setError(cause instanceof Error ? cause.message : '자동편성 실패') }
+    finally { setWorking(false) }
+  }
+  const expandFormation = async () => {
+    if (!selected || selected.kind !== 'root' || working) return
+    setWorking(true); setError(''); setExpansionResult(null)
+    try {
+      const response = await fetch(`${API_BASE}/organization/${selected.id}/expand`, { method: 'POST' })
+      if (!response.ok) throw new Error(await responseError(response, '편제 확장 실패'))
+      setExpansionResult(await response.json() as ExpansionResult)
+      onRefresh()
+    } catch (cause) { setError(cause instanceof Error ? cause.message : '편제 확장 실패') }
     finally { setWorking(false) }
   }
 
@@ -477,9 +488,10 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
         <p className="rm-org-shortfall">편성 부족인원 <b>{selected.shortfall === null ? '미설정' : `${selected.shortfall}명`}</b></p>
         {selected.planned_strength !== null && <div className="rm-org-rate">분대 정원 기준 편성률 <b>{selected.planned_strength > 0 ? Math.round((selected.planned_actual ?? 0) / selected.planned_strength * 100) : 0}%</b>
           <div><i style={{ width: `${Math.min(100, selected.planned_strength > 0 ? (selected.planned_actual ?? 0) / selected.planned_strength * 100 : 0)}%` }} /></div></div>}
-        <section className="rm-org-assistant"><div><h3>AI 어시스턴트</h3><button type="button" disabled={working || !canAutoFill} onClick={() => void autoFill()}>자동편성</button></div>
-          <p>기존 특기 우선순위에 따라 선택한 단위의 각 분대에서 미편성 인원으로 부족분만 채웁니다. 다른 부대의 기존 배정은 유지합니다.</p>
-          {result && <p className="rm-org-success" role="status">{result.total_assigned}명 추가 편성 · 소대 {result.created_platoons?.length ?? 0}개 · 분대 {result.created_squads?.length ?? 0}개 추가{result.created_squads?.length ? ` (${result.created_squads.map(squad => squad.name).join(', ')})` : ''} · 잔여 부족 {result.total_shortfall}명</p>}
+        <section className="rm-org-assistant"><div><h3>AI 어시스턴트</h3><button type="button" disabled={working || !canAutoFill} onClick={() => void autoFill()}>자동편성</button>{selected.kind === 'root' && <button type="button" disabled={working} onClick={() => void expandFormation()}>소대·분대 추가</button>}</div>
+          <p>자동편성은 기존 분대의 빈 자리만 채웁니다. 소대와 분대를 늘리려면 별도 확장 버튼을 사용하세요.</p>
+          {result && <p className="rm-org-success" role="status">{result.total_assigned}명 추가 편성 · 잔여 부족 {result.total_shortfall}명</p>}
+          {expansionResult && <p className="rm-org-success" role="status">현재 소대 {expansionResult.total_platoons}개 · 분대 {expansionResult.total_squads}개</p>}
           {!canAutoFill && <p>이 단위에 분대가 없습니다. 편제 관리에서 분대를 추가하세요.</p>}
         </section>
         <section className="rm-org-breakdown"><h3>편성 요약</h3>

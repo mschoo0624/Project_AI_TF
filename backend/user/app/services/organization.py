@@ -150,51 +150,9 @@ def delete_unit(db: Session, node_id: int) -> None:
 
 
 def assign_vacancies(db: Session, selected_id: int) -> dict[str, object]:
-    """Fill squad vacancies and add squads for eligible overflow in the selected scope."""
+    """Fill vacancies in existing squads without changing the hierarchy."""
     nodes = _nodes(db)
     selected = _get(nodes, selected_id)
-    created_squads: list[dict[str, object]] = []
-    created_platoons: list[dict[str, object]] = []
-
-    if selected.kind == "root":
-        platoons = [node for node in nodes.values()
-                    if node.parent_id == selected.id and node.kind == "platoon"]
-        next_platoon_number = 1
-        while len(platoons) < 10:
-            existing_names = {node.name for node in nodes.values() if node.parent_id == selected.id}
-            while f"{next_platoon_number}소대" in existing_names:
-                next_platoon_number += 1
-            platoon = OrganizationNode(parent_id=selected.id, kind="platoon",
-                                       name=f"{next_platoon_number}소대")
-            db.add(platoon)
-            db.flush()
-            nodes[platoon.id] = platoon
-            platoons.append(platoon)
-            created_platoons.append({"id": platoon.id, "name": platoon.name})
-            next_platoon_number += 1
-
-        for platoon in platoons:
-            squads = [node for node in nodes.values()
-                      if node.parent_id == platoon.id and node.kind == "squad"]
-            next_squad_number = 1
-            while len(squads) < 4:
-                existing_names = {node.name for node in nodes.values() if node.parent_id == platoon.id}
-                while f"{next_squad_number}분대" in existing_names:
-                    next_squad_number += 1
-                squad = Squad(name=f"{next_squad_number}분대", description="기본 편제")
-                db.add(squad)
-                db.flush()
-                squad_node = OrganizationNode(parent_id=platoon.id, kind="squad",
-                                              name=squad.name, squad_id=squad.id,
-                                              planned_strength=11)
-                db.add(squad_node)
-                db.flush()
-                nodes[squad_node.id] = squad_node
-                squads.append(squad_node)
-                created_squads.append({"id": squad_node.id, "squad_id": squad.id,
-                                       "name": squad_node.name})
-                next_squad_number += 1
-
     target_squads = [node for node in [selected, *_descendants(nodes, selected_id)]
                      if node.kind == "squad" and node.squad_id is not None]
     if not target_squads:
@@ -217,103 +175,87 @@ def assign_vacancies(db: Session, selected_id: int) -> dict[str, object]:
 
     used: set[str] = set()
     assignments: list[dict[str, object]] = []
-    def add_overflow_squad() -> OrganizationNode | None:
-        parents = [node for node in [selected, *_descendants(nodes, selected_id)]
-                   if node.kind in {"root", "company", "platoon"}]
-        if not parents:
-            return None
-
-        if selected.kind == "root":
-            platoons = [node for node in parents if node.kind == "platoon"]
-            least_loaded = min(
-                platoons,
-                key=lambda node: sum(child.parent_id == node.id and child.kind == "squad"
-                                      for child in nodes.values()),
-                default=None,
-            )
-            if least_loaded is None or sum(
-                child.parent_id == least_loaded.id and child.kind == "squad"
-                for child in nodes.values()
-            ) >= 4:
-                number = 1
-                platoon_names = {node.name for node in nodes.values() if node.parent_id == selected.id}
-                while f"{number}소대" in platoon_names:
-                    number += 1
-                platoon = OrganizationNode(parent_id=selected.id, kind="platoon",
-                                            name=f"{number}소대")
-                db.add(platoon)
-                db.flush()
-                nodes[platoon.id] = platoon
-                parents.append(platoon)
-                created_platoons.append({"id": platoon.id, "name": platoon.name})
-                least_loaded = platoon
-            parent = least_loaded
-        else:
-            def depth(node: OrganizationNode) -> int:
-                result = 0
-                current = node
-                while current.parent_id is not None:
-                    result += 1
-                    current = nodes[current.parent_id]
-                return result
-
-            parent = max(parents, key=lambda node: (
-                depth(node),
-                -sum(child.parent_id == node.id and child.kind == "squad" for child in nodes.values()),
-                -node.id,
-            ))
-        sibling_names = {node.name for node in nodes.values() if node.parent_id == parent.id}
-        number = 1
-        while f"{number}분대" in sibling_names:
-            number += 1
-        squad = Squad(name=f"{number}분대", description="자동 확장 편제")
-        db.add(squad)
-        db.flush()
-        node = OrganizationNode(parent_id=parent.id, kind="squad", name=squad.name,
-                                squad_id=squad.id, planned_strength=11)
-        db.add(node)
-        db.flush()
-        nodes[node.id] = node
-        target_squads.append(node)
-        squad_members[squad.id] = []
-        created_squads.append({"id": node.id, "squad_id": squad.id, "name": node.name})
-        return node
-
     try:
-        while True:
-            assigned_before_pass = len(assignments)
-            for node in target_squads:
-                squad_id = node.squad_id
-                current = squad_members.setdefault(squad_id, [])
-                remaining = max(0, (node.planned_strength or 11) - len(current))
-                for _ in range(remaining):
-                    existing_groups = {(person.branch, personnel_category(person.rank))
-                                       for person in current}
-                    candidate = next((person for person in ordered if person.military_number not in used
-                                      and (not existing_groups or existing_groups == {
-                                          (person.branch, personnel_category(person.rank))})), None)
-                    if candidate is None:
-                        break
-                    candidate.squad_id = squad_id
-                    set_assignment_mobilization_status(db, candidate, True)
-                    db.add(Assignment(person_id=candidate.military_number, squad_id=squad_id,
-                                      assigned_date=date.today(), status="assigned"))
-                    current.append(candidate)
-                    used.add(candidate.military_number)
-                    assignments.append({"military_number": candidate.military_number,
-                                        "name": candidate.name, "squad_id": squad_id})
-            if len(used) == len(ordered):
-                break
-            if add_overflow_squad() is None:
-                break
-            if len(assignments) == assigned_before_pass and not created_squads:
-                break
+        for node in target_squads:
+            squad_id = node.squad_id
+            current = squad_members.setdefault(squad_id, [])
+            remaining = max(0, (node.planned_strength or 11) - len(current))
+            for _ in range(remaining):
+                existing_groups = {(person.branch, personnel_category(person.rank))
+                                   for person in current}
+                candidate = next((person for person in ordered if person.military_number not in used
+                                  and (not existing_groups or existing_groups == {
+                                      (person.branch, personnel_category(person.rank))})), None)
+                if candidate is None:
+                    break
+                candidate.squad_id = squad_id
+                set_assignment_mobilization_status(db, candidate, True)
+                db.add(Assignment(person_id=candidate.military_number, squad_id=squad_id,
+                                  assigned_date=date.today(), status="assigned"))
+                current.append(candidate)
+                used.add(candidate.military_number)
+                assignments.append({"military_number": candidate.military_number,
+                                    "name": candidate.name, "squad_id": squad_id})
         shortfall = sum(max(0, (node.planned_strength or 11) - len(squad_members[node.squad_id]))
                         for node in target_squads)
         db.commit()
         return {"total_assigned": len(assignments), "total_shortfall": shortfall,
-                "assigned": assignments, "scope_id": selected_id,
-            "created_squads": created_squads, "created_platoons": created_platoons}
+                "assigned": assignments, "scope_id": selected_id}
+    except Exception:
+        db.rollback()
+        raise
+
+
+def expand_formation(db: Session, selected_id: int) -> dict[str, object]:
+    """Create the standard 10-platoon, 4-squad formation without assigning people."""
+    nodes = _nodes(db)
+    selected = _get(nodes, selected_id)
+    if selected.kind != "root":
+        raise ValueError("소대와 분대 확장은 최상위 편제에서만 실행할 수 있습니다.")
+
+    created_platoons: list[dict[str, object]] = []
+    created_squads: list[dict[str, object]] = []
+    try:
+        platoons = [node for node in nodes.values()
+                    if node.parent_id == selected.id and node.kind == "platoon"]
+        platoon_number = 1
+        while len(platoons) < 10:
+            names = {node.name for node in nodes.values() if node.parent_id == selected.id}
+            while f"{platoon_number}소대" in names:
+                platoon_number += 1
+            platoon = OrganizationNode(parent_id=selected.id, kind="platoon",
+                                       name=f"{platoon_number}소대")
+            db.add(platoon)
+            db.flush()
+            nodes[platoon.id] = platoon
+            platoons.append(platoon)
+            created_platoons.append({"id": platoon.id, "name": platoon.name})
+            platoon_number += 1
+
+        for platoon in platoons:
+            squads = [node for node in nodes.values()
+                      if node.parent_id == platoon.id and node.kind == "squad"]
+            squad_number = 1
+            while len(squads) < 4:
+                names = {node.name for node in nodes.values() if node.parent_id == platoon.id}
+                while f"{squad_number}분대" in names:
+                    squad_number += 1
+                squad = Squad(name=f"{squad_number}분대", description="기본 편제")
+                db.add(squad)
+                db.flush()
+                node = OrganizationNode(parent_id=platoon.id, kind="squad", name=squad.name,
+                                        squad_id=squad.id, planned_strength=11)
+                db.add(node)
+                db.flush()
+                nodes[node.id] = node
+                squads.append(node)
+                created_squads.append({"id": node.id, "squad_id": squad.id, "name": node.name})
+                squad_number += 1
+        db.commit()
+        return {"created_platoons": created_platoons, "created_squads": created_squads,
+                "total_platoons": len(platoons), "total_squads": sum(
+                    1 for node in nodes.values() if node.kind == "squad"
+                )}
     except Exception:
         db.rollback()
         raise

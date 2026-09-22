@@ -12,7 +12,7 @@ from user.app.models.organization import OrganizationNode
 from user.app.models.person import Person
 from user.app.models.squad import Squad
 from user.app.services.organization import (
-    assign_vacancies, create_unit, delete_unit, hierarchy, move_unit,
+    assign_vacancies, create_unit, delete_unit, expand_formation, hierarchy, move_unit,
 )
 
 
@@ -50,6 +50,21 @@ def test_hierarchy_create_move_and_guard_delete() -> None:
     db.close()
 
 
+def test_deleting_squad_removes_linked_squad_record() -> None:
+    db = make_session()
+    root = OrganizationNode(kind="root", name="편제")
+    db.add(root)
+    db.commit()
+    squad_node = create_unit(db, root.id, "squad", "삭제 대상 분대")
+    squad_id = squad_node.squad_id
+
+    delete_unit(db, squad_node.id)
+
+    assert db.get(OrganizationNode, squad_node.id) is None
+    assert db.get(Squad, squad_id) is None
+    db.close()
+
+
 def test_scoped_auto_fills_only_shortfall_and_keeps_other_assignments() -> None:
     db = make_session()
     root = OrganizationNode(kind="root", name="편제")
@@ -68,17 +83,16 @@ def test_scoped_auto_fills_only_shortfall_and_keeps_other_assignments() -> None:
     db.commit()
 
     result = assign_vacancies(db, platoon_a.id)
-    assert result["total_assigned"] == 5
-    assert result["total_shortfall"] == 8
-    assert len(result["created_squads"]) == 1
+    assert result["total_assigned"] == 2
+    assert result["total_shortfall"] == 0
     assert db.get(Person, "preserved").squad_id == squad_b.squad_id
     assert db.scalar(select(Person).where(Person.squad_id == squad_a.squad_id).with_only_columns(func.count())) == 11
     assert db.scalar(select(Person).where(Person.squad_id == squad_b.squad_id).with_only_columns(func.count())) == 1
     assert assign_vacancies(db, platoon_a.id)["total_assigned"] == 0
-    assert len(db.scalars(select(Assignment)).all()) == 5
+    assert len(db.scalars(select(Assignment)).all()) == 2
     tree = hierarchy(db)
-    assert next(node for node in tree if node["id"] == platoon_a.id)["person_count"] == 14
-    assert next(node for node in tree if node["id"] == root.id)["planned_strength"] == 33
+    assert next(node for node in tree if node["id"] == platoon_a.id)["person_count"] == 11
+    assert next(node for node in tree if node["id"] == root.id)["planned_strength"] == 22
     db.close()
 
 
@@ -192,10 +206,28 @@ def test_scoped_auto_fill_four_squads_with_eleven_each() -> None:
     assert first["total_assigned"] == 10
     assert first["total_shortfall"] == 0
     all_result = assign_vacancies(db, platoon.id)
-    assert all_result["total_assigned"] == 40
-    assert all_result["total_shortfall"] == 4
-    assert len(all_result["created_squads"]) == 1
-    assert [n["person_count"] for n in hierarchy(db) if n["kind"] == "squad"] == [11] * 4 + [7]
-    assert next(n for n in hierarchy(db) if n["kind"] == "platoon")["planned_strength"] == 55
+    assert all_result["total_assigned"] == 33
+    assert all_result["total_shortfall"] == 0
+    assert [n["person_count"] for n in hierarchy(db) if n["kind"] == "squad"] == [11] * 4
+    assert next(n for n in hierarchy(db) if n["kind"] == "platoon")["planned_strength"] == 44
     assert assign_vacancies(db, root.id)["total_assigned"] == 0
+    db.close()
+
+
+def test_expand_formation_is_separate_from_auto_fill() -> None:
+    db = make_session()
+    root = OrganizationNode(kind="root", name="삼각동대")
+    db.add(root)
+    db.flush()
+    create_unit(db, root.id, "platoon", "1소대")
+    db.commit()
+
+    result = expand_formation(db, root.id)
+
+    assert result["total_platoons"] == 10
+    assert result["total_squads"] == 40
+    assert len(result["created_platoons"]) == 9
+    assert len(result["created_squads"]) == 40
+    assert len([node for node in hierarchy(db) if node["kind"] == "platoon"]) == 10
+    assert len([node for node in hierarchy(db) if node["kind"] == "squad"]) == 40
     db.close()
