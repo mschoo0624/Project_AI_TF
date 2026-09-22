@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from user.app.models.assignment import Assignment
+from user.app.models.organization import OrganizationNode
 from user.app.models.person import Person
 from user.app.models.squad import Squad
 
@@ -73,6 +74,15 @@ class AssignmentCandidate:
 	person: Person
 	tier: str
 	personnel_category: str
+
+
+def set_assignment_mobilization_status(db: Session, person: Person, designated: bool) -> None:
+	"""Keep the current training status aligned with squad membership."""
+	from user.app.services.training import apply_mobilization_status_change
+
+	apply_mobilization_status_change(
+		db, person, "동원지정" if designated else "동원미지정"
+	)
 
 def normalize_specialty(specialty: str | None) -> str:
 	return re.sub(r"\D", "", specialty or "")
@@ -239,6 +249,7 @@ def fill_squad_positions(
 					raise ValueError("A squad cannot mix branches or personnel categories")
 				squad_group.add(person_group)
 				person.squad_id = squad_id
+				set_assignment_mobilization_status(db, person, True)
 				db.add(
 					Assignment(
 						person_id=person.military_number,
@@ -340,6 +351,7 @@ def confirm_assignment_selections(
 				raise ValueError("A squad cannot mix branches or personnel categories")
 			selected_groups[squad_id] = person_group
 			person.squad_id = squad_id
+			set_assignment_mobilization_status(db, person, True)
 			db.add(
 				Assignment(
 					person_id=person_id,
@@ -359,9 +371,11 @@ def confirm_assignment_selections(
 def reset_assignment_pool(db: Session) -> dict[str, int]:
 	"""Move every reservist back to the temporary, unassigned pool."""
 	try:
-		reset_count = db.query(Person).filter(Person.squad_id.is_not(None)).update(
-			{Person.squad_id: None}, synchronize_session=False
-		)
+		assigned_people = list(db.scalars(select(Person).where(Person.squad_id.is_not(None))).all())
+		for person in assigned_people:
+			person.squad_id = None
+			set_assignment_mobilization_status(db, person, False)
+		reset_count = len(assigned_people)
 		db.query(Assignment).delete(synchronize_session=False)
 		db.commit()
 		return {"reset_count": reset_count}
@@ -392,14 +406,28 @@ def auto_assign_people(
 		groups: dict[tuple[str, str], list[Person]] = {}
 		for person in people:
 			groups.setdefault((person.branch, personnel_category(person.rank)), []).append(person)
-		if len(groups) > len(squads):
-			raise ValueError("There are not enough squads to keep branches and personnel categories separate")
+
+		def create_squad(parent_id: int | None = None) -> Squad:
+			squad = Squad(name=f"자동편성 {len(squads) + 1}분대", description="자동 확장 편제")
+			db.add(squad)
+			db.flush()
+			if parent_id is not None:
+				db.add(OrganizationNode(parent_id=parent_id, kind="squad", name=squad.name,
+								squad_id=squad.id, planned_strength=11))
+			squads.append(squad)
+			squad_counts[squad.id] = 0
+			return squad
 
 		position_order = {position: index for index, position in enumerate(POSITION_SPECIALTIES)}
 		assigned: list[dict[str, object]] = []
 		assigned_count = 0
+		squad_counts = {squad.id: 0 for squad in squads}
+		initial_squads = list(squads)
 		for group_index, (group, group_people) in enumerate(sorted(groups.items())):
-			squad = squads[group_index]
+			group_squads = [initial_squads[group_index]] if group_index < len(initial_squads) else [create_squad()]
+			parent_id = db.scalar(select(OrganizationNode.parent_id).where(
+				OrganizationNode.squad_id == group_squads[0].id
+			))
 			ordered: list[AssignmentCandidate] = []
 			for position in sorted(
 				{person.position for person in group_people},
@@ -415,8 +443,13 @@ def auto_assign_people(
 			for candidate in ordered:
 				if limit is not None and assigned_count >= limit:
 					break
+				if squad_counts[group_squads[-1].id] >= 11:
+					group_squads.append(create_squad(parent_id))
+				squad = group_squads[-1]
 				person = candidate.person
 				person.squad_id = squad.id
+				squad_counts[squad.id] += 1
+				set_assignment_mobilization_status(db, person, True)
 				db.add(
 					Assignment(
 						person_id=person.military_number,

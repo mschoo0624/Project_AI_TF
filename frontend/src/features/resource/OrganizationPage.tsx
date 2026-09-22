@@ -55,7 +55,13 @@ type OrganizationNode = {
   planned_actual: number | null
   shortfall: number | null
 }
-type ScopedResult = { total_assigned: number; total_shortfall: number; scope_id: number }
+type ScopedResult = {
+  total_assigned: number
+  total_shortfall: number
+  scope_id: number
+  created_squads?: { id: number; squad_id: number; name: string }[]
+  created_platoons?: { id: number; name: string }[]
+}
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
 const assignmentPositions = ['행정병', '통신병', '의무병', '운전병', '보급병']
@@ -279,8 +285,8 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
       if (controller.signal.aborted) return
       setNodes(data)
       setSelectedId(current => data.some(node => node.id === current)
-        ? current : (data.find(node => node.kind === 'platoon')?.id
-          ?? data.find(node => node.kind === 'root')?.id ?? null))
+        ? current : (data.find(node => node.kind === 'root')?.id
+          ?? data.find(node => node.kind === 'platoon')?.id ?? null))
       setExpanded(current => new Set([...current, ...data.filter(node =>
         node.kind === 'root' || node.kind === 'platoon').map(node => node.id)]))
       setError('')
@@ -473,7 +479,7 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
           <div><i style={{ width: `${Math.min(100, selected.planned_strength > 0 ? (selected.planned_actual ?? 0) / selected.planned_strength * 100 : 0)}%` }} /></div></div>}
         <section className="rm-org-assistant"><div><h3>AI 어시스턴트</h3><button type="button" disabled={working || !canAutoFill} onClick={() => void autoFill()}>자동편성</button></div>
           <p>기존 특기 우선순위에 따라 선택한 단위의 각 분대에서 미편성 인원으로 부족분만 채웁니다. 다른 부대의 기존 배정은 유지합니다.</p>
-          {result && <p className="rm-org-success" role="status">{result.total_assigned}명 추가 편성 · 잔여 부족 {result.total_shortfall}명</p>}
+          {result && <p className="rm-org-success" role="status">{result.total_assigned}명 추가 편성 · 소대 {result.created_platoons?.length ?? 0}개 · 분대 {result.created_squads?.length ?? 0}개 추가{result.created_squads?.length ? ` (${result.created_squads.map(squad => squad.name).join(', ')})` : ''} · 잔여 부족 {result.total_shortfall}명</p>}
           {!canAutoFill && <p>이 단위에 분대가 없습니다. 편제 관리에서 분대를 추가하세요.</p>}
         </section>
         <section className="rm-org-breakdown"><h3>편성 요약</h3>

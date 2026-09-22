@@ -90,7 +90,7 @@ const positionOptions = ['행정병', '병기취급병', '통신병', '의무병
 const initialCreatePersonForm: CreatePersonForm = {
   military_number: '', name: '', branch: '육군', rank: '병장', unit: '', specialty: '',
   origin_type: '병사', service_year: 1, position: '소총수',
-  mobilization_status: '동원지정', status: 'active', previous_training_hours: '',
+  mobilization_status: '동원미지정', status: 'active', previous_training_hours: '',
 }
 
 function suggestPositionForSpecialty(specialty: string): string | null {
@@ -192,7 +192,7 @@ function ReserveManagement() {
   const savePerson = async () => {
     if (!selectedId) return
     try {
-      const r = await fetch(`${API_BASE}/persons/${selectedId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(personForm) })
+      const r = await fetch(`${API_BASE}/persons/${selectedId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...personForm, mobilization_status: personForm.squad_id ? '동원지정' : '동원미지정' }) })
       if (!r.ok) throw new Error(await responseError(r, '인원 정보 수정에 실패했습니다.'))
       setSelectedPerson(await r.json() as Person); setEditingPerson(false); setRefreshKey(k => k + 1)
     } catch (e) { setActionError(e instanceof Error ? e.message : '인원 정보 수정에 실패했습니다.') }
@@ -304,7 +304,9 @@ function DetailModal(props: {
 
 function ProfileTab({ person, progress }: { person: Person; progress: TrainingProgress[] }) {
   const risks = progress.filter(x => x.prosecution_risk).map(x => x.service_year)
-  return <div className="modal-body"><div className="profile-status"><StatusBadge status={person.status} /><span>{person.service_year}년차 · {person.mobilization_status ?? '상태 미지정'}</span></div>
+  const currentProgress = progress.find(item => item.service_year === person.service_year)
+  const mobilizationStatus = person.squad_id ? '동원지정' : '동원미지정'
+  return <div className="modal-body"><div className="profile-status"><StatusBadge status={person.status} /><span>{person.service_year}년차 · {mobilizationStatus} · {currentProgress?.training_plan.map(item => item.name).join(', ') || '훈련 대상 확인 필요'}</span></div>
     {risks.length > 0 && <section className="prosecution-warning"><b>!</b><div><strong>고발 조치 검토가 필요한 예비군입니다</strong><p>{risks.map(y => `${y}년차`).join(', ')} 훈련에서 고발 위험 기록이 확인되었습니다.</p></div></section>}
     <section className="info-grid"><Info label="현재 복무연차" value={person.service_year != null ? `${person.service_year}년차` : null} /><Info label="계급" value={person.rank} /><Info label="군종" value={person.branch} /><Info label="소속부대" value={person.unit} /><Info label="특기" value={person.specialty} /><Info label="직책" value={person.position} /><Info label="등록구분" value={person.registration_type} /><Info label="분대" value={person.squad_id ? `${person.squad_id}분대` : '-'} /></section>
   </div>
@@ -346,7 +348,7 @@ function PersonEditor({ form, setForm, records, onSave, onCancel }: { form: Part
     <label>특기<input value={form.specialty ?? ''} onChange={e => { const s = suggestPositionForSpecialty(e.target.value); setForm({ ...form, specialty: e.target.value, position: s && (!form.position || form.position === '소총수' || form.position === '보충') ? s : form.position }) }} /></label>
     <label>직책<input value={form.position ?? ''} onChange={e => update('position', e.target.value)} /></label>
     <label>복무연차<input type="number" value={form.service_year ?? ''} onChange={e => update('service_year', Number(e.target.value))} /></label>
-    <label>동원 상태<select value={form.mobilization_status ?? '해당없음'} onChange={e => update('mobilization_status', e.target.value)}>{mobilizationStatuses.map(x => <option key={x}>{x}</option>)}</select></label>
+    <label>동원 상태<select value={form.squad_id ? '동원지정' : '동원미지정'} disabled>{mobilizationStatuses.map(x => <option key={x}>{x}</option>)}</select></label>
     <label>출신 유형<input value={form.origin_type ?? ''} onChange={e => update('origin_type', e.target.value || null)} /></label>
     <label>상태<select value={form.status ?? 'active'} onChange={e => update('status', e.target.value)}><option value="active">복무 중</option><option value="on_leave">휴가 중</option></select></label>
   </div><div className="history-panel"><h4>이전 훈련 기록</h4><div className="table-wrap"><table><thead><tr><th>연차</th><th>훈련연도</th><th>종류</th><th>시간</th></tr></thead><tbody>{records.map(r => <tr key={r.id}><td>{r.education_year}년차</td><td>{r.training_year ?? '-'}</td><td>{r.training_type}</td><td>{r.training_hours}시간</td></tr>)}</tbody></table></div></div><div className="form-actions"><button className="button secondary" onClick={onCancel}>취소</button><button className="button primary" onClick={onSave}>저장</button></div></div>
@@ -361,7 +363,7 @@ function CreatePersonModal({ open, form, setForm, loading, error, onClose, onSub
     <div className="edit-grid">
       <label>군번 *<input value={form.military_number} onChange={e => update('military_number', e.target.value)} /></label><label>이름 *<input value={form.name} onChange={e => update('name', e.target.value)} /></label>
       <label>군종<select value={form.branch} onChange={e => update('branch', e.target.value)}>{branches.map(x => <option key={x}>{x}</option>)}</select></label><label>소속부대<input value={form.unit} onChange={e => update('unit', e.target.value)} /></label>
-      <label>복무연차<input type="number" min="1" max="8" value={form.service_year} onChange={e => update('service_year', Number(e.target.value))} /></label><label>동원상태<select value={form.mobilization_status} onChange={e => update('mobilization_status', e.target.value)}>{mobilizationStatuses.map(x => <option key={x}>{x}</option>)}</select></label>
+      <label>복무연차<input type="number" min="1" max="8" value={form.service_year} onChange={e => update('service_year', Number(e.target.value))} /></label><label>동원상태<select value="동원미지정" disabled>{mobilizationStatuses.map(x => <option key={x}>{x}</option>)}</select></label>
       <div className="wide"><span className="field-label">인원 유형</span><div className="choice-row">{originTypeOptions.map(x => <button key={x} className={`choice ${category === x ? 'selected' : ''}`} onClick={() => setForm(prev => ({ ...prev, origin_type: x, rank: rankCategoryMap[x][0] }))}>{x}</button>)}</div></div>
       <div className="wide"><span className="field-label">계급</span><div className="choice-row">{rankCategoryMap[category].map(x => <button key={x} className={`choice ${form.rank === x ? 'selected' : ''}`} onClick={() => update('rank', x)}>{x}</button>)}</div></div>
       <div className="wide">{!showSpecialty ? <button className="button secondary" onClick={() => setShowSpecialty(true)}>특기 입력</button> : <label>특기<input value={form.specialty} onChange={e => { const v = e.target.value; setForm(prev => ({ ...prev, specialty: v, position: suggestPositionForSpecialty(v) ?? prev.position })) }} /></label>}</div>

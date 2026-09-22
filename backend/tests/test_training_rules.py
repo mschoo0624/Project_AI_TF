@@ -57,8 +57,17 @@ def test_student_reservist_always_gets_flat_eight_hours() -> None:
     for service_year in range(1, 7):
         assert target_training_hours(service_year, "학생예비군", "육군", "상병") == 8
         assert training_plan(service_year, "학생예비군", "육군", "상병") == [
-            {"name": "기본훈련", "hours": 8}
+            {"name": "학생예비군", "hours": 8}
         ]
+
+
+def test_enlisted_mobilization_status_selects_training_type() -> None:
+    assert training_plan(3, "동원지정", "육군", "병장") == [
+        {"name": "동원훈련Ⅰ형", "hours": 28}
+    ]
+    assert training_plan(3, "동원미지정", "육군", "병장") == [
+        {"name": "동원훈련Ⅱ형", "hours": 32}
+    ]
 
 
 def test_enlisted_year_five_six_defaults_to_basic_and_operations_training() -> None:
