@@ -119,14 +119,14 @@ const initialSchedules: Schedule[] = [
 function App() {
   const [homeRevision, setHomeRevision] = useState(0)
   const [activePage, setActivePage] = useState<PageId>('home')
-  const [resourceLanding, setResourceLanding] = useState<'roster' | 'hold' | 'prosecution' | 'travel'>('roster')
+  const [resourceLanding, setResourceLanding] = useState<'roster' | 'organization' | 'hold' | 'prosecution' | 'travel'>('organization')
   const navigate = (destination: HomeDestination) => {
     if (destination === 'home') setHomeRevision(value => value + 1)
     if (destination === 'resource:hold' || destination === 'resource:prosecution' || destination === 'resource:travel') {
       setResourceLanding(destination === 'resource:hold' ? 'hold' : destination === 'resource:prosecution' ? 'prosecution' : 'travel')
       setActivePage('resource')
     } else {
-      setResourceLanding('roster')
+      setResourceLanding('organization')
       setActivePage(destination)
     }
   }
@@ -153,7 +153,7 @@ function App() {
         <div className="workspace-content">
           {activePage === 'home'
             ? <Home key={homeRevision} onNavigate={navigate} />
-            : activePage === 'resource' ? <ResourceManagement initialTab={resourceLanding} key="resource" />
+            : activePage === 'resource' ? <ResourceManagement initialTab={resourceLanding} key={`resource-${resourceLanding}`} />
             : ActiveComponent ? <ActiveComponent key={activePage} /> : null}
         </div>
       </main>
