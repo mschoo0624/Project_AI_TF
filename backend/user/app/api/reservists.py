@@ -24,10 +24,38 @@ from user.app.models.person import Person
 from user.app.schemas.person import PersonCreate, PersonRead, PersonUpdate
 from user.app.services.assignment import grouped_candidates
 from user.app.services.person import create_person
-from user.app.services.training import apply_mobilization_status_change
+from user.app.services.training import all_training_progress, apply_mobilization_status_change
 
 router = APIRouter(prefix="/reservists", tags=["reservists"])
 persons_router = APIRouter(prefix="/persons", tags=["persons"])
+
+
+@router.get("/prosecution-targets")
+def list_prosecution_targets(db: Session = Depends(get_db)) -> list[dict[str, object]]:
+	"""List reservists currently marked as prosecution targets by training rules."""
+	people = db.scalars(select(Person).order_by(Person.military_number)).all()
+	result: list[dict[str, object]] = []
+	for person in people:
+		progress = all_training_progress(db, person)
+		targets = [item for item in progress if item.get("prosecution_status") == "고발대상자"]
+		if not targets:
+			continue
+		latest = targets[-1]
+		result.append({
+			"military_number": person.military_number,
+			"name": person.name,
+			"branch": person.branch,
+			"rank": person.rank,
+			"service_year": person.service_year,
+			"squad_id": person.squad_id,
+			"mobilization_status": person.mobilization_status,
+			"prosecution_reason": latest.get("prosecution_reason"),
+			"consecutive_unexcused_absences": max(
+				int(item.get("consecutive_unexcused_absences", 0)) for item in targets
+			),
+			"target_years": [int(item["service_year"]) for item in targets],
+		})
+	return result
 
 @persons_router.get("/assignment-candidates")
 def list_assignment_candidates(

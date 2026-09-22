@@ -134,6 +134,18 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
 /* 중첩된 보류·연기 검토 화면의 높이는 자원관리 상단 탭(56px)을 기준으로 계산합니다. */
 .rm-tab-pane { --workspace-tabs-height: 56px; }
 .rm-empty-pane { min-height:calc(100vh - var(--topbar-height) - 56px); background:#f9fbff; }
+.rm-prosecution-page { min-height:calc(100vh - var(--topbar-height) - 56px); padding:28px 30px 48px; background:#f9fbff; }
+.rm-prosecution-heading { display:flex; align-items:end; justify-content:space-between; gap:24px; margin-bottom:24px; }
+.rm-prosecution-heading h1 { margin:2px 0 8px; color:#202b3b; font-size:28px; }
+.rm-prosecution-heading p { margin:0; color:#7b8797; }
+.rm-prosecution-heading>strong { color:#c43d35; font-size:32px; }
+.rm-prosecution-eyebrow { color:#c43d35!important; font-size:11px; font-weight:700; letter-spacing:.08em; }
+.rm-prosecution-table-wrap { overflow:auto; border:1px solid #e2c5c2; border-radius:8px; background:#fff; }
+.rm-prosecution-table { width:100%; border-collapse:collapse; text-align:left; }
+.rm-prosecution-table th { padding:12px 16px; background:#fff4f2; color:#8f514d; font-size:11px; }
+.rm-prosecution-table td { padding:14px 16px; border-top:1px solid #f0e3e1; color:#354255; }
+.rm-prosecution-table td small { display:block; margin-top:4px; color:#8a96a5; font-size:11px; }
+.rm-prosecution-badge { display:inline-block; padding:5px 8px; border-radius:4px; background:#ffe4e1; color:#b3342e; font-size:11px; font-weight:700; }
 /* 편성인원목록 — 화면 내부 스타일. 다른 기능/전투편성 화면에는 적용하지 않습니다. */
 .rm-roster-layout {
   display:grid;
