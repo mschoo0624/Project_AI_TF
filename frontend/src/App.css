@@ -17,9 +17,9 @@ button { cursor:pointer; }
 .system-brand { font-size:15px; font-weight:600; color:#262d38; }
 .account-area { width:260px; height:100%; }
 .system-body { min-height:calc(var(--screen-height) - var(--topbar-height)); display:grid; grid-template-columns:var(--sidebar-width) minmax(0,1fr); }
-.sidebar { width:var(--sidebar-width); min-height:calc(var(--screen-height) - var(--topbar-height)); background:#34475b; border-right:1px solid #273f52; }
+.sidebar { width:var(--sidebar-width); min-height:calc(var(--screen-height) - var(--topbar-height)); background:#1e293b; border-right:1px solid #273f52; }
 .user-icon, .side-button { width:100%; display:grid; place-items:center; border:0; border-bottom:1px solid rgba(255,255,255,.23); background:transparent; color:#fff; }
-.user-icon { height:56px; padding:4px; background:#2c577a; }
+.user-icon { height:56px; padding:4px; background:#1e293b; }
 .user-icon:hover { background:#346588; }
 .user-icon-figure { width:37px; height:37px; display:grid; place-items:center; border-radius:50%; background:#dbe2e7; color:#1c2e3e; }
 .side-button { height:38px; padding:6px 5px; font-size:15px; line-height:1.3; }
