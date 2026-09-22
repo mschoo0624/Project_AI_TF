@@ -65,7 +65,7 @@ def training_plan(
     if is_officer_reservist(rank) and 1 <= service_year <= 6:
         return [{"name": "동원훈련Ⅰ형", "hours": 28}]
     if mobilization_status in STUDENT and 1 <= service_year <= 6:
-        return [{"name": "기본훈련", "hours": 8}]
+        return [{"name": "학생예비군", "hours": 8}]
     if 1 <= service_year <= 4:
         if mobilization_status in DESIGNATED:
             return [{"name": "동원훈련Ⅰ형", "hours": 28}]
@@ -120,7 +120,7 @@ def apply_mobilization_status_change(db: Session, person: Person, new_status: st
     are never recomputed retroactively. Only the current year onward switches
     to the new status (e.g. 동원훈련Ⅱ형 이수 후 학생예비군으로 전환).
     """
-    old_status = person.mobilization_status
+    old_status = person.mobilization_status or "동원미지정"
     current_year = person.service_year if person.service_year is not None else 0
     current_year = max(0, min(current_year, 8))
 

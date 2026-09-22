@@ -14,8 +14,10 @@ from user.app.services.assignment import (
     rank_candidates_for_position,
     recommend_squads_for_person,
     personnel_category,
+    reset_assignment_pool,
     suggest_position_for_specialty,
 )
+from user.app.services.training import training_plan
 
 
 def make_session() -> Session:
@@ -130,6 +132,10 @@ def test_confirm_assignment_selections_persists_reviewed_squad_choice() -> None:
 
     assert result["total_assigned"] == 1
     assert db.get(Person, "reviewed").squad_id == 2
+    assert db.get(Person, "reviewed").mobilization_status == "동원지정"
+    assert training_plan(5, db.get(Person, "reviewed").mobilization_status, "육군", "하사") == [
+        {"name": "동원훈련Ⅰ형", "hours": 28}
+    ]
     assert db.scalars(select(Assignment)).one().squad_id == 2
     db.close()
 
@@ -219,4 +225,53 @@ def test_auto_assign_resets_everyone_and_keeps_branch_category_groups_separate()
     assert db.get(Person, "first").squad_id == 1
     assert db.get(Person, "second").squad_id == 1
     assert db.get(Person, "third").squad_id == 2
+    assert db.get(Person, "first").mobilization_status == "동원지정"
+    assert db.get(Person, "second").mobilization_status == "동원지정"
+    assert db.get(Person, "third").mobilization_status == "동원지정"
+    assert db.get(Person, "inactive").mobilization_status == "동원미지정"
+
+    reset_assignment_pool(db)
+
+    assert all(person.squad_id is None for person in db.scalars(select(Person)).all())
+    assert all(person.mobilization_status == "동원미지정"
+               for person in db.scalars(select(Person)).all())
+    db.close()
+
+
+def test_auto_assign_creates_overflow_squads_for_unassigned_people() -> None:
+    db = make_session()
+    db.add(Squad(id=1, name="1분대"))
+    for index in range(13):
+        add_person(db, f"overflow-{index:02d}", "행정병", "3111 101", service_year=3)
+    db.commit()
+
+    result = auto_assign_people(db)
+
+    assert result["total_assigned"] == 13
+    assert db.scalar(select(Squad).where(Squad.name == "자동편성 2분대")) is not None
+    assert [
+        len(db.scalars(select(Person).where(Person.squad_id == squad.id)).all())
+        for squad in db.scalars(select(Squad).order_by(Squad.id)).all()
+    ] == [11, 2]
+    db.close()
+
+
+def test_auto_assign_keeps_overflow_groups_separate() -> None:
+    db = make_session()
+    db.add(Squad(id=1, name="1분대"))
+    for index in range(12):
+        add_person(db, f"army-{index:02d}", "행정병", "3111 101", service_year=3)
+    navy = add_person(db, "navy", "행정병", "3111 101", service_year=3)
+    navy.branch = "해군"
+    db.commit()
+
+    auto_assign_people(db)
+
+    squad_groups = {
+        squad.id: {(person.branch, personnel_category(person.rank))
+                   for person in db.scalars(select(Person).where(Person.squad_id == squad.id)).all()}
+        for squad in db.scalars(select(Squad).order_by(Squad.id)).all()
+    }
+    assert all(len(groups) <= 1 for groups in squad_groups.values())
+    assert db.get(Person, "navy").squad_id != db.get(Person, "army-00").squad_id
     db.close()

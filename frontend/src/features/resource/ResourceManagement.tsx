@@ -15,7 +15,7 @@ const resourceTabs: { id: ResourceTabId; label: string }[] = [
 ]
 
 export default function ResourceManagement(
-  { initialTab = 'roster' }: { initialTab?: ResourceTabId } = {},
+  { initialTab = 'organization' }: { initialTab?: ResourceTabId } = {},
 ) {
   const [activeTab, setActiveTab] = useState<ResourceTabId>(initialTab)
   const [revision, setRevision] = useState(0)

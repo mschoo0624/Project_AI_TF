@@ -68,16 +68,17 @@ def test_scoped_auto_fills_only_shortfall_and_keeps_other_assignments() -> None:
     db.commit()
 
     result = assign_vacancies(db, platoon_a.id)
-    assert result["total_assigned"] == 2
-    assert result["total_shortfall"] == 0
+    assert result["total_assigned"] == 5
+    assert result["total_shortfall"] == 8
+    assert len(result["created_squads"]) == 1
     assert db.get(Person, "preserved").squad_id == squad_b.squad_id
     assert db.scalar(select(Person).where(Person.squad_id == squad_a.squad_id).with_only_columns(func.count())) == 11
     assert db.scalar(select(Person).where(Person.squad_id == squad_b.squad_id).with_only_columns(func.count())) == 1
     assert assign_vacancies(db, platoon_a.id)["total_assigned"] == 0
-    assert len(db.scalars(select(Assignment)).all()) == 2
+    assert len(db.scalars(select(Assignment)).all()) == 5
     tree = hierarchy(db)
-    assert next(node for node in tree if node["id"] == platoon_a.id)["person_count"] == 11
-    assert next(node for node in tree if node["id"] == root.id)["planned_strength"] == 22
+    assert next(node for node in tree if node["id"] == platoon_a.id)["person_count"] == 14
+    assert next(node for node in tree if node["id"] == root.id)["planned_strength"] == 33
     db.close()
 
 
@@ -191,9 +192,10 @@ def test_scoped_auto_fill_four_squads_with_eleven_each() -> None:
     assert first["total_assigned"] == 10
     assert first["total_shortfall"] == 0
     all_result = assign_vacancies(db, platoon.id)
-    assert all_result["total_assigned"] == 33
-    assert all_result["total_shortfall"] == 0
-    assert [n["person_count"] for n in hierarchy(db) if n["kind"] == "squad"] == [11] * 4
-    assert next(n for n in hierarchy(db) if n["kind"] == "platoon")["planned_strength"] == 44
+    assert all_result["total_assigned"] == 40
+    assert all_result["total_shortfall"] == 4
+    assert len(all_result["created_squads"]) == 1
+    assert [n["person_count"] for n in hierarchy(db) if n["kind"] == "squad"] == [11] * 4 + [7]
+    assert next(n for n in hierarchy(db) if n["kind"] == "platoon")["planned_strength"] == 55
     assert assign_vacancies(db, root.id)["total_assigned"] == 0
     db.close()
