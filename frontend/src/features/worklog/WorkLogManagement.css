@@ -67,7 +67,7 @@
   grid-template-columns: 296px minmax(0, 1032px);
   gap: 15px;
   align-items: stretch;
-  height: min(750px, calc(100vh - 210px));
+  height: min(750px, calc(var(--screen-height) - 210px));
   min-height: 510px;
   margin-top: 22px;
 }
@@ -316,21 +316,4 @@
   margin: 7px 0 0;
   color: #858a92;
   font-size: 11px;
-}
-@media (max-width: 1170px) {
-  .worklog-layout,
-  .worklog--pdf .worklog-layout { grid-template-columns: 250px minmax(0, 1fr); gap: 12px; }
-  .worklog-content-head h2 { font-size: 17px; }
-  .worklog-document-actions { gap: 5px; }
-  .worklog-document-actions .worklog-btn { min-width: 58px; padding: 0 8px; font-size: 13px; }
-}
-@media (max-width: 850px) {
-  .worklog { padding: 18px 12px; }
-  .worklog-heading { height: auto; min-height: 70px; padding: 10px 12px; }
-  .worklog-heading h1 { font-size: 25px; }
-  .worklog-layout,
-  .worklog--pdf .worklog-layout { grid-template-columns: minmax(0, 1fr); height: auto; gap: 12px; margin-top: 18px; }
-  .worklog-explorer { height: 330px; }
-  .worklog-content,
-  .worklog--pdf .worklog-content { height: 550px; margin-top: 0; }
 }

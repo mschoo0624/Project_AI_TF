@@ -53,5 +53,3 @@
 .review-ai-unlinked p { margin:0 0 9px; }
 .review-ai-actions { display:flex; justify-content:flex-end; gap:9px; padding-top:8px; }
 .review-ai-actions .reject { border-color:#d6a3a1; background:#fff; color:#a52b32; }
-@media (max-width:1220px) { .review-ai-layout { grid-template-columns:1fr; } .review-ai-list-scroll { max-height:310px; } }
-@media (max-width:700px) { .review-ai-form { grid-template-columns:1fr; } .review-ai-form-actions { flex-wrap:wrap; } .review-ai-facts { grid-template-columns:repeat(2,minmax(0,1fr)); } .review-ai-top { align-items:flex-start; } }

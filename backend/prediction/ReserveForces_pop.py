@@ -394,10 +394,10 @@ SCENARIO_TOGGLES = {
 }
 
 
-def generate_dashboard_data(start_year=2025, end_year=2052):
+def generate_dashboard_data(start_year=2024, end_year=2052):
     """Generate the JSON-serializable payload consumed by the home forecast dashboard.
 
-    The historical cutoff is 2025. 2025 uses the measured 20-29 male population,
+    The historical cutoff is 2025. 2024-2025 use the measured 20-29 male population,
     while 2026 onward uses this module's cohort + migration gap forecast.
     """
     years = list(range(start_year, end_year + 1))

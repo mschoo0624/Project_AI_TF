@@ -1,0 +1,27 @@
+/* Only the navigation tracks the viewport. Content keeps its desktop geometry. */
+html, body { min-width:0; min-height:100vh; background:#fff; }
+#root { width:100%; min-width:0; margin:0; }
+.app { position:relative; width:100%; min-height:100vh; background:#fff; }
+.system-topbar { position:sticky; top:0; z-index:40; width:100%; }
+.system-body { display:block; min-height:calc(100vh - var(--topbar-height)); }
+.sidebar { position:fixed; left:0; top:var(--topbar-height); bottom:0; min-height:0; overflow-y:auto; z-index:40; }
+.workspace { margin-left:var(--sidebar-width); min-width:1780px; }
+.workspace-content { flex:none; width:1780px; margin:0 auto; position:relative; transform:translateZ(0); }
+.home-dashboard { height:852px; min-height:852px; grid-template-rows:300px 500px; gap:16px 24px; padding-top:20px; padding-bottom:16px; }
+.home-left-column { grid-template-rows:72px 212px 1fr; gap:16px; }
+.home-today { padding-top:0; }
+.home-today-tile { height:94px; padding-top:12px; }
+.home-today-tile strong { font-size:27px; }
+.home-today-grid { margin-top:10px; }
+.home-composition-divider { margin:28px 3px 10px; }
+.home-composition { overflow-y:auto; }
+.home-service-legend { justify-content:flex-start; gap:5px 9px; }
+.home-category-row { grid-template-columns:80px minmax(0,1fr) 40px; }
+.home-category-row > span { overflow:visible; text-overflow:clip; white-space:normal; overflow-wrap:anywhere; }
+.forecast-chart { height:355px; }
+.forecast-chart-wrap { margin-top:12px; }
+.home-data-note { margin:8px 0; color:#728095; font-size:10px; line-height:1.5; }
+.home-metrics-area { position:relative; }
+.home-metrics-error { position:absolute; top:100%; left:0; z-index:1; margin:2px 0 0; color:#a32323; font-size:11px; }
+.home-metric-detail { font-size:12px; }
+.empty-reserve-page { min-height:852px; background:#f9fbff; }

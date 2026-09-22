@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
-import ReserveManagement from './features/reserve/ReserveManagement'
 import ResourceManagement from './features/resource/ResourceManagement'
 import WorkLogManagement from './features/worklog/WorkLogManagement'
+import { countReviewDocuments, fetchBootstrap } from './features/review/api'
 
 const featurePages = [
-  { id: 'reserve', label: '부대관리', Component: ReserveManagement },
+  { id: 'reserve', label: '부대관리', Component: EmptyReservePage },
   { id: 'resource', label: '자원관리', Component: ResourceManagement },
   { id: 'worklog', label: '업무일지', Component: WorkLogManagement },
 ] as const
+
+function EmptyReservePage() {
+  return <section className="empty-reserve-page" aria-label="부대관리" />
+}
 
 type FeaturePageId = typeof featurePages[number]['id']
 type PageId = 'home' | FeaturePageId
@@ -40,34 +44,70 @@ function Icon({ name, size = 19 }: { name: IconName; size?: number }) {
   return <svg {...common}>{drawing}</svg>
 }
 
-// 아래 숫자와 일정은 첨부된 Figma 시안의 예시값이며 서버 데이터가 아닙니다.
-// 추후 API 연결 시 이 객체를 API 응답으로 대체할 수 있습니다.
+// Metrics use the DB; hold/delay alerts use the review inbox document queue.
 const demoDashboard = {
   metrics: [
-    { label: '전체 대상자', count: 547, detail: '전체 예비군 대상자 수', icon: 'person' },
-    { label: '보류자/연기자', count: 230, detail: '현재 보류자/연기자 수', icon: 'person' },
-    { label: '고발대상자', count: 17, detail: '현재 고발대상자 수', icon: 'person' },
-    { label: '금년도 대상자', count: 276, detail: '금년도 예비군 대상자 수', icon: 'calendar' },
-    { label: '훈련 완료', count: 243, detail: '금년도 완료한 인원', icon: 'check' },
-    { label: '미응소', count: 33, detail: '훈련 미참석 인원', icon: 'warning' },
+    { label: '전체 대상자', key: 'total_people', detail: '전체 예비군 대상자 수', icon: 'person' },
+    { label: '보류자/연기자', key: 'held_or_delayed', detail: '현재 보류·연기 상태 또는 승인 인원', icon: 'person' },
+    { label: '고발대상자', key: 'prosecution_people', detail: '무단불참 규칙에 따른 검토 대상', icon: 'person' },
+    { label: '금년도 대상자', key: 'training_targets', detail: '현재 연차 훈련 대상 인원', icon: 'calendar' },
+    { label: '훈련 완료', key: 'training_completed', detail: '현재 연차 필요시간 이수 인원', icon: 'check' },
+    { label: '미응소', key: 'absent_people', detail: '현재 연차 무단불참 기록 인원', icon: 'warning' },
   ] as const,
   alerts: [
-    { label: '보류 대상자 처리', count: 8, page: 'resource:hold' },
-    { label: '연기 대상자 처리', count: 10, page: 'resource:hold' },
+    { label: '보류/연기 대상자 처리', reviewKey: 'pending', page: 'resource:hold' },
     { label: '고발 대상자 처리', count: 17, page: 'resource:prosecution' },
     { label: '현재 출국자', count: 16, page: 'resource:travel' },
   ] as const,
-  today: [
-    { label: '전입자', count: 0 }, { label: '전출자', count: 3 },
-    { label: '출국자', count: 10 }, { label: '귀국자', count: 4 },
-    { label: '보류자', count: 7 }, { label: '연기자', count: 1 },
-  ] as const,
-  categories: [
-    { label: '보병', count: 198 }, { label: '포병', count: 87 },
-    { label: '기갑', count: 62 }, { label: '공병', count: 55 },
-    { label: '통신', count: 48 }, { label: '병참', count: 42 },
-    { label: '수송', count: 31 }, { label: '의무', count: 24 },
-  ] as const,
+
+
+}
+
+type Composition = {
+  officers: number
+  soldiers: number
+  other: number
+  service_years: Record<string, number>
+  positions: { label: string; count: number }[]
+}
+
+function isComposition(value: unknown): value is Composition {
+  if (!value || typeof value !== 'object') return false
+  const data = value as Composition
+  const isCount = (count: unknown) => typeof count === 'number' && Number.isInteger(count) && count >= 0
+  return [data.officers, data.soldiers, data.other].every(isCount)
+    && !!data.service_years && typeof data.service_years === 'object'
+    && Object.values(data.service_years).every(isCount)
+    && Array.isArray(data.positions)
+    && data.positions.every(item => !!item && typeof item.label === 'string' && isCount(item.count))
+}
+
+function CompositionPanel({ data, error }: { data: Composition | null; error: string }) {
+  const colors = ['#2162e5', '#619eef', '#b8d5fc', '#c4cbd5']
+  const years = Object.entries(data?.service_years ?? {})
+  const maximum = Math.max(1, ...(data?.positions.map(item => item.count) ?? []))
+  return <section className="home-composition" aria-label="DB 대상자 구성" aria-busy={!data && !error}>
+    <h2>대상자 구성</h2>
+    <div className="home-composition-head">
+      <div className="home-composition-tile"><span>간부</span><strong>{data?.officers.toLocaleString('ko-KR') ?? '—'} <small>명</small></strong></div>
+      <div className="home-composition-tile"><span>일반 병사</span><strong>{data?.soldiers.toLocaleString('ko-KR') ?? '—'} <small>명</small></strong></div>
+    </div>
+    {!!data?.other && <p className="home-data-note">계급 미분류 {data.other}명</p>}
+    <h3>일반 병사 연차별</h3>
+    <div className="home-service-bar" aria-label={years.map(([label, count]) => `${label} ${count}명`).join(', ')}>
+      {years.map(([label, count], index) => <span key={label} style={{ flex: `${count} 1 0%`, backgroundColor: colors[index] }} />)}
+    </div>
+    <div className="home-service-legend">{years.filter(([, count], index) => index < 3 || count > 0).map(([label, count]) => <span key={label}><i style={{ backgroundColor: colors[years.findIndex(([key]) => key === label)] }} />{label} {count.toLocaleString('ko-KR')}명</span>)}</div>
+    <div className="home-composition-divider" />
+    <h3>보직별 인원</h3>
+    <div className="home-category-list">{data?.positions.map(item => <div className="home-category-row" key={item.label}>
+      <span title={item.label}>{item.label}</span>
+      <div className="home-category-track"><i style={{ width: `${item.count / maximum * 100}%` }} /></div>
+      <strong>{item.count.toLocaleString('ko-KR')}명</strong>
+    </div>)}</div>
+    {!data && <p className="home-data-note" role={error ? 'alert' : 'status'}>{error || '대상자 구성 조회 중…'}</p>}
+    {data && data.positions.length === 0 && <p className="home-data-note">등록된 인원이 없습니다.</p>}
+  </section>
 }
 
 type Schedule = { id: number; date: string; title: string }
@@ -77,9 +117,11 @@ const initialSchedules: Schedule[] = [
 ]
 
 function App() {
+  const [homeRevision, setHomeRevision] = useState(0)
   const [activePage, setActivePage] = useState<PageId>('home')
   const [resourceLanding, setResourceLanding] = useState<'roster' | 'hold' | 'prosecution' | 'travel'>('roster')
   const navigate = (destination: HomeDestination) => {
+    if (destination === 'home') setHomeRevision(value => value + 1)
     if (destination === 'resource:hold' || destination === 'resource:prosecution' || destination === 'resource:travel') {
       setResourceLanding(destination === 'resource:hold' ? 'hold' : destination === 'resource:prosecution' ? 'prosecution' : 'travel')
       setActivePage('resource')
@@ -110,7 +152,7 @@ function App() {
       <main className="workspace">
         <div className="workspace-content">
           {activePage === 'home'
-            ? <Home onNavigate={navigate} />
+            ? <Home key={homeRevision} onNavigate={navigate} />
             : activePage === 'resource' ? <ResourceManagement initialTab={resourceLanding} key="resource" />
             : ActiveComponent ? <ActiveComponent key={activePage} /> : null}
         </div>
@@ -120,6 +162,45 @@ function App() {
 }
 
 function Home({ onNavigate }: { onNavigate: (page: HomeDestination) => void }) {
+  const [reviewCounts, setReviewCounts] = useState<number | null>(null)
+  const [reviewError, setReviewError] = useState('')
+  useEffect(() => {
+    const controller = new AbortController()
+    void Promise.resolve().then(async () => {
+      if (controller.signal.aborted) return
+      try {
+        const payload = await fetchBootstrap(controller.signal)
+        if (!controller.signal.aborted) setReviewCounts(countReviewDocuments(payload.queue))
+      } catch {
+        if (!controller.signal.aborted) setReviewError('검토함 서류 수를 불러오지 못했습니다.')
+      }
+    })
+    return () => controller.abort()
+  }, [])
+  const [summary, setSummary] = useState<(Record<typeof demoDashboard.metrics[number]['key'], number> & { composition: Composition }) | null>(null)
+  const [summaryError, setSummaryError] = useState('')
+  useEffect(() => {
+    const controller = new AbortController()
+    const refresh = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? '/api'}/dashboard/summary`, { signal: controller.signal, cache: 'no-store' })
+        if (!response.ok) throw new Error('인원 현황을 불러오지 못했습니다.')
+        const payload = await response.json()
+        if (!isComposition(payload.composition) || !demoDashboard.metrics.every(metric => Number.isInteger(payload[metric.key]) && payload[metric.key] >= 0)) {
+          throw new Error('인원 현황 응답을 확인해 주세요. 백엔드 재시작이 필요할 수 있습니다.')
+        }
+        if (!controller.signal.aborted) setSummary(payload)
+        setSummaryError('')
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setSummary(null)
+          setSummaryError(error instanceof Error ? error.message : '인원 조회 오류')
+        }
+      }
+    }
+    void Promise.resolve().then(() => { if (!controller.signal.aborted) return refresh() })
+    return () => controller.abort()
+  }, [])
   const [schedules, setSchedules] = useState<Schedule[]>(initialSchedules)
   const [selectedSchedule, setSelectedSchedule] = useState<number | null>(null)
   const [editingSchedule, setEditingSchedule] = useState<number | 'new' | null>(null)
@@ -127,7 +208,6 @@ function Home({ onNavigate }: { onNavigate: (page: HomeDestination) => void }) {
   const [draftTitle, setDraftTitle] = useState('')
   const [showScheduleList, setShowScheduleList] = useState(true)
   const [showScheduleInfo, setShowScheduleInfo] = useState(false)
-  const [dayOffset, setDayOffset] = useState(0)
 
   const editSchedule = (schedule?: Schedule) => {
     setEditingSchedule(schedule?.id ?? 'new')
@@ -149,12 +229,6 @@ function Home({ onNavigate }: { onNavigate: (page: HomeDestination) => void }) {
     setSchedules(prev => prev.filter(schedule => schedule.id !== selectedSchedule))
     setSelectedSchedule(null)
   }
-  const dayLabel = (() => {
-    if (dayOffset === 0) return 'Today'
-    const date = new Date()
-    date.setDate(date.getDate() + dayOffset)
-    return `${date.getMonth() + 1}월 ${date.getDate()}일`
-  })()
 
   return <section className="home-dashboard" aria-label="홈 대시보드">
     <div className="home-left-column">
@@ -194,23 +268,11 @@ function Home({ onNavigate }: { onNavigate: (page: HomeDestination) => void }) {
         {!showScheduleInfo && editingSchedule === null && schedules.length === 0 && <p className="home-schedule-add-hint">+ 버튼으로 일정을 추가하세요.</p>}
       </section>
 
-      <section className="home-today" aria-label="당일 현황">
-        <div className="home-today-header">
-          <button type="button" aria-label="이전 날짜" onClick={() => setDayOffset(day => day - 1)}><Icon name="left" size={17} /></button>
-          <strong>{dayLabel}</strong>
-          <button type="button" aria-label="다음 날짜" onClick={() => setDayOffset(day => day + 1)}><Icon name="right" size={17} /></button>
-        </div>
-        <div className="home-today-grid">
-          {demoDashboard.today.map(entry =>
-            <div className="home-today-tile" key={entry.label}>
-              <span>{entry.label}</span><strong>{dayOffset === 0 ? entry.count : '—'}</strong>
-            </div>
-          )}
-        </div>
-      </section>
+      <DailyPanel />
     </div>
 
-    <section className="home-metrics-area" aria-label="대상자 통계 예시">
+    <section className="home-metrics-area" aria-label="DB 대상자 통계" aria-busy={!summary && !summaryError}>
+      {summaryError && <p className="home-metrics-error" role="alert">{summaryError}</p>}
       <div className="home-metrics-grid">
         {demoDashboard.metrics.map(metric =>
           <article className="home-metric-card" key={metric.label}>
@@ -218,53 +280,30 @@ function Home({ onNavigate }: { onNavigate: (page: HomeDestination) => void }) {
               <span className={`home-metric-icon icon-${metric.icon}`}><Icon name={metric.icon} size={19} /></span>
               <strong>{metric.label}</strong>
             </div>
-            <p className="home-metric-number">{metric.count.toLocaleString('ko-KR')}명</p>
+            <p className="home-metric-number">{summary ? `${summary[metric.key].toLocaleString('ko-KR')}명` : '—'}</p>
             <p className="home-metric-detail">{metric.detail}</p>
           </article>
         )}
       </div>
     </section>
 
-    <section className="home-alerts-card" aria-label="알림 예시">
+    <section className="home-alerts-card" aria-label="알림">
       <h2><span className="home-alert-icon"><Icon name="bell" size={19} /></span>알림</h2>
       <div className="home-alert-list">
         {demoDashboard.alerts.map(alert =>
           <div className="home-alert-row" key={alert.label}>
             <span className="home-alert-text"><span className="home-dot" />{alert.label}</span>
-            <span className="home-alert-count">{alert.count}명</span>
+            <span className="home-alert-count">{'reviewKey' in alert ? reviewCounts !== null ? `${reviewCounts}건` : '—' : `${alert.count}명`}</span>
             <button type="button" className="home-alert-link" title={`${alert.page === 'resource:hold' ? '자원관리 · 보류자/연기자 검토' : alert.page === 'resource:prosecution' ? '자원관리 · 고발대상자' : '자원관리 · 출국자/귀국자'} 화면 열기`} aria-label={`${alert.label}: 관리 화면 열기`} onClick={() => onNavigate(alert.page)}><Icon name="arrow" size={19} /></button>
           </div>
         )}
       </div>
+      {reviewError && <p className="home-data-note" role="alert">{reviewError}</p>}
     </section>
 
     <HomeForecast />
 
-    <section className="home-composition" aria-label="대상자 구성 예시">
-      <h2>대상자 구성</h2>
-      <div className="home-composition-head">
-        <div className="home-composition-tile"><span>간부</span><strong>120 <small>명</small></strong></div>
-        <div className="home-composition-tile"><span>일반 병사</span><strong>427 <small>명</small></strong></div>
-      </div>
-      <h3>일반 병사 연차별</h3>
-      <div className="home-service-bar" aria-label="1~4년차 215명, 5~6년차 138명, 7~8년차 74명">
-        <span style={{ flex: 215, backgroundColor: '#2162e5' }} />
-        <span style={{ flex: 138, backgroundColor: '#619eef' }} />
-        <span style={{ flex: 74, backgroundColor: '#b8d5fc' }} />
-      </div>
-      <div className="home-service-legend"><span><i style={{ backgroundColor: '#2162e5' }} />1~4년차 215명</span><span><i style={{ backgroundColor: '#619eef' }} />5~6년차 138명</span><span><i style={{ backgroundColor: '#b8d5fc' }} />7~8년차 74명</span></div>
-      <div className="home-composition-divider" />
-      <h3>병과별 인원</h3>
-      <div className="home-category-list">
-        {demoDashboard.categories.map(category =>
-          <div className="home-category-row" key={category.label}>
-            <span>{category.label}</span>
-            <div className="home-category-track"><i style={{ width: `${category.count / 198 * 100}%` }} /></div>
-            <strong>{category.count}명</strong>
-          </div>
-        )}
-      </div>
-    </section>
+    <CompositionPanel data={summary?.composition ?? null} error={summaryError} />
   </section>
 }
 
@@ -277,22 +316,16 @@ type ForecastPayload = {
   data: Record<ForecastScenario, Record<string, Record<string, number | null>>>
 }
 
-const forecastScenarioLabels: Record<ForecastScenario, string> = {
-  outflow_down: '유출 감소 (-5%)',
-  baseline: '현재 추세 (0%)',
-  outflow_up: '유출 심화 (+5%)',
-}
+const forecastYears = [2024, 2025, 2026, 2027, 2028]
 
 function HomeForecast() {
   const [forecast, setForecast] = useState<ForecastPayload | null>(null)
-  const [region, setRegion] = useState('전국')
-  const [scenario, setScenario] = useState<ForecastScenario>('baseline')
-  const [threshold, setThreshold] = useState<number | null>(null)
+  const [region, setRegion] = useState('전라남도')
   const [error, setError] = useState('')
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/dashboard/forecast')
+    const load = () => fetch('/api/dashboard/forecast', { cache: 'no-store' })
       .then(async response => {
         if (!response.ok) throw new Error(`예측 API 응답 오류 (${response.status})`)
         return response.json() as Promise<ForecastPayload>
@@ -300,93 +333,111 @@ function HomeForecast() {
       .then(payload => {
         if (cancelled) return
         setForecast(payload)
-        const initialRegion = payload.regions.includes('전국') ? '전국' : payload.regions[0]
-        setRegion(initialRegion)
-        const measured = payload.data.baseline[initialRegion]?.[String(payload.hist_cutoff)]
-        setThreshold(measured == null ? 0 : Math.round(measured * 0.45 * 10) / 10)
+        setRegion(payload.regions.includes('전라남도') ? '전라남도' : payload.regions[0])
       })
       .catch(reason => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : '예측 데이터를 불러오지 못했습니다.')
       })
+    void Promise.resolve().then(() => { if (!cancelled) return load() })
     return () => { cancelled = true }
   }, [])
 
-  const series = useMemo(() => {
-    if (!forecast) return []
-    return forecast.years.map(year => ({
-      year,
-      outflow_down: forecast.data.outflow_down[region]?.[String(year)] ?? null,
-      baseline: forecast.data.baseline[region]?.[String(year)] ?? null,
-      outflow_up: forecast.data.outflow_up[region]?.[String(year)] ?? null,
-    }))
-  }, [forecast, region])
+  const series = useMemo(() => forecastYears.map(year => ({
+    year,
+    value: forecast?.data.baseline[region]?.[String(year)] ?? null,
+  })), [forecast, region])
 
   if (error) return <section className="home-forecast home-forecast-status" aria-label="예비군 예상 추이"><strong>예측 데이터를 불러오지 못했습니다.</strong><span>{error}</span></section>
-  if (!forecast || threshold === null) return <section className="home-forecast home-forecast-status" aria-label="예비군 예상 추이"><strong>예측 데이터 로딩 중…</strong><span>서버 시작 시 생성된 캐시를 읽고 있습니다.</span></section>
+  if (!forecast) return <section className="home-forecast home-forecast-status" aria-label="예비군 예상 추이"><strong>예측 데이터 로딩 중…</strong></section>
 
-  const selectedValues = series.map(row => row[scenario])
-  const crossing = series.find(row => row[scenario] != null && (row[scenario] as number) < threshold)
-  const allValues = series.flatMap(row => [row.outflow_down, row.baseline, row.outflow_up]).filter((value): value is number => value != null)
-  const maxValue = Math.max(threshold, ...allValues, 1) * 1.08
-  const W = 760, H = 270, pad = { l: 42, r: 14, t: 12, b: 25 }
-  const x = (index: number) => pad.l + (W - pad.l - pad.r) * (index / Math.max(series.length - 1, 1))
-  const y = (value: number) => H - pad.b - (H - pad.t - pad.b) * (value / maxValue)
-  const points = (key: ForecastScenario) => series
-    .map((row, index) => row[key] == null ? null : `${x(index)},${y(row[key] as number)}`)
-    .filter(Boolean).join(' ')
-  const colors: Record<ForecastScenario, string> = { outflow_down: '#b9d9ee', baseline: '#5b9bd0', outflow_up: '#244f7d' }
-
-  const updateRegion = (nextRegion: string) => {
-    setRegion(nextRegion)
-    const measured = forecast.data.baseline[nextRegion]?.[String(forecast.hist_cutoff)]
-    setThreshold(measured == null ? 0 : Math.round(measured * 0.45 * 10) / 10)
-  }
+  const values = series.map(row => row.value).filter((value): value is number => value != null && Number.isFinite(value))
+  const minimum = values.length ? Math.min(...values) : 0
+  const maximum = values.length ? Math.max(...values) : 1
+  const margin = Math.max((maximum - minimum) * 0.2, maximum * 0.01, 0.05)
+  const minValue = Math.max(0, minimum - margin)
+  const maxValue = maximum + margin
+  const W = 760, H = 340, pad = { l: 58, r: 42, t: 38, b: 35 }
+  const x = (index: number) => pad.l + (W - pad.l - pad.r) * index / (series.length - 1)
+  const y = (value: number) => H - pad.b - (H - pad.t - pad.b) * (value - minValue) / (maxValue - minValue)
+  // Start a new segment after missing data instead of inventing a connection.
+  const path = series.map((row, index) => {
+    if (row.value == null || !Number.isFinite(row.value)) return ''
+    const previous = series[index - 1]?.value
+    const command = previous == null || !Number.isFinite(previous) ? 'M' : 'L'
+    return `${command} ${x(index)} ${y(row.value)}`
+  }).join(' ')
 
   return <section className="home-forecast" aria-label="예비군 예상 추이">
     <div className="forecast-header">
       <div>
         <h2>예비군 정원 워치</h2>
-        <p>20~29세 남성 인구 기준 · {forecast.hist_cutoff}년 실측 + 이후 예측</p>
+        <p>20~29세 남성 인구 기준 · 2024~2025년 실측 · 2026~2028년 예측</p>
       </div>
       <div className="forecast-controls">
-        <label>지역<select value={region} onChange={e => updateRegion(e.target.value)}>{forecast.regions.map(item => <option key={item}>{item}</option>)}</select></label>
-        <label>기준선 (만명)<input type="number" min="0" step="0.1" value={threshold} onChange={e => setThreshold(Math.max(0, Number(e.target.value) || 0))} /></label>
+        <label>지역<select value={region} onChange={e => setRegion(e.target.value)}>{forecast.regions.map(item => <option key={item}>{item}</option>)}</select></label>
       </div>
-    </div>
-
-    <div className="forecast-scenario-row" role="group" aria-label="청년 유출입 강도 시나리오">
-      {forecast.scenarios.map(item => <button key={item} type="button" className={scenario === item ? 'active' : ''} onClick={() => setScenario(item)}>{forecastScenarioLabels[item]}</button>)}
-    </div>
-
-    <div className={`forecast-headline ${crossing ? 'danger' : 'safe'}`}>
-      <span>기준선 붕괴 시점</span>
-      <strong>{crossing ? `${crossing.year}년` : `${forecast.years.at(-1)}년까지 유지`}</strong>
-      <small>{region} · {forecastScenarioLabels[scenario]} · 기준선 {threshold.toFixed(1)}만명</small>
     </div>
 
     <div className="forecast-chart-wrap">
-      <svg className="forecast-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${region} 20~29세 남성 인구 예측 그래프`}>
+      <svg className="forecast-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${region} 2024~2028년 20~29세 남성 인구 추이, 단위 만명`}>
+        <text x={pad.l} y={16} className="forecast-axis">단위: 만명</text>
         {Array.from({ length: 6 }, (_, index) => {
-          const value = maxValue * index / 5
+          const value = minValue + (maxValue - minValue) * index / 5
           const yy = y(value)
-          return <g key={index}><line x1={pad.l} x2={W - pad.r} y1={yy} y2={yy} className="forecast-gridline" /><text x={pad.l - 6} y={yy + 3} className="forecast-axis" textAnchor="end">{Math.round(value)}</text></g>
+          return <g key={index}><line x1={pad.l} x2={W - pad.r} y1={yy} y2={yy} className="forecast-gridline" /><text x={pad.l - 10} y={yy + 4} className="forecast-axis" textAnchor="end">{value.toFixed(2)}</text></g>
         })}
-        {series.map((row, index) => (row.year % 5 === 0 || index === 0 || index === series.length - 1) ? <text key={row.year} x={x(index)} y={H - 5} className="forecast-axis" textAnchor="middle">{row.year}</text> : null)}
-        {forecast.years.includes(forecast.hist_cutoff) && <line x1={x(forecast.years.indexOf(forecast.hist_cutoff))} x2={x(forecast.years.indexOf(forecast.hist_cutoff))} y1={pad.t} y2={H - pad.b} className="forecast-cutoff" />}
-        <line x1={pad.l} x2={W - pad.r} y1={y(threshold)} y2={y(threshold)} className="forecast-threshold" />
-        {forecast.scenarios.map(item => <polyline key={item} points={points(item)} fill="none" stroke={colors[item]} strokeWidth={scenario === item ? 3 : 1.6} opacity={scenario === item ? 1 : .55} strokeLinecap="round" strokeLinejoin="round" />)}
-        {crossing && (() => {
-          const index = forecast.years.indexOf(crossing.year)
-          const value = selectedValues[index] as number
-          return <g><line x1={x(index)} x2={x(index)} y1={pad.t} y2={H - pad.b} className="forecast-cross" /><circle cx={x(index)} cy={y(value)} r="5" className="forecast-cross-dot"><title>{crossing.year}년 {value.toFixed(2)}만명</title></circle></g>
-        })()}
+        {series.map((row, index) => <text key={row.year} x={x(index)} y={H - 10} className="forecast-axis" textAnchor="middle">{row.year}년</text>)}
+        <path d={path} className="forecast-line" />
+        {series.map((row, index) => row.value != null && Number.isFinite(row.value) ? <g key={row.year}>
+          <circle cx={x(index)} cy={y(row.value)} r="5" className="forecast-point"><title>{row.year}년 {row.value.toFixed(2)}만명</title></circle>
+          <text x={x(index)} y={y(row.value) - 14} className="forecast-value" textAnchor="middle">{row.value.toFixed(2)}</text>
+        </g> : <text key={row.year} x={x(index)} y={H - pad.b - 12} className="forecast-axis" textAnchor="middle">자료 없음</text>)}
       </svg>
-    </div>
-
-    <div className="forecast-legend">
-      {forecast.scenarios.map(item => <span key={item} className={scenario === item ? 'selected' : ''}><i style={{ backgroundColor: colors[item] }} />{forecastScenarioLabels[item]}</span>)}
-      <span><i className="threshold" />기준선</span>
     </div>
   </section>
 }
 export default App
+
+const movementLabels = { transfer_in: '전입자', transfer_out: '전출자', departure: '출국자', arrival: '귀국자' }
+const dailyLabels = { ...movementLabels, hold: '보류자', delay: '연기자' }
+type DailyPayload = { date: string; counts: Record<'hold' | 'delay', number> }
+
+function koreaDate(offset = 0) {
+  const date = new Date(Date.now() + 9 * 3600000)
+  date.setUTCDate(date.getUTCDate() + offset)
+  return date.toISOString().slice(0, 10)
+}
+
+function DailyPanel() {
+  const [offset, setOffset] = useState(0)
+  const [data, setData] = useState<(DailyPayload & { offset: number }) | null>(null)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    const controller = new AbortController()
+    const refresh = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? '/api'}/dashboard/daily?day=${koreaDate(offset)}`, { signal: controller.signal, cache: 'no-store' })
+        if (!response.ok) throw new Error('당일 현황을 불러오지 못했습니다.')
+        const payload = await response.json() as DailyPayload
+        if (!(['hold', 'delay'] as const).every(key => Number.isInteger(payload.counts?.[key as 'hold' | 'delay']))) throw new Error('당일 현황 응답 오류')
+        if (!controller.signal.aborted) { setData({ ...payload, offset }); setError('') }
+      } catch (reason) {
+        if (!controller.signal.aborted) { setData(null); setError(reason instanceof Error ? reason.message : '조회 오류') }
+      }
+    }
+    void Promise.resolve().then(() => { if (!controller.signal.aborted) return refresh() })
+    return () => controller.abort()
+  }, [offset])
+  const current = data?.offset === offset ? data : null
+  const demoMovements: Record<string, number> = { transfer_in: 0, transfer_out: 3, departure: 10, arrival: 4 }
+  return <section className="home-today" aria-label="날짜별 인원 현황">
+    <div className="home-today-header">
+      <button type="button" aria-label="이전 날짜" onClick={() => setOffset(value => value - 1)}>‹</button>
+      <strong>{offset === 0 ? 'Today' : koreaDate(offset)}</strong>
+      <button type="button" aria-label="다음 날짜" onClick={() => setOffset(value => value + 1)}>›</button>
+    </div>
+    <div className="home-today-grid">{Object.entries(dailyLabels).map(([key, label]) => <div className="home-today-tile" key={key}><span>{label}</span><strong>{key in demoMovements ? (offset === 0 ? demoMovements[key] : '—') : current ? current.counts[key as 'hold' | 'delay'].toLocaleString('ko-KR') : '—'}</strong></div>)}</div>
+    {error && <p role="alert" className="home-data-note">{error}</p>}
+
+  </section>
+}

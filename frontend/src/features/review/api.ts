@@ -73,17 +73,28 @@ export type Bootstrap = {
   queue: QueueItem[]
 }
 
+export function reviewReason(item: QueueItem): string {
+  const classification = item.if_accepted_classification || item.current_classification || ''
+  if (classification.includes('연기')) return '연기자'
+  if (classification.includes('보류') || classification.includes('후순위')) return '보류자'
+  return item.type
+}
+
+export function countReviewDocuments(queue: QueueItem[]): number {
+  return new Set(queue.filter(item => item.status === '검토대기').map(item => item.id)).size
+}
+
 const DATA_SOURCE: 'static' | 'api' = 'static'
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
-export async function fetchBootstrap(): Promise<Bootstrap> {
+export async function fetchBootstrap(signal?: AbortSignal): Promise<Bootstrap> {
   if (DATA_SOURCE === 'api') {
-    const res = await fetch(`${API_BASE}/exemptions/bootstrap`)
+    const res = await fetch(`${API_BASE}/exemptions/bootstrap`, { signal, cache: 'no-store' })
     if (!res.ok) throw new Error(`백엔드 응답 오류 (${res.status})`)
     return res.json() as Promise<Bootstrap>
   }
 
-  const res = await fetch('/data.json')
+  const res = await fetch('/data.json', { signal, cache: 'no-store' })
   if (!res.ok) throw new Error('data.json 을 불러오지 못했습니다')
   return res.json() as Promise<Bootstrap>
 }
