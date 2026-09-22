@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 type Squad = {
   id: number
@@ -21,29 +20,6 @@ type SquadMember = {
   status: string
 }
 
-type AssignmentResult = {
-  squad_id: number
-  positions: Record<string, { requested: number; assigned: { military_number: string; name: string }[]; shortfall: number }>
-  total_requested: number
-  total_assigned: number
-  total_shortfall: number
-}
-type AssignmentQuotas = Record<string, Record<string, Record<string, number>>>
-type AssignmentCandidate = {
-  military_number: string
-  name: string
-  position: string
-  specialty: string | null
-  service_year: number | null
-  origin_type?: string | null
-  personnel_category?: string
-  tier: string
-  branch: string
-  category: string
-}
-type AssignmentCandidates = Record<string, Record<string, AssignmentCandidate[]>>
-type ProposedAssignment = AssignmentCandidate & { squad_id: number }
-
 type OrganizationNode = {
   id: number
   parent_id: number | null
@@ -63,10 +39,6 @@ type ScopedResult = {
 type ExpansionResult = { created_platoons: { id: number; name: string }[]; created_squads: { id: number; squad_id: number; name: string }[]; total_platoons: number; total_squads: number }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
-const assignmentPositions = ['행정병', '통신병', '의무병', '운전병', '보급병']
-const personnelCategories = ['병사', '부사관', '장교']
-const assignmentBranches = ['육군', '해군', '해병대', '공군']
-
 const unitNames: Record<OrganizationNode['kind'], string> = {
   root: '편제', company: '중대', platoon: '소대', squad: '분대',
 }
@@ -92,177 +64,30 @@ export default function OrganizationPage({
   onDataChanged: () => void
 }) {
   const [squads, setSquads] = useState<Squad[]>([])
-  const [candidates, setCandidates] = useState<AssignmentCandidates>({})
-  const [assignmentSquad, setAssignmentSquad] = useState('1')
-  const [assignmentTab, setAssignmentTab] = useState('육군-병사')
-  const [proposal, setProposal] = useState<ProposedAssignment[]>([])
-  const [assignmentResult, setAssignmentResult] = useState<AssignmentResult | null>(null)
-  const [assignmentLoading, setAssignmentLoading] = useState(false)
-  const [assignmentError, setAssignmentError] = useState('')
-  const [quotas, setQuotas] = useState<AssignmentQuotas>(
-    Object.fromEntries(assignmentBranches.map(branch => [
-      branch,
-      Object.fromEntries(assignmentPositions.map(position => [
-        position,
-        { 병사: 1, 부사관: 0, 장교: 0 },
-      ])),
-    ])) as AssignmentQuotas,
-  )
+  const [rosterError, setRosterError] = useState('')
 
   useEffect(() => {
     const controller = new AbortController()
-    Promise.all([
-      fetch(`${API_BASE}/squads`, { signal: controller.signal }),
-      fetch(`${API_BASE}/squads/assignment-candidates`, { signal: controller.signal }),
-    ]).then(async ([squadResponse, candidateResponse]) => {
-      if (!squadResponse.ok) throw new Error(await responseError(squadResponse, '분대 목록을 불러오지 못했습니다.'))
-      if (!candidateResponse.ok) throw new Error(await responseError(candidateResponse, '가용 인원을 불러오지 못했습니다.'))
-      return [
-        await squadResponse.json() as Squad[],
-        await candidateResponse.json() as AssignmentCandidates,
-      ] as const
-    }).then(([nextSquads, nextCandidates]) => {
+    fetch(`${API_BASE}/squads`, { signal: controller.signal }).then(async response => {
+      if (!response.ok) throw new Error(await responseError(response, '분대 목록을 불러오지 못했습니다.'))
+      return response.json() as Promise<Squad[]>
+    }).then(nextSquads => {
       if (controller.signal.aborted) return
       setSquads(nextSquads)
-      setCandidates(nextCandidates)
-      setAssignmentSquad(current =>
-        nextSquads.length && !nextSquads.some(squad => String(squad.id) === current)
-          ? String(nextSquads[0].id)
-          : current)
+      setRosterError('')
     }).catch(cause => {
       if (!controller.signal.aborted) {
-        setAssignmentError(cause instanceof Error ? cause.message : '편성 자료를 불러오지 못했습니다.')
+        setRosterError(cause instanceof Error ? cause.message : '편성 자료를 불러오지 못했습니다.')
       }
     })
     return () => controller.abort()
   }, [revision])
 
-  const prepareAssignment = () => {
-    const next: ProposedAssignment[] = []
-    const used = new Set<string>()
-    const [selectedBranch, selectedCategory] = assignmentTab.split('-')
-    assignmentPositions.forEach(position => {
-      const requested = quotas[selectedBranch]?.[position]?.[selectedCategory] ?? 0
-      ;(candidates[selectedBranch]?.[selectedCategory] ?? [])
-        .filter(candidate => candidate.position === position)
-        .slice(0, requested)
-        .forEach(candidate => {
-          if (used.has(candidate.military_number)) return
-          used.add(candidate.military_number)
-          next.push({
-            ...candidate,
-            branch: selectedBranch,
-            category: selectedCategory,
-            squad_id: Number(assignmentSquad),
-          })
-        })
-    })
-    setProposal(next)
-    setAssignmentResult(null)
-    setAssignmentError('')
-  }
-
-  const toggleAssignmentCandidate = (candidate: AssignmentCandidate) => {
-    const [selectedBranch, selectedCategory] = assignmentTab.split('-')
-    setProposal(items => {
-      const existing = items.find(item => item.military_number === candidate.military_number)
-      if (existing) return items.filter(item => item.military_number !== candidate.military_number)
-      const requested = quotas[selectedBranch]?.[candidate.position]?.[selectedCategory] ?? 0
-      const selectedForPosition = items.filter(item =>
-        item.branch === selectedBranch &&
-        item.category === selectedCategory &&
-        item.position === candidate.position).length
-      if (selectedForPosition >= requested) return items
-      return [...items, {
-        ...candidate,
-        branch: selectedBranch,
-        category: selectedCategory,
-        squad_id: Number(assignmentSquad),
-      }]
-    })
-    setAssignmentResult(null)
-    setAssignmentError('')
-  }
-
-  const confirmAssignments = async () => {
-    setAssignmentLoading(true)
-    setAssignmentError('')
-    try {
-      const response = await fetch(`${API_BASE}/squads/assignments/confirm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          assignments: proposal.map(item => ({
-            person_id: item.military_number,
-            squad_id: item.squad_id,
-          })),
-        }),
-      })
-      if (!response.ok) throw new Error(await responseError(response, '전투편성에 실패했습니다.'))
-      setAssignmentResult({
-        squad_id: Number(assignmentSquad),
-        positions: {},
-        total_requested: proposal.length,
-        total_assigned: proposal.length,
-        total_shortfall: 0,
-      })
-      setProposal([])
-      onDataChanged()
-    } catch (cause) {
-      setAssignmentError(cause instanceof Error ? cause.message : '전투편성에 실패했습니다.')
-    } finally {
-      setAssignmentLoading(false)
-    }
-  }
-
-  const resetAssignments = async () => {
-    if (!window.confirm('전체 예비군의 배정과 배정 기록을 초기화합니다. 선택한 부대에만 적용되지 않습니다. 계속하시겠습니까?')) return
-    setAssignmentLoading(true)
-    setAssignmentError('')
-    try {
-      const response = await fetch(`${API_BASE}/squads/assignments/reset`, { method: 'POST' })
-      if (!response.ok) throw new Error(await responseError(response, '전투편성 초기화에 실패했습니다.'))
-      setProposal([])
-      setAssignmentResult(null)
-      onDataChanged()
-    } catch (cause) {
-      setAssignmentError(cause instanceof Error ? cause.message : '전투편성 초기화에 실패했습니다.')
-    } finally {
-      setAssignmentLoading(false)
-    }
-  }
-
-  return <OrganizationView
-    squads={squads}
-    refreshKey={revision}
-    onRefresh={onDataChanged}
-    onSelectSquad={id => setAssignmentSquad(String(id))}
-  >
-    <AssignmentReviewView
-      squads={squads}
-      candidates={candidates}
-      squadId={assignmentSquad}
-      setSquadId={setAssignmentSquad}
-      quotas={quotas}
-      setQuotas={setQuotas}
-      result={assignmentResult}
-      proposal={proposal}
-      setProposal={setProposal}
-      tab={assignmentTab}
-      setTab={setAssignmentTab}
-      loading={assignmentLoading}
-      error={assignmentError}
-      onPrepare={prepareAssignment}
-      onToggleCandidate={toggleAssignmentCandidate}
-      onConfirm={confirmAssignments}
-      onReset={resetAssignments}
-    />
-  </OrganizationView>
+  return <OrganizationView squads={squads} refreshKey={revision} onRefresh={onDataChanged} rosterError={rosterError} />
 }
 
-function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, children }: {
-  squads: Squad[]; refreshKey: number; onRefresh: () => void; onSelectSquad: (id: number) => void;
-  children: React.ReactNode
+function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
+  squads: Squad[]; refreshKey: number; onRefresh: () => void; rosterError: string;
 }) {
   const [nodes, setNodes] = useState<OrganizationNode[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -275,6 +100,42 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
   const [draft, setDraft] = useState({ query: '', status: '', category: '', position: '' })
   const [applied, setApplied] = useState(draft)
   const [page, setPage] = useState(1)
+  const [releaseTarget, setReleaseTarget] = useState<{ id: number; name: string } | null>(null)
+  const [releaseError, setReleaseError] = useState('')
+  const releaseDialog = useRef<HTMLDialogElement>(null)
+  const unitDialog = useRef<HTMLDialogElement>(null)
+  const [unitEditor, setUnitEditor] = useState<{ mode: 'add' | 'rename'; node: OrganizationNode } | null>(null)
+  const [unitKind, setUnitKind] = useState<OrganizationNode['kind']>('squad')
+  const [unitName, setUnitName] = useState('')
+  const [unitError, setUnitError] = useState('')
+
+  useEffect(() => {
+    if (unitEditor) unitDialog.current?.showModal()
+    else unitDialog.current?.close()
+  }, [unitEditor])
+
+  useEffect(() => {
+    if (releaseTarget) releaseDialog.current?.showModal()
+    else releaseDialog.current?.close()
+  }, [releaseTarget])
+
+  const releaseMembers = async (nodeId: number, personId?: string) => {
+    if (working) return
+    setWorking(true); setError(''); setReleaseError(''); setResult(null)
+    try {
+      const response = await fetch(`${API_BASE}/organization/${nodeId}/release-members`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(personId === undefined ? {} : { person_id: personId }),
+      })
+      if (!response.ok) throw new Error(await responseError(response, '편성 해제에 실패했습니다.'))
+      setReleaseTarget(null)
+      onRefresh()
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : '편성 해제에 실패했습니다.'
+      if (personId === undefined) setReleaseError(message)
+      else setError(message)
+    } finally { setWorking(false) }
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -310,9 +171,10 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
       && (!applied.position || person.position === applied.position)
       && (!applied.status || person.status === applied.status)
   })
-  const pageCount = Math.max(1, Math.ceil(filtered.length / 10))
+  const pageSize = 15
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
   const actualPage = Math.min(page, pageCount)
-  const pageRows = filtered.slice((actualPage - 1) * 10, actualPage * 10)
+  const pageRows = filtered.slice((actualPage - 1) * pageSize, actualPage * pageSize)
   const positions = [...new Set(roster.map(person => person.position).filter((value): value is string => !!value))].sort()
   const breadcrumb: OrganizationNode[] = []
   if (selected) {
@@ -338,13 +200,30 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
     } catch (cause) { setError(cause instanceof Error ? cause.message : failure) }
     finally { setWorking(false) }
   }
-  const addUnit = (kind: OrganizationNode['kind']) => {
-    if (!selected || !mayAdd.includes(kind)) return
-    const name = window.prompt(`${unitNames[kind]} 이름을 입력하세요.`)?.trim()
-    if (!name) return
-    void mutate('/organization', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ parent_id: selected.id, kind, name }) }, `${unitNames[kind]} 추가 실패`)
-    setExpanded(current => new Set([...current, selected.id]))
+  const openUnitEditor = (mode: 'add' | 'rename') => {
+    if (!selected || working || (mode === 'add' && !mayAdd.length)) return
+    setUnitName(mode === 'rename' ? selected.name : '')
+    setUnitKind(mayAdd[0] ?? 'squad')
+    setUnitError('')
+    setUnitEditor({ mode, node: selected })
+  }
+  const saveUnit = async () => {
+    if (!unitEditor || working || !unitName.trim()) return
+    const { mode, node } = unitEditor
+    setWorking(true); setUnitError('')
+    try {
+      const response = await fetch(`${API_BASE}/organization${mode === 'rename' ? `/${node.id}/name` : ''}`, {
+        method: mode === 'rename' ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mode === 'rename' ? { name: unitName.trim() }
+          : { parent_id: node.id, kind: unitKind, name: unitName.trim() }),
+      })
+      if (!response.ok) throw new Error(await responseError(response, '편제 저장에 실패했습니다.'))
+      if (mode === 'add') setExpanded(current => new Set([...current, node.id]))
+      setUnitEditor(null)
+      onRefresh()
+    } catch (cause) { setUnitError(cause instanceof Error ? cause.message : '편제 저장에 실패했습니다.') }
+    finally { setWorking(false) }
   }
   const deleteSelected = () => {
     if (!selected || selected.kind === 'root' || !window.confirm(`${selected.name}을(를) 삭제하시겠습니까?\n분대인 경우 연결된 분대도 함께 삭제됩니다. 하위 단위나 배정 인원이 있는 경우 삭제되지 않습니다.`)) return
@@ -397,7 +276,6 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
             {open ? '⌄' : '›'}</button> : <span className="rm-org-toggle-placeholder" />}
           <button type="button" className="rm-org-tree-select" onClick={() => {
             setSelectedId(node.id); setPage(1); setResult(null)
-            if (node.squad_id !== null) onSelectSquad(node.squad_id)
           }} aria-current={selectedId === node.id ? 'page' : undefined}>
             <span aria-hidden="true" className="rm-org-folder">{node.kind === 'squad' ? '▢' : '▱'}</span>{node.name}
           </button>
@@ -410,13 +288,22 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
   return <div className="rm-org-layout">
     <aside className="rm-org-navigator" aria-label="전투편성 트리">
       <header><strong>전투편성표</strong><span>⌄</span></header>
-      <div className="rm-org-tree">{treeRows(null, 0)}</div>
-      <footer className="rm-org-nav-footer">
+      <div className="rm-org-tree" tabIndex={0} aria-label="편제 목록">{treeRows(null, 0)}
+      <div className="rm-org-nav-footer">
         <strong>편성 기준</strong>
         <p>분대 계획 정원 <b>11명</b></p>
         <p>소속 분대 총수 <b>{nodes.filter(node => node.kind === 'squad').length}개</b></p>
         <p>이전 예시 분대에 배정된 인원은 미편성으로 전환됩니다.</p>
         <p>상위 단위 정원은 하위 분대 정원을 합산합니다.</p>
+      </div>
+      </div>
+      <footer className="rm-org-toolbar" aria-label="편제 관리 도구">
+        <button type="button" title="하위 편제 추가" aria-label="하위 편제 추가" disabled={working || !mayAdd.length} onClick={() => openUnitEditor('add')}><span aria-hidden="true">+</span></button>
+        <button type="button" className="rm-org-toolbar-delete" title="선택 단위 삭제" aria-label="선택 단위 삭제" disabled={working || !selected || selected.kind === 'root'} onClick={deleteSelected}><span aria-hidden="true">−</span></button>
+        <button type="button" title="이름 바꾸기" aria-label="이름 바꾸기" disabled={working || !selected} onClick={() => openUnitEditor('rename')}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20h16M5 15l-1 4 4-1L19 7l-3-3L5 15ZM14 6l3 3" /></svg>
+        </button>
+        <span>편제 관리</span>
       </footer>
     </aside>
 
@@ -425,8 +312,6 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
       {selected && <>
         <div className="rm-org-breadcrumb">{breadcrumb.map((node, index) =>
           <span key={node.id}>{index > 0 ? ' › ' : ''}{node.name}</span>)}</div>
-        <h1>{selected.name} 전투편성</h1>
-        <p className="rm-org-description">선택한 {unitNames[selected.kind]}와 하위 단위에 편성된 인원을 조회합니다.</p>
         <div className="rm-org-metrics">
           <section><span>계획인원</span><b>{selected.planned_strength === null ? '미설정' : `${selected.planned_strength}명`}</b></section>
           <section><span>편성인원</span><b>{selected.person_count}명</b></section>
@@ -449,15 +334,19 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
         </form>
         <section className="rm-org-roster" aria-label="편성 인원 목록">
           <div className="rm-org-table-scroll"><table>
-            <thead><tr><th>번호</th><th>성명</th><th>군번</th><th>구분</th><th>소속 분대</th><th>병과·직책</th><th>상태</th><th>편성 여부</th></tr></thead>
+            <thead><tr><th>번호</th><th>성명</th><th>군번</th><th>구분</th><th>소속 분대</th><th>병과·직책</th><th className="rm-org-release-column">
+              <button type="button" className="rm-org-release" disabled={working || roster.length === 0}
+                onClick={() => { setReleaseError(''); setReleaseTarget({ id: selected.id, name: breadcrumb.map(node => node.name).join('>') }) }}>전체 편성 해제</button>
+            </th></tr></thead>
             <tbody>{pageRows.map((person, index) => <tr key={person.military_number}>
-              <td>{(actualPage - 1) * 10 + index + 1}</td><td><b>{person.name}</b></td><td>{person.military_number}</td>
+              <td>{(actualPage - 1) * pageSize + index + 1}</td><td><b>{person.name}</b></td><td>{person.military_number}</td>
               <td>{person.category}</td><td>{person.squadName}</td><td>{person.position ?? '—'}</td>
-              <td><span className="rm-org-badge rm-org-badge--green">{person.status === 'active' ? '복무 중' : person.status === 'on_leave' ? '휴가 중' : person.status}</span></td>
-              <td><span className="rm-org-badge rm-org-badge--blue">편성</span></td>
+              <td className="rm-org-release-column"><button type="button" className="rm-org-release" disabled={working}
+                aria-label={`${person.name} 편성 해제`}
+                onClick={() => void releaseMembers(selected.id, person.military_number)}>편성 해제</button></td>
             </tr>)}</tbody>
           </table>{filtered.length === 0 && <p className="rm-org-message">해당 단위에 편성된 인원이 없습니다.</p>}</div>
-          <footer><span>총 {filtered.length}명 중 {filtered.length ? (actualPage - 1) * 10 + 1 : 0}–{Math.min(actualPage * 10, filtered.length)}명 표시</span>
+          <footer><span>총 {filtered.length}명 중 {filtered.length ? (actualPage - 1) * pageSize + 1 : 0}–{Math.min(actualPage * pageSize, filtered.length)}명 표시</span>
             <div><button type="button" disabled={actualPage === 1} onClick={() => setPage(p => p - 1)}>‹</button>
               {Array.from({ length: Math.min(pageCount, 5) }, (_, index) => {
                 const number = Math.max(1, Math.min(actualPage - 2, pageCount - 4)) + index
@@ -468,12 +357,9 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
             </div>
           </footer>
         </section>
-        <details className="rm-org-manual">
-          <summary>기존 수동 편성안 작성 · 검토 · 전체 편성 초기화</summary>
-          {children}
-        </details>
       </>}
       {!loading && !selected && <p className="rm-org-message">왼쪽에서 편제 단위를 선택하세요.</p>}
+      {rosterError && <p className="rm-org-error" role="alert">{rosterError}</p>}
       {error && <p className="rm-org-error" role="alert">{error}</p>}
     </main>
 
@@ -492,7 +378,7 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
           <p>자동편성은 기존 분대의 빈 자리만 채웁니다. 소대와 분대를 늘리려면 별도 확장 버튼을 사용하세요.</p>
           {result && <p className="rm-org-success" role="status">{result.total_assigned}명 추가 편성 · 잔여 부족 {result.total_shortfall}명</p>}
           {expansionResult && <p className="rm-org-success" role="status">현재 소대 {expansionResult.total_platoons}개 · 분대 {expansionResult.total_squads}개</p>}
-          {!canAutoFill && <p>이 단위에 분대가 없습니다. 편제 관리에서 분대를 추가하세요.</p>}
+          {!canAutoFill && <p>이 단위에 분대가 없습니다. 왼쪽 아래 + 버튼으로 분대를 추가하세요.</p>}
         </section>
         <section className="rm-org-breakdown"><h3>편성 요약</h3>
           {Object.entries(roster.reduce<Record<string, number>>((acc, person) => {
@@ -503,55 +389,43 @@ function OrganizationView({ squads, refreshKey, onRefresh, onSelectSquad, childr
           {roster.length === 0 && <p>편성 인원이 없습니다.</p>}
         </section>
         <section className="rm-org-edit"><h3>편제 관리</h3>
-          {mayAdd.map(kind => <button key={kind} type="button" disabled={working} onClick={() => addUnit(kind)}>+ {unitNames[kind]} 추가</button>)}
           {candidateParents.length > 0 && <label>상위 단위 이동
             <select value={selected.parent_id ?? ''} disabled={working}
               onChange={event => moveSelected(Number(event.target.value))}>
               {candidateParents.map(node => <option value={node.id} key={node.id}>{node.name} ({unitNames[node.kind]})</option>)}
             </select>
           </label>}
-          {selected.kind !== 'root' && <button type="button" className="rm-org-delete" disabled={working} onClick={deleteSelected}>선택 단위 삭제</button>}
           <small>하위 단위나 인원이 있는 편제는 삭제할 수 없습니다. 먼저 다른 곳으로 이동하세요.</small>
         </section>
       </div>
     </aside>}
+    <dialog ref={unitDialog} className="rm-org-release-dialog rm-org-unit-dialog" aria-labelledby="rm-unit-title"
+      onCancel={event => { if (working) event.preventDefault(); else setUnitEditor(null) }}>
+      <form onSubmit={event => { event.preventDefault(); void saveUnit() }}>
+        <h2 id="rm-unit-title">{unitEditor?.mode === 'add' ? '하위 편제 추가' : '이름 바꾸기'}</h2>
+        <p>{unitEditor?.node.name}{unitEditor?.mode === 'add' ? ' 아래에 새 편제를 추가합니다.' : '의 이름을 변경합니다.'}</p>
+        {unitEditor?.mode === 'add' && <label>편제 종류<select value={unitKind} disabled={working}
+          onChange={event => setUnitKind(event.target.value as OrganizationNode['kind'])}>
+          {(['company', 'platoon', 'squad'] as const).map(kind => <option key={kind} value={kind} disabled={!canAdd[unitEditor.node.kind].includes(kind)}>{unitNames[kind]}</option>)}
+        </select></label>}
+        <label>이름<input autoFocus required maxLength={100} value={unitName} disabled={working} placeholder="편제 이름을 입력하세요"
+          onChange={event => setUnitName(event.target.value)} /></label>
+        {unitError && <p className="rm-org-error" role="alert">{unitError}</p>}
+        <div className="rm-org-release-actions">
+          <button type="submit" className="rm-org-save" disabled={working || !unitName.trim()}>{working ? '저장 중…' : unitEditor?.mode === 'add' ? '추가' : '저장'}</button>
+          <button type="button" disabled={working} onClick={() => setUnitEditor(null)}>취소</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog ref={releaseDialog} className="rm-org-release-dialog" aria-labelledby="rm-release-question"
+      onCancel={event => { if (working) event.preventDefault(); else setReleaseTarget(null) }}>
+      <p id="rm-release-question"><strong>{releaseTarget?.name}</strong>의 편성인원을 전부 해제하시겠습니까?</p>
+      {releaseError && <p className="rm-org-error" role="alert">{releaseError}</p>}
+      <div className="rm-org-release-actions">
+        <button type="button" className="rm-org-release" disabled={working}
+          onClick={() => { if (releaseTarget) void releaseMembers(releaseTarget.id) }}>{working ? '해제 중…' : '확인'}</button>
+        <button type="button" autoFocus disabled={working} onClick={() => setReleaseTarget(null)}>취소</button>
+      </div>
+    </dialog>
   </div>
-}
-
-function AssignmentReviewView({ squads, candidates, squadId, setSquadId, quotas, setQuotas, result, proposal, setProposal, tab, setTab, loading, error, onPrepare, onToggleCandidate, onConfirm, onReset }: {
-  squads: Squad[]; candidates: AssignmentCandidates; squadId: string; setSquadId: (v: string) => void; quotas: AssignmentQuotas; setQuotas: (v: AssignmentQuotas) => void;
-  result: AssignmentResult | null; proposal: ProposedAssignment[]; setProposal: Dispatch<SetStateAction<ProposedAssignment[]>>; tab: string; setTab: (v: string) => void; loading: boolean; error: string; onPrepare: () => void; onToggleCandidate: (candidate: AssignmentCandidate) => void; onConfirm: () => void; onReset: () => void
-}) {
-  const tabs = assignmentBranches.flatMap(b => personnelCategories.map(c => `${b}-${c}`))
-  const [selectedBranch, selectedCategory] = tab.split('-')
-  const tabCandidates = candidates[selectedBranch]?.[selectedCategory] ?? []
-  const tabProposal = proposal.filter(p => p.branch === selectedBranch && p.category === selectedCategory)
-  const required = assignmentPositions.reduce((s, p) => s + (quotas[selectedBranch]?.[p]?.[selectedCategory] ?? 0), 0)
-  const branchRequested = assignmentPositions.reduce((s, p) => s + personnelCategories.reduce((s2, c) => s2 + (quotas[selectedBranch]?.[p]?.[c] ?? 0), 0), 0)
-  const selectedSquad = squads.find(s => String(s.id) === squadId)
-
-  return <div className="assignment-page">
-    <div className="page-intro"><div><h2>전투편성 검토</h2><p>군별·인원유형별·직책별로 후보를 분리해 확인한 뒤 확정합니다.</p></div></div>
-    <div className="squad-profile-layout">
-      <section className="assignment-panel"><div className="assignment-toolbar"><button className="button secondary" disabled={loading} onClick={onReset}>편성 초기화</button></div><label className="assignment-select">대상 분대<select value={squadId} onChange={e => setSquadId(e.target.value)}>{squads.map(s => <option key={s.id} value={s.id}>{s.name} · 현재 {s.person_count}명</option>)}</select></label>{selectedSquad && <SquadProfile squad={selectedSquad} />}</section>
-      <section className="assignment-panel"><div className="section-heading"><h3>{selectedBranch} 필요 인원</h3><span>{branchRequested}명 요청</span></div><div className="quota-table"><div className="quota-row quota-head"><span>직책</span>{personnelCategories.map(c => <span key={c}>{c}</span>)}</div>{assignmentPositions.map(p => <div className="quota-row" key={p}><strong>{p}</strong>{personnelCategories.map(c => <label key={c}><input type="number" min="0" value={quotas[selectedBranch][p][c]} onChange={e => setQuotas({ ...quotas, [selectedBranch]: { ...quotas[selectedBranch], [p]: { ...quotas[selectedBranch][p], [c]: Number(e.target.value) } } })} /></label>)}</div>)}</div></section>
-    </div>
-    <section className="assignment-panel review-panel">
-      <div className="assignment-tabs">{tabs.map(t => <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>{t.replace('-', ' · ')}</button>)}</div>
-      <div className="review-heading"><div><h3>{selectedBranch} · {selectedCategory}</h3><p>가용 {tabCandidates.filter(p => assignmentPositions.includes(p.position)).length}명 · 필요 {required}명 · 검토안 {tabProposal.length}명</p></div><span className={tabProposal.length < required ? 'shortfall-label' : 'ready-label'}>{Math.max(required - tabProposal.length, 0)}명 부족</span></div>
-      <div className="candidate-list">{tabCandidates.length === 0 && <State>현재 조건에 맞는 후보가 없습니다.</State>}{tabCandidates.map(c => { const proposed = proposal.find(p => p.military_number === c.military_number); return <article className={`candidate-row ${proposed ? 'proposed' : ''}`} key={c.military_number} onClick={() => onToggleCandidate(c)}><div><strong>{c.name}</strong><span>{c.military_number} · {c.position} · {c.specialty ?? '특기 없음'} · {c.service_year ?? '-'}년차</span></div><span className="tier-badge">{c.tier}</span>{proposed ? <select value={String(proposed.squad_id)} onClick={e => e.stopPropagation()} onChange={e => setProposal(items => items.map(p => p.military_number === c.military_number ? { ...p, squad_id: Number(e.target.value) } : p))}>{squads.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <span className="candidate-status">후보 · 클릭하여 선택</span>}</article> })}</div>
-      <div className="review-actions"><button className="button secondary" onClick={onPrepare}>편성안 만들기</button><button className="button primary" disabled={loading || proposal.length === 0} onClick={onConfirm}>{loading ? '확정 중...' : '검토안 확정 배정'}</button></div>
-      {error && <div className="inline-error">{error}</div>}{result && <div className="confirmation-note">{result.total_assigned}명이 확정 배정되었습니다.</div>}
-    </section>
-    {selectedSquad && <section className="assignment-panel roster-panel"><div className="section-heading"><h3>{selectedSquad.name} 전투편성표</h3><span>{selectedSquad.person_count}명</span></div>{selectedSquad.roster?.length ? <div className="table-wrap"><table><thead><tr><th>군번</th><th>성명</th><th>군종</th><th>인원유형</th><th>직책</th><th>주특기</th><th>연차</th></tr></thead><tbody>{selectedSquad.roster.map(person => <tr key={person.military_number}><td className="mono">{person.military_number}</td><td className="person-name">{person.name}</td><td>{person.branch}</td><td>{person.category}</td><td>{person.position ?? '-'}</td><td>{person.specialty ?? '-'}</td><td>{person.service_year ?? '-'}년차</td></tr>)}</tbody></table></div> : <State>현재 배정된 인원이 없습니다.</State>}</section>}
-  </div>
-}
-function SquadProfile({ squad }: { squad: Squad }) {
-  const entries = Object.entries(squad.breakdown ?? {})
-  return <div className="squad-profile"><div className="circle-chart"><strong>{squad.person_count}</strong><span>현재 인원</span></div><div>{entries.length ? entries.map(([k, v]) => <span key={k}>{k.replace('-', ' · ')} {v}명</span>) : <span>구성 데이터 없음</span>}</div></div>
-}
-
-
-function State({ children }: { children: React.ReactNode }) {
-  return <div className="state">{children}</div>
 }

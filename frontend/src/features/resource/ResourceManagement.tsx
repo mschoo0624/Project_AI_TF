@@ -22,7 +22,7 @@ export default function ResourceManagement(
 
   const refreshResourceData = () => setRevision(value => value + 1)
 
-  return <section className="rm-shell" aria-label="자원관리">
+  return <section className={`rm-shell${activeTab === 'organization' ? ' rm-shell--organization' : ''}`} aria-label="자원관리">
     <nav className="rm-top-tabs" aria-label="자원관리 하위 메뉴">
       {resourceTabs.map(tab => <button
         key={tab.id}

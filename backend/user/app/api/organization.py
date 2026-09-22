@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from user.app.database import get_db
 from user.app.services.organization import (
-    assign_vacancies, create_unit, delete_unit, expand_formation, hierarchy, move_unit,
+    assign_vacancies, create_unit, delete_unit, expand_formation, hierarchy, move_unit, release_members, rename_unit,
 )
 
 router = APIRouter(prefix="/organization", tags=["organization"])
@@ -19,6 +19,31 @@ class UnitCreate(BaseModel):
 
 class UnitMove(BaseModel):
     parent_id: int
+
+
+class UnitRename(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+@router.patch("/{node_id}/name")
+def change_name(node_id: int, payload: UnitRename, db: Session = Depends(get_db)) -> dict[str, bool]:
+    try:
+        rename_unit(db, node_id, payload.name)
+        return {"ok": True}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+class MemberRelease(BaseModel):
+    person_id: str | None = Field(default=None, min_length=1)
+
+
+@router.post("/{node_id}/release-members")
+def release_unit_members(node_id: int, payload: MemberRelease, db: Session = Depends(get_db)) -> dict[str, int]:
+    try:
+        return release_members(db, node_id, payload.person_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 @router.get("")

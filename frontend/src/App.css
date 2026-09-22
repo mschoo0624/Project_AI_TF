@@ -5,7 +5,7 @@
   --blue:#6288a1; --blue-dark:#54778e; --red:#e13b35;
   --ink:#17251f; --muted:#728078; --line:#d9e2dc; --paper:#f6f8f4;
   --panel:#fff; --green:#176b4d; --mint:#dcefe4; --red-bg:#fff0ee;
-  --screen-height:960px;
+  --screen-height:919px;
   --sidebar-width:140px; --topbar-height:48px;
 }
 html, body, #root { margin:0; min-width:980px; min-height:100%; }

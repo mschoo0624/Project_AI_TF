@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from user.app.models.assignment import Assignment
@@ -44,6 +44,33 @@ def _get(nodes: dict[int, OrganizationNode], node_id: int) -> OrganizationNode:
     if node is None:
         raise ValueError("선택한 편제 단위가 없습니다.")
     return node
+
+
+def release_members(db: Session, selected_id: int, person_id: str | None = None) -> dict[str, int]:
+    """Release current members only within the selected unit and its descendants."""
+    nodes = _nodes(db)
+    selected = _get(nodes, selected_id)
+    squad_ids = [node.squad_id for node in [selected, *_descendants(nodes, selected_id)]
+                 if node.squad_id is not None]
+    query = select(Person).where(Person.squad_id.in_(squad_ids))
+    if person_id is not None:
+        query = query.where(Person.military_number == person_id)
+    try:
+        people = list(db.scalars(query).all())
+        if person_id is not None and not people:
+            raise ValueError("선택한 부대에 편성된 인원이 아닙니다.")
+        for person in people:
+            db.execute(delete(Assignment).where(
+                Assignment.person_id == person.military_number,
+                Assignment.squad_id == person.squad_id,
+            ))
+            person.squad_id = None
+            set_assignment_mobilization_status(db, person, False)
+        db.commit()
+        return {"released_count": len(people)}
+    except Exception:
+        db.rollback()
+        raise
 
 
 def hierarchy(db: Session) -> list[dict[str, object]]:
@@ -102,6 +129,23 @@ def create_unit(db: Session, parent_id: int, kind: str, name: str) -> Organizati
         db.commit()
         db.refresh(node)
         return node
+    except Exception:
+        db.rollback()
+        raise
+
+
+def rename_unit(db: Session, node_id: int, name: str) -> None:
+    node = _get(_nodes(db), node_id)
+    name = name.strip()
+    if not name or len(name) > 100:
+        raise ValueError("이름은 1~100자여야 합니다.")
+    try:
+        node.name = name
+        if node.squad_id is not None:
+            squad = db.get(Squad, node.squad_id)
+            if squad is not None:
+                squad.name = name
+        db.commit()
     except Exception:
         db.rollback()
         raise
