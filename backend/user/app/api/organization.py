@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from user.app.database import get_db
 from user.app.services.organization import (
-    assign_vacancies, create_unit, delete_unit, hierarchy, move_unit,
+    assign_vacancies, create_unit, delete_unit, expand_formation, hierarchy, move_unit,
 )
 
 router = APIRouter(prefix="/organization", tags=["organization"])
@@ -57,5 +57,13 @@ def remove_unit(node_id: int, db: Session = Depends(get_db)) -> dict[str, bool]:
 def auto_fill_unit(node_id: int, db: Session = Depends(get_db)) -> dict[str, object]:
     try:
         return assign_vacancies(db, node_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.post("/{node_id}/expand")
+def expand_unit(node_id: int, db: Session = Depends(get_db)) -> dict[str, object]:
+    try:
+        return expand_formation(db, node_id)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
