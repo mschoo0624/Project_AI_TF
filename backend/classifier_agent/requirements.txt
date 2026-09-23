@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pypdf
+ollama
+transformers
+torch
+scikit-learn
+joblib
