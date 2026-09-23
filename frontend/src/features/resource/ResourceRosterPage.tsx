@@ -31,6 +31,31 @@ type TrainingRecord = {
   training_round: number
   attendance_status: string
   training_hours: number
+  required_hours: number | null
+}
+
+type TrainingProgress = {
+  service_year: number
+  training_plan: { name: string; hours: number }[]
+}
+
+function trainingHistory(records: TrainingRecord[], progress: TrainingProgress[]) {
+  const rows = new Map<string, { name: string; serviceYear: number; completed: number; required: number | null }>()
+  for (const record of records) {
+    const plan = progress.find(item => item.service_year === record.education_year)?.training_plan ?? []
+    const rawName = record.training_type.trim()
+    const generic = !rawName || rawName === '훈련'
+    const component = plan.find(item => item.name === rawName)
+      ?? (generic && plan.length === 1 ? plan[0] : undefined)
+    const name = component?.name ?? (generic ? '훈련 종류 미상' : rawName)
+    const key = `${record.education_year}:${name}`
+    const row = rows.get(key) ?? { name, serviceYear: record.education_year, completed: 0, required: record.required_hours ?? component?.hours ?? null }
+    if (record.attendance_status === 'completed' || record.attendance_status === '이수') {
+      row.completed += record.training_hours
+    }
+    rows.set(key, row)
+  }
+  return [...rows.values()].sort((a, b) => b.serviceYear - a.serviceYear || a.name.localeCompare(b.name, 'ko'))
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
@@ -74,6 +99,7 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
   const [checked, setChecked] = useState<Set<string>>(() => new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [records, setRecords] = useState<TrainingRecord[]>([])
+  const [trainingProgress, setTrainingProgress] = useState<TrainingProgress[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
 
@@ -120,8 +146,11 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
         const response = await fetch(`${API_BASE}/reservists/${encodeURIComponent(selectedId)}/training-hours`,
           { signal: controller.signal })
         if (!response.ok) throw new Error(await responseError(response, '훈련 기록을 불러오지 못했습니다.'))
-        const result = await response.json() as { records: TrainingRecord[] }
-        if (!controller.signal.aborted) setRecords(result.records ?? [])
+        const result = await response.json() as { records: TrainingRecord[]; progress: TrainingProgress[] }
+        if (!controller.signal.aborted) {
+          setRecords(result.records ?? [])
+          setTrainingProgress(result.progress ?? [])
+        }
       } catch (cause) {
         if (!controller.signal.aborted) setDetailError(cause instanceof Error ? cause.message : '훈련 기록을 불러오지 못했습니다.')
       } finally {
@@ -322,10 +351,12 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
         {detailLoading ? <p className="rm-detail-note">훈련 이력을 불러오는 중입니다.</p>
           : detailError ? <p className="rm-detail-note rm-error">{detailError}</p>
           : records.length === 0 ? <p className="rm-detail-note">등록된 훈련 기록이 없습니다.</p>
-          : <div className="rm-training-records">{[...records]
-              .sort((a, b) => (b.training_year ?? 0) - (a.training_year ?? 0) || b.id - a.id)
-              .slice(0, 8).map(record => <div key={record.id}>
-                <span>{record.training_year ?? '연도 미상'} · {record.training_type}</span><b>{record.attendance_status}</b>
+          : <div className="rm-training-records">{trainingHistory(records, trainingProgress)
+              .map(record => <div key={`${record.serviceYear}:${record.name}`}>
+                <span>{record.serviceYear}년차 · {record.name}</span>
+                <b aria-label={`이수 ${record.completed}시간, 필요 ${record.required === null ? '확인 필요' : `${record.required}시간`}`}>
+                  {record.completed}/{record.required ?? '—'}시간
+                </b>
               </div>)}</div>}
         <p className="rm-detail-note">전화번호·주소·이메일은 현재 인원 API에서 제공하지 않습니다.</p>
       </div>
