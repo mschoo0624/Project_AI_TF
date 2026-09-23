@@ -141,7 +141,7 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
 /* 중첩된 보류·연기 검토 화면의 높이는 자원관리 상단 탭(56px)을 기준으로 계산합니다. */
 .rm-tab-pane { --workspace-tabs-height: 56px; }
 .rm-empty-pane { min-height:calc(100vh - var(--topbar-height) - 56px); background:#f9fbff; }
-.rm-prosecution-page { min-height:calc(100vh - var(--topbar-height) - 56px); padding:28px 30px 48px; background:#f9fbff; }
+.rm-prosecution-page { min-height:calc(100vh - var(--topbar-height) - 56px); height:100%; overflow-y:auto; padding:28px 30px 48px; background:#f9fbff; }
 .rm-prosecution-heading { display:flex; align-items:end; justify-content:space-between; gap:24px; margin-bottom:24px; }
 .rm-prosecution-heading h1 { margin:2px 0 8px; color:#202b3b; font-size:28px; }
 .rm-prosecution-heading p { margin:0; color:#7b8797; }
@@ -153,17 +153,41 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
 .rm-prosecution-table td { padding:14px 16px; border-top:1px solid #f0e3e1; color:#354255; }
 .rm-prosecution-table td small { display:block; margin-top:4px; color:#8a96a5; font-size:11px; }
 .rm-prosecution-badge { display:inline-block; padding:5px 8px; border-radius:4px; background:#ffe4e1; color:#b3342e; font-size:11px; font-weight:700; }
+.rm-prosecution-row { cursor:pointer; }
+.rm-prosecution-row:hover td,.rm-prosecution-row:focus td { background:#fff7f5; outline:0; }
+.rm-prosecution-row:focus-visible { outline:2px solid #c43d35; outline-offset:-2px; }
+.rm-prosecution-profile { position:fixed; inset:7vh 12vw; z-index:60; display:flex; flex-direction:column; overflow:hidden; border:1px solid #e2c5c2; border-radius:10px; background:#fff; box-shadow:0 20px 60px rgba(38,28,28,.25); }
+.rm-prosecution-profile::before { content:''; position:fixed; inset:0; z-index:-1; background:rgba(20,30,25,.38); }
+.rm-prosecution-profile>header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px 24px; background:#fff8f6; border-bottom:1px solid #f0d9d6; }
+.rm-prosecution-profile>header p { margin:0 0 5px; color:#c43d35; font-size:10px; font-weight:700; letter-spacing:.08em; }
+.rm-prosecution-profile>header h2 { margin:0; color:#202b3b; font-size:24px; }
+.rm-prosecution-profile>header span { display:block; margin-top:5px; color:#7b8797; font-size:12px; }
+.rm-prosecution-profile>header button { width:32px; height:32px; border:1px solid #e2c5c2; border-radius:5px; background:#fff; color:#8f514d; font-size:20px; }
+.rm-prosecution-profile-body { min-height:0; overflow:auto; padding:20px 24px 30px; }
+.rm-prosecution-profile-body h3 { margin:20px 0 9px; color:#354255; font-size:14px; }
+.rm-prosecution-profile-reason { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid #f0d1cd; border-radius:6px; background:#fff7f5; color:#8f514d; font-size:12px; }
+.rm-prosecution-profile-reason span { color:#b3342e; font-weight:700; }
+.rm-prosecution-progress { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.rm-prosecution-progress>div { display:grid; grid-template-columns:55px minmax(0,1fr) auto; align-items:center; gap:8px; padding:10px; border:1px solid #e2e7ef; border-radius:6px; background:#fafcff; color:#344153; font-size:11px; }
+.rm-prosecution-progress small { overflow:hidden; color:#8a96a5; text-overflow:ellipsis; white-space:nowrap; }
+.rm-prosecution-progress b { color:#536b8e; font-size:10px; white-space:nowrap; }
+.rm-prosecution-progress>div.is-risk { border-color:#e1aaa5; background:#fff5f3; }
+.rm-prosecution-history { overflow:auto; border:1px solid #e2e7ef; border-radius:7px; }
+.rm-prosecution-history table { width:100%; min-width:620px; border-collapse:collapse; font-size:11px; }
+.rm-prosecution-history th { padding:9px 10px; background:#f7f9fc; color:#657389; text-align:left; }
+.rm-prosecution-history td { padding:10px; border-top:1px solid #e5eaf1; color:#344153; white-space:nowrap; }
 /* 편성인원목록 — 화면 내부 스타일. 다른 기능/전투편성 화면에는 적용하지 않습니다. */
 .rm-roster-layout {
   display:grid;
   height:100%;
   min-height:0;
   grid-template-rows:minmax(0,1fr);
-  grid-template-columns:minmax(0,1fr) 374px;
-  gap:24px;
+  grid-template-columns:minmax(0,1fr);
+  gap:18px;
   padding:calc(var(--rm-unit) * 12) 10px calc(var(--rm-unit) * 12) 24px;
   align-items:stretch;
 }
+.rm-roster-layout:has(.rm-person-detail) { grid-template-columns:minmax(360px, .9fr) minmax(460px, 1.25fr); }
 .rm-roster-main { min-width:0; min-height:0; display:flex; flex-direction:column; overflow:auto; }
 .rm-roster-main> :not(.rm-person-list) { flex-shrink:0; }
 .rm-roster-title {
@@ -413,6 +437,9 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
 .rm-detail-heading button { padding:4px 10px; border:0; border-radius:5px; background:#1476df; color:#fff; font-size:12px; }
 .rm-person-detail>.rm-detail-heading { flex:none; }
 .rm-detail-body { flex:1; min-height:0; overflow:auto; padding-bottom:calc(var(--rm-unit) * 15); }
+.rm-detail-tabs { display:flex; gap:4px; margin:0 17px 12px; border-bottom:1px solid #e2e8f0; }
+.rm-detail-tabs button { padding:9px 8px; border:0; border-bottom:2px solid transparent; background:transparent; color:#657389; font-size:12px; }
+.rm-detail-tabs button.is-active { border-bottom-color:#2670ed; color:#2062d7; font-weight:700; }
 .rm-detail-person {
   display:flex;
   align-items:center;
@@ -450,6 +477,42 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
 .rm-training-records>div { display:flex; justify-content:space-between; gap:6px; padding:10px; border-bottom:1px solid #e5eaf1; font-size:11px; }
 .rm-training-records>div:last-child { border-bottom:0; }
 .rm-training-records b { color:#1464d8; white-space:nowrap; }
+.rm-training-panel { margin:0 17px 14px; }
+.rm-training-panel-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.rm-training-panel-heading h4 { margin:0; }
+.rm-training-panel-heading>span { color:#8b96a4; font-size:10px; }
+.rm-training-panel-heading .rm-btn { height:30px; padding:0 9px; border-radius:5px; font-size:11px; }
+.rm-current-training { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; padding:11px 10px; border:1px solid #cfe0fa; border-radius:7px; background:#f2f7ff; color:#263248; }
+.rm-current-training>div span,.rm-current-training>div strong { display:block; }
+.rm-current-training>div span { color:#52657e; font-size:10px; }
+.rm-current-training>div strong { margin-top:3px; color:#1764d2; font-size:16px; }
+.rm-current-training>b { color:#52657e; font-size:11px; white-space:nowrap; }
+.rm-current-training.is-risk { border-color:#e1aaa5; background:#fff5f3; }
+.rm-current-training.is-risk>div strong,.rm-current-training.is-risk>b { color:#bd3333; }
+.rm-training-progress-list { overflow:hidden; border:1px solid #e0e7f0; border-radius:8px; background:#fafcff; }
+.rm-training-progress-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 8px; padding:9px 10px; border-bottom:1px solid #e5eaf1; font-size:11px; }
+.rm-training-progress-row:last-child { border-bottom:0; }
+.rm-training-progress-row>div { min-width:0; }
+.rm-training-progress-row strong,.rm-training-progress-row small { display:block; }
+.rm-training-progress-row small { margin-top:3px; overflow:hidden; color:#8b96a4; text-overflow:ellipsis; white-space:nowrap; }
+.rm-training-progress-row>span { color:#1464d8; font-weight:700; }
+.rm-training-progress-row>b { grid-column:1/-1; color:#617089; font-size:10px; font-weight:500; }
+.rm-training-progress-row.is-risk { background:#fff7f6; }
+.rm-training-progress-row.is-risk>b { color:#bd3333; }
+.rm-training-progress-row.is-incomplete { background:#fffaf0; }
+.rm-training-progress-row.is-incomplete>b.incomplete-label { color:#9a6b00; font-weight:700; }
+.rm-record-editor { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:10px; margin-bottom:10px; border:1px solid #dce5f0; border-radius:7px; background:#f7faff; }
+.rm-record-editor label { display:grid; gap:4px; color:#657389; font-size:10px; }
+.rm-record-editor input,.rm-record-editor select { min-width:0; width:100%; padding:6px; border:1px solid #d5deeb; border-radius:4px; background:#fff; color:#263248; font-size:11px; }
+.rm-record-editor .wide { grid-column:1/-1; }
+.rm-record-actions { display:flex!important; justify-content:flex-end; gap:6px; }
+.rm-record-actions .rm-btn { height:29px; border-radius:5px; font-size:11px; }
+.rm-record-table-wrap { overflow:auto; border:1px solid #e0e7f0; border-radius:8px; }
+.rm-record-table { width:100%; min-width:510px; border-collapse:collapse; font-size:10px; }
+.rm-record-table th { padding:7px 6px; background:#f7f9fc; color:#657389; font-size:10px; white-space:nowrap; }
+.rm-record-table td { padding:8px 6px; border-top:1px solid #e5eaf1; color:#344153; white-space:nowrap; }
+.rm-record-action { padding:3px 5px; border:0; background:transparent; color:#2062d7; font-size:10px; }
+.rm-record-action.danger { color:#bd3333; }
 .rm-detail-note { margin:10px 17px; color:#8b96a4; font-size:11px; }
 
 
@@ -513,6 +576,11 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
 .rm-org-filters select { flex:0 1 96px; min-width:80px; height:calc(var(--rm-unit) * 39); padding:0 calc(var(--rm-unit) * 8); border:1px solid #dce3ef; border-radius:22px; background:#fff; color:#526179; font-size:12px; }
 .rm-org-filters>button { height:calc(var(--rm-unit) * 39); padding:0 calc(var(--rm-unit) * 13); border:1px solid #dde4ee; border-radius:22px; background:#fff; color:#44536a; white-space:nowrap; font-size:12px; }
 .rm-org-filters>button.rm-org-primary { border-color:#2463e3; background:#2463e3; color:#fff; }
+.rm-org-danger-actions { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0 0 calc(var(--rm-unit) * 10); padding:10px 12px; border:1px solid #f0d6d4; border-left:3px solid #e13b35; border-radius:6px; background:#fffafa; }
+.rm-org-danger-actions>div { display:grid; gap:3px; min-width:0; }
+.rm-org-danger-actions strong { color:#7f2b28; font-size:11px; }
+.rm-org-danger-actions span { color:#927774; font-size:10px; }
+.rm-org-danger-actions .hold-button { flex:none; }
 .rm-org-roster { min-width:0; min-height:0; display:flex; flex-direction:column; overflow:hidden; border:1px solid #dce4ef; border-radius:9px; background:#fff; box-shadow:0 2px 4px #15233b0d; }
 .rm-org-table-scroll { min-height:0; overflow:auto; }
 .rm-org-roster table { width:100%; border-collapse:collapse; table-layout:auto; text-align:left; font-size:11px; }

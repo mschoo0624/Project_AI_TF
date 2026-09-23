@@ -1,0 +1,44 @@
+.hold-button {
+  --hold-progress: 0;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  min-width: 176px;
+  height: 40px;
+  overflow: hidden;
+  padding: 0 22px;
+  border: 0;
+  border: 1px solid #e2aaa6;
+  border-radius: 7px;
+  background: #fff3f1;
+  color: #9f302c;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  transition: transform 160ms ease, box-shadow 200ms ease;
+}
+.hold-button:hover:not(:disabled) { background: #ffe8e5; box-shadow: 0 5px 14px -8px rgba(180,38,33,.5); }
+.hold-button:active:not(:disabled) { transform: scale(.97); }
+.hold-button:focus-visible { outline: 2px solid #e13b35; outline-offset: 2px; }
+.hold-button:disabled { opacity: .5; cursor: default; }
+.hold-button__fill {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  clip-path: inset(0 calc((1 - var(--hold-progress)) * 100%) 0 0);
+  background: #e13b35;
+  color: #ffffff;
+  transition: clip-path 80ms linear;
+}
+.hold-button__fill>span { white-space: nowrap; }
+.hold-button__label { position: relative; z-index: 1; white-space: nowrap; }
+.hold-button.is-done { background: #b92d29; color: #ffffff; box-shadow: 0 5px 14px -8px rgba(180,38,33,.7); }
+@media (prefers-reduced-motion: reduce) {
+  .hold-button { transition: none; }
+  .hold-button__fill { transition: none; }
+}
