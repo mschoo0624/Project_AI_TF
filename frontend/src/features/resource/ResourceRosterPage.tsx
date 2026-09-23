@@ -59,12 +59,13 @@ function trainingHistory(records: TrainingRecord[], progress: TrainingProgress[]
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
-type SortKey = 'checked' | 'number' | 'name' | 'military_number' | 'unit' | 'squad_id' | 'status' | 'position' | 'service_year'
+type SortKey = 'checked' | 'number' | 'name' | 'military_number' | 'branch' | 'rank' | 'squad_id' | 'status' | 'position' | 'mobilization_status' | 'service_year'
 const rosterColumns: { key: SortKey; label: string }[] = [
   { key: 'checked', label: '선택' }, { key: 'number', label: 'No.' },
   { key: 'name', label: '이름' }, { key: 'military_number', label: '군번' },
-  { key: 'unit', label: '소속' }, { key: 'squad_id', label: '편성 부대' },
-  { key: 'status', label: '상태' }, { key: 'position', label: '직책' },
+  { key: 'branch', label: '군별' }, { key: 'rank', label: '계급' },
+  { key: 'position', label: '직책' }, { key: 'squad_id', label: '편성 부대' },
+  { key: 'status', label: '상태' }, { key: 'mobilization_status', label: '동원 상태' },
   { key: 'service_year', label: '연차' },
 ]
 const rosterCollator = new Intl.Collator('ko', { numeric: true })
@@ -283,6 +284,7 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
         {loading ? <p className="rm-list-message">인원 목록을 불러오는 중입니다.</p>
           : error ? <p className="rm-list-message rm-error">{error}</p>
           : <div className="rm-list-scroll"><table className="rm-person-table">
+            <colgroup>{[4, 4, 10, 12, 6, 6, 10, 16, 10, 14, 8].map((width, index) => <col key={rosterColumns[index].key} style={{ width: `${width}%` }} />)}</colgroup>
             <thead><tr>{rosterColumns.map(column => <th key={column.key} scope="col"
               aria-sort={sort.key === column.key ? sort.direction : 'none'}>
               <button type="button" className="rm-sort-button" onClick={() => changeSort(column.key)}
@@ -307,12 +309,13 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
                 onChange={event => toggleChecked(person.military_number, event.target.checked)} /></td>
               <td>{personNumbers.get(person.military_number)}</td><td className="rm-table-name">{person.name}</td>
               <td className="rm-num">{person.military_number}</td>
-              <td><span className="rm-unit">{person.unit ?? '소속 정보 없음'}</span></td>
-              <td>{squadLabel(person)}</td>
+              <td>{person.branch}</td><td>{person.rank ?? '—'}</td>
+              <td title={person.position ?? undefined}>{person.position ?? '—'}</td>
+              <td title={squadLabel(person)}>{squadLabel(person)}</td>
               <td><span className={`rm-status ${person.status === 'active' ? 'active' : 'other'}`}>
                 {person.status === 'active' ? '복무 중' : person.status === 'on_leave' ? '휴가 중' : person.status}
               </span></td>
-              <td>{person.position ?? '—'}</td><td>{person.service_year === null ? '—' : `${person.service_year}년차`}</td>
+              <td>{person.mobilization_status ?? '—'}</td><td>{person.service_year === null ? '—' : `${person.service_year}년차`}</td>
             </tr>)}</tbody>
           </table>{filtered.length === 0 && <p className="rm-list-message">검색 결과가 없습니다.</p>}</div>}
         <footer className="rm-person-footer"><span>총 {filtered.length.toLocaleString('ko-KR')}명 중 {filtered.length ? (actualPage - 1) * pageSize + 1 : 0}–{Math.min(actualPage * pageSize, filtered.length)}명 표시</span>
@@ -340,7 +343,7 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
         <dl className="rm-detail-fields">
           {[
             ['성명', selected.name], ['군번', selected.military_number], ['소속 부대', selected.unit ?? '미등록'],
-            ['편성 분대', squadLabel(selected)], ['군종', selected.branch], ['계급', selected.rank ?? '미등록'],
+            ['편성 분대', squadLabel(selected)], ['군별', selected.branch], ['계급', selected.rank ?? '미등록'],
             ['상태', selected.status === 'active' ? '복무 중' : selected.status === 'on_leave' ? '휴가 중' : selected.status],
             ['동원 상태', selected.mobilization_status ?? '미등록'], ['직책', selected.position ?? '미등록'],
             ['주특기', selected.specialty ?? '미등록'],

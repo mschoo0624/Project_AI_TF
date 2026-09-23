@@ -36,12 +36,13 @@ def change_name(node_id: int, payload: UnitRename, db: Session = Depends(get_db)
 
 class MemberRelease(BaseModel):
     person_id: str | None = Field(default=None, min_length=1)
+    person_ids: list[str] | None = Field(default=None, min_length=1)
 
 
 @router.post("/{node_id}/release-members")
 def release_unit_members(node_id: int, payload: MemberRelease, db: Session = Depends(get_db)) -> dict[str, int]:
     try:
-        return release_members(db, node_id, payload.person_id)
+        return release_members(db, node_id, payload.person_id, payload.person_ids)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 

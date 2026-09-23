@@ -13,6 +13,7 @@ type SquadMember = {
   military_number: string
   name: string
   branch: string
+  rank: string | null
   category: string
   position: string | null
   specialty: string | null
@@ -39,6 +40,13 @@ type ScopedResult = {
 type ExpansionResult = { created_platoons: { id: number; name: string }[]; created_squads: { id: number; squad_id: number; name: string }[]; total_platoons: number; total_squads: number }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
+type RosterSortKey = 'name' | 'military_number' | 'branch' | 'rank' | 'position' | 'squadName'
+const rosterColumns: { key: RosterSortKey; label: string }[] = [
+  { key: 'name', label: '이름' }, { key: 'military_number', label: '군번' },
+  { key: 'branch', label: '군별' }, { key: 'rank', label: '계급' },
+  { key: 'position', label: '직책(병과)' }, { key: 'squadName', label: '소속 분대(편성 부대)' },
+]
+const rosterCollator = new Intl.Collator('ko', { numeric: true })
 const unitNames: Record<OrganizationNode['kind'], string> = {
   root: '편제', company: '중대', platoon: '소대', squad: '분대',
 }
@@ -100,7 +108,9 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
   const [draft, setDraft] = useState({ query: '', status: '', category: '', position: '' })
   const [applied, setApplied] = useState(draft)
   const [page, setPage] = useState(1)
-  const [releaseTarget, setReleaseTarget] = useState<{ id: number; name: string } | null>(null)
+  const [sort, setSort] = useState<{ key: RosterSortKey; direction: 'ascending' | 'descending' }>({ key: 'military_number', direction: 'ascending' })
+  const [checkedMembers, setCheckedMembers] = useState<Set<string>>(() => new Set())
+  const [releaseTarget, setReleaseTarget] = useState<{ id: number; name: string; personIds: string[] } | null>(null)
   const [releaseError, setReleaseError] = useState('')
   const releaseDialog = useRef<HTMLDialogElement>(null)
   const unitDialog = useRef<HTMLDialogElement>(null)
@@ -119,21 +129,21 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
     else releaseDialog.current?.close()
   }, [releaseTarget])
 
-  const releaseMembers = async (nodeId: number, personId?: string) => {
-    if (working) return
+  const releaseMembers = async (nodeId: number, personIds: string[]) => {
+    if (working || !personIds.length) return
     setWorking(true); setError(''); setReleaseError(''); setResult(null)
     try {
       const response = await fetch(`${API_BASE}/organization/${nodeId}/release-members`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(personId === undefined ? {} : { person_id: personId }),
+        body: JSON.stringify({ person_ids: personIds }),
       })
       if (!response.ok) throw new Error(await responseError(response, '편성 해제에 실패했습니다.'))
       setReleaseTarget(null)
+      setCheckedMembers(new Set())
       onRefresh()
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : '편성 해제에 실패했습니다.'
-      if (personId === undefined) setReleaseError(message)
-      else setError(message)
+      setReleaseError(message)
     } finally { setWorking(false) }
   }
 
@@ -174,7 +184,17 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
   const pageSize = 15
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
   const actualPage = Math.min(page, pageCount)
-  const pageRows = filtered.slice((actualPage - 1) * pageSize, actualPage * pageSize)
+  const sorted = [...filtered].sort((a, b) => {
+    const left = a[sort.key], right = b[sort.key]
+    if (left == null && right != null) return 1
+    if (left != null && right == null) return -1
+    const comparison = rosterCollator.compare(left ?? '', right ?? '')
+    return (sort.direction === 'ascending' ? comparison : -comparison)
+      || rosterCollator.compare(a.military_number, b.military_number)
+  })
+  const pageRows = sorted.slice((actualPage - 1) * pageSize, actualPage * pageSize)
+  const selectedMembers = roster.filter(person => checkedMembers.has(person.military_number))
+  const allMembersChecked = roster.length > 0 && selectedMembers.length === roster.length
   const positions = [...new Set(roster.map(person => person.position).filter((value): value is string => !!value))].sort()
   const breadcrumb: OrganizationNode[] = []
   if (selected) {
@@ -275,7 +295,7 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
             onClick={() => setExpanded(old => { const next = new Set(old); if (next.has(node.id)) next.delete(node.id); else next.add(node.id); return next })}>
             {open ? '⌄' : '›'}</button> : <span className="rm-org-toggle-placeholder" />}
           <button type="button" className="rm-org-tree-select" onClick={() => {
-            setSelectedId(node.id); setPage(1); setResult(null)
+            setSelectedId(node.id); setPage(1); setResult(null); setCheckedMembers(new Set())
           }} aria-current={selectedId === node.id ? 'page' : undefined}>
             <span aria-hidden="true" className="rm-org-folder">{node.kind === 'squad' ? '▢' : '▱'}</span>{node.name}
           </button>
@@ -317,7 +337,7 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
           <section><span>편성인원</span><b>{selected.person_count}명</b></section>
           <section><span>편성부족인원</span><b>{selected.shortfall === null ? '미설정' : `${selected.shortfall}명`}</b></section>
         </div>
-        <form className="rm-org-filters" onSubmit={event => { event.preventDefault(); setApplied(draft); setPage(1) }}>
+        <form className="rm-org-filters" onSubmit={event => { event.preventDefault(); setApplied(draft); setPage(1); setCheckedMembers(new Set()) }}>
           <label><span aria-hidden="true">⌕</span><input aria-label="편성 인원 검색" placeholder="이름, 군번을 입력하세요."
             value={draft.query} onChange={event => setDraft(p => ({ ...p, query: event.target.value }))} /></label>
           <select aria-label="편성 상태" value={draft.status} onChange={event => setDraft(p => ({ ...p, status: event.target.value }))}>
@@ -330,20 +350,29 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
             <option value="">전체 병과</option>{positions.map(value => <option key={value}>{value}</option>)}
           </select>
           <button type="submit" className="rm-org-primary">검색</button>
-          <button type="button" onClick={() => { setDraft({ query: '', status: '', category: '', position: '' }); setApplied({ query: '', status: '', category: '', position: '' }); setPage(1) }}>↶ 초기화</button>
+          <button type="button" onClick={() => { setDraft({ query: '', status: '', category: '', position: '' }); setApplied({ query: '', status: '', category: '', position: '' }); setPage(1); setCheckedMembers(new Set()) }}>↶ 초기화</button>
+          <button type="button" className="rm-org-release" disabled={working || selectedMembers.length === 0}
+            onClick={() => { setReleaseError(''); setReleaseTarget({ id: selected.id, name: breadcrumb.map(node => node.name).join('>'), personIds: selectedMembers.map(person => person.military_number) }) }}>편성 해제{selectedMembers.length > 0 ? ` (${selectedMembers.length})` : ''}</button>
         </form>
         <section className="rm-org-roster" aria-label="편성 인원 목록">
           <div className="rm-org-table-scroll"><table>
-            <thead><tr><th>번호</th><th>성명</th><th>군번</th><th>구분</th><th>소속 분대</th><th>병과·직책</th><th className="rm-org-release-column">
-              <button type="button" className="rm-org-release" disabled={working || roster.length === 0}
-                onClick={() => { setReleaseError(''); setReleaseTarget({ id: selected.id, name: breadcrumb.map(node => node.name).join('>') }) }}>전체 편성 해제</button>
-            </th></tr></thead>
+            <colgroup>{[4, 5, 15, 18, 9, 10, 17, 22].map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}</colgroup>
+            <thead><tr><th className="rm-org-check-column"><input type="checkbox" aria-label="선택한 부대 전체 인원 선택" title="페이지·검색 조건과 관계없이 부대 전체 인원 선택" checked={allMembersChecked} disabled={working || roster.length === 0}
+              ref={element => { if (element) element.indeterminate = !allMembersChecked && selectedMembers.length > 0 }}
+              onChange={event => setCheckedMembers(event.target.checked ? new Set(roster.map(person => person.military_number)) : new Set())} /></th><th>번호</th>
+              {rosterColumns.map(column => <th key={column.key} scope="col" aria-sort={sort.key === column.key ? sort.direction : 'none'}>
+                <button type="button" className="rm-sort-button"
+                  aria-label={`${column.label}, ${sort.key === column.key && sort.direction === 'ascending' ? '내림차순' : '오름차순'} 정렬`}
+                  onClick={() => { setSort(current => ({ key: column.key, direction: current.key === column.key && current.direction === 'ascending' ? 'descending' : 'ascending' })); setPage(1) }}>
+                  <span>{column.label}</span><span className="rm-sort-indicator" aria-hidden="true">{sort.key === column.key ? (sort.direction === 'ascending' ? '▼' : '▲') : ''}</span>
+                </button>
+              </th>)}
+            </tr></thead>
             <tbody>{pageRows.map((person, index) => <tr key={person.military_number}>
+              <td className="rm-org-check-column"><input type="checkbox" aria-label={`${person.name} 선택`} checked={checkedMembers.has(person.military_number)} disabled={working}
+                onChange={event => { const checked = event.target.checked; setCheckedMembers(previous => { const next = new Set(previous); if (checked) next.add(person.military_number); else next.delete(person.military_number); return next }) }} /></td>
               <td>{(actualPage - 1) * pageSize + index + 1}</td><td><b>{person.name}</b></td><td>{person.military_number}</td>
-              <td>{person.category}</td><td>{person.squadName}</td><td>{person.position ?? '—'}</td>
-              <td className="rm-org-release-column"><button type="button" className="rm-org-release" disabled={working}
-                aria-label={`${person.name} 편성 해제`}
-                onClick={() => void releaseMembers(selected.id, person.military_number)}>편성 해제</button></td>
+              <td>{person.branch}</td><td>{person.rank ?? '—'}</td><td title={person.position ?? undefined}>{person.position ?? '—'}</td><td title={person.squadName}>{person.squadName}</td>
             </tr>)}</tbody>
           </table>{filtered.length === 0 && <p className="rm-org-message">해당 단위에 편성된 인원이 없습니다.</p>}</div>
           <footer><span>총 {filtered.length}명 중 {filtered.length ? (actualPage - 1) * pageSize + 1 : 0}–{Math.min(actualPage * pageSize, filtered.length)}명 표시</span>
@@ -419,11 +448,11 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
     </dialog>
     <dialog ref={releaseDialog} className="rm-org-release-dialog" aria-labelledby="rm-release-question"
       onCancel={event => { if (working) event.preventDefault(); else setReleaseTarget(null) }}>
-      <p id="rm-release-question"><strong>{releaseTarget?.name}</strong>의 편성인원을 전부 해제하시겠습니까?</p>
+      <p id="rm-release-question">선택된 {releaseTarget?.personIds.length ?? 0}명을 <strong>{releaseTarget?.name}</strong> 편성에서 해제하시겠습니까?</p>
       {releaseError && <p className="rm-org-error" role="alert">{releaseError}</p>}
       <div className="rm-org-release-actions">
         <button type="button" className="rm-org-release" disabled={working}
-          onClick={() => { if (releaseTarget) void releaseMembers(releaseTarget.id) }}>{working ? '해제 중…' : '확인'}</button>
+          onClick={() => { if (releaseTarget) void releaseMembers(releaseTarget.id, releaseTarget.personIds) }}>{working ? '해제 중…' : '확인'}</button>
         <button type="button" autoFocus disabled={working} onClick={() => setReleaseTarget(null)}>취소</button>
       </div>
     </dialog>

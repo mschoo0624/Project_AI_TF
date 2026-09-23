@@ -106,6 +106,7 @@ def list_squads(db: Session = Depends(get_db)) -> list[dict[str, object]]:
 					"military_number": person.military_number,
 					"name": person.name,
 					"branch": person.branch,
+					"rank": person.rank,
 					"category": personnel_category(person.rank),
 					"position": person.position,
 					"specialty": person.specialty,

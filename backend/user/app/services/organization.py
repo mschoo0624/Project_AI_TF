@@ -46,18 +46,24 @@ def _get(nodes: dict[int, OrganizationNode], node_id: int) -> OrganizationNode:
     return node
 
 
-def release_members(db: Session, selected_id: int, person_id: str | None = None) -> dict[str, int]:
+def release_members(db: Session, selected_id: int, person_id: str | None = None,
+                    person_ids: list[str] | None = None) -> dict[str, int]:
     """Release current members only within the selected unit and its descendants."""
     nodes = _nodes(db)
     selected = _get(nodes, selected_id)
     squad_ids = [node.squad_id for node in [selected, *_descendants(nodes, selected_id)]
                  if node.squad_id is not None]
     query = select(Person).where(Person.squad_id.in_(squad_ids))
-    if person_id is not None:
-        query = query.where(Person.military_number == person_id)
+    if person_id is not None and person_ids is not None:
+        raise ValueError("해제할 인원 목록을 하나만 지정하세요.")
+    requested = set(person_ids) if person_ids is not None else ({person_id} if person_id is not None else None)
+    if requested is not None:
+        if not requested or any(not value.strip() for value in requested):
+            raise ValueError("해제할 인원을 선택하세요.")
+        query = query.where(Person.military_number.in_(requested))
     try:
         people = list(db.scalars(query).all())
-        if person_id is not None and not people:
+        if requested is not None and {person.military_number for person in people} != requested:
             raise ValueError("선택한 부대에 편성된 인원이 아닙니다.")
         for person in people:
             db.execute(delete(Assignment).where(

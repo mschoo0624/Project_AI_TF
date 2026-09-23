@@ -68,6 +68,28 @@ def test_release_members_respects_scope_and_updates_records(scope: str) -> None:
             assert release_members(db, target) == {"released_count": 0}
 
 
+def test_batch_release_is_atomic_and_only_releases_selected_members() -> None:
+    with make_session() as db:
+        root = OrganizationNode(kind="root", name="root")
+        db.add(root)
+        db.commit()
+        first = create_unit(db, root.id, "squad", "first")
+        other = create_unit(db, root.id, "squad", "other")
+        for number in ("one", "two", "keep"):
+            add_person(db, number, first.squad_id)
+        add_person(db, "outside", other.squad_id)
+        db.commit()
+        for ids in ([], ["one", "outside"], ["one", "missing"], [""]):
+            with pytest.raises(ValueError):
+                release_members(db, first.id, person_ids=ids)
+            assert db.get(Person, "one").squad_id == first.squad_id
+        assert release_members(db, first.id, person_ids=["one", "two", "one"]) == {"released_count": 2}
+        assert db.get(Person, "one").squad_id is None
+        assert db.get(Person, "two").squad_id is None
+        assert db.get(Person, "keep").squad_id == first.squad_id
+        assert db.get(Person, "outside").squad_id == other.squad_id
+
+
 def test_rename_unit_syncs_squad_and_preserves_membership() -> None:
     with make_session() as db:
         root = OrganizationNode(kind="root", name="root")
