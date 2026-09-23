@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
+import { forecastThreshold } from './forecastThreshold'
 import ResourceManagement from './features/resource/ResourceManagement'
 import WorkLogManagement from './features/worklog/WorkLogManagement'
 import { countReviewDocuments, fetchBootstrap } from './features/review/api'
@@ -317,6 +318,7 @@ type ForecastPayload = {
 }
 
 const forecastYears = [2024, 2025, 2026, 2027, 2028]
+const requiredFormationPopulation = 3.5 // Chart values are in units of 10,000 people.
 
 function HomeForecast() {
   const [forecast, setForecast] = useState<ForecastPayload | null>(null)
@@ -350,9 +352,16 @@ function HomeForecast() {
   if (error) return <section className="home-forecast home-forecast-status" aria-label="예비군 예상 추이"><strong>예측 데이터를 불러오지 못했습니다.</strong><span>{error}</span></section>
   if (!forecast) return <section className="home-forecast home-forecast-status" aria-label="예비군 예상 추이"><strong>예측 데이터 로딩 중…</strong></section>
 
+  const thresholdResult = forecastThreshold(forecast.years, forecast.data.baseline[region] ?? {}, forecast.hist_cutoff, requiredFormationPopulation)
+  const thresholdText = thresholdResult.status === 'breach'
+    ? `${thresholdResult.year}년 병력 기준선 붕괴`
+    : thresholdResult.status === 'safe'
+      ? `${thresholdResult.year}년까지 유지`
+      : '예측 자료 부족으로 판정 불가'
+
   const values = series.map(row => row.value).filter((value): value is number => value != null && Number.isFinite(value))
-  const minimum = values.length ? Math.min(...values) : 0
-  const maximum = values.length ? Math.max(...values) : 1
+  const minimum = Math.min(requiredFormationPopulation, ...values)
+  const maximum = Math.max(requiredFormationPopulation, ...values)
   const margin = Math.max((maximum - minimum) * 0.2, maximum * 0.01, 0.05)
   const minValue = Math.max(0, minimum - margin)
   const maxValue = maximum + margin
@@ -378,8 +387,8 @@ function HomeForecast() {
       </div>
     </div>
 
-    <div className="forecast-chart-wrap">
-      <svg className="forecast-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${region} 2024~2028년 20~29세 남성 인구 추이, 단위 만명`}>
+    <div className="forecast-chart-wrap forecast-chart-with-status">
+      <svg className="forecast-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${region} 2024~2028년 20~29세 남성 인구 추이, 단위 만명, 편제 필요인원 ${requiredFormationPopulation}만명`}>
         <text x={pad.l} y={16} className="forecast-axis">단위: 만명</text>
         {Array.from({ length: 6 }, (_, index) => {
           const value = minValue + (maxValue - minValue) * index / 5
@@ -388,11 +397,17 @@ function HomeForecast() {
         })}
         {series.map((row, index) => <text key={row.year} x={x(index)} y={H - 10} className="forecast-axis" textAnchor="middle">{row.year}년</text>)}
         <path d={path} className="forecast-line" />
+        <line x1={pad.l} x2={W - pad.r} y1={y(requiredFormationPopulation)} y2={y(requiredFormationPopulation)} className="forecast-required-line" />
+        <text x={W - pad.r} y={y(requiredFormationPopulation) - 10} textAnchor="end" className="forecast-required-label">필요 병력 {requiredFormationPopulation}만명</text>
         {series.map((row, index) => row.value != null && Number.isFinite(row.value) ? <g key={row.year}>
           <circle cx={x(index)} cy={y(row.value)} r="5" className="forecast-point"><title>{row.year}년 {row.value.toFixed(2)}만명</title></circle>
           <text x={x(index)} y={y(row.value) - 14} className="forecast-value" textAnchor="middle">{row.value.toFixed(2)}</text>
         </g> : <text key={row.year} x={x(index)} y={H - pad.b - 12} className="forecast-axis" textAnchor="middle">자료 없음</text>)}
       </svg>
+      <aside className={`forecast-threshold-status is-${thresholdResult.status}`} aria-live="polite">
+        <strong>{thresholdText}</strong>
+        <span>필요 병력 {requiredFormationPopulation}만명 기준</span>
+      </aside>
     </div>
   </section>
 }
