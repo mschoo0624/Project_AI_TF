@@ -229,6 +229,28 @@ def test_future_year_training_gaps_are_not_prosecution_targets() -> None:
     db.close()
 
 
+def test_service_years_before_three_are_not_prosecution_targets() -> None:
+    db = make_session()
+    person = Person(
+        military_number="26-70099950", name="테스터", branch="육군", rank="병장",
+        service_year=2, mobilization_status="동원미지정", status="active",
+    )
+    db.add(person)
+    db.flush()
+    db.add(Education(
+        person_id=person.military_number, education_year=2, training_year=2026,
+        training_type="기본훈련", training_round=3,
+        attendance_status="무단불참",
+    ))
+    db.commit()
+
+    progress = training_progress(db, person, 2)
+
+    assert progress["prosecution_status"] is None
+    assert progress["prosecution_risk"] is False
+    db.close()
+
+
 def test_one_mobilization_absence_prosecutes_officer_too() -> None:
     db = make_session()
     person = Person(

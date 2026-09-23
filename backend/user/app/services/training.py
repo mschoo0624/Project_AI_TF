@@ -276,7 +276,9 @@ def training_progress(
     )
     is_on_hold = mobilization_status in PARTIAL_HOLD or mobilization_status in {"연기", "postponed"}
     is_current_or_completed_year = (
-        person.service_year is not None and service_year <= person.service_year
+        person.service_year is not None
+        and person.service_year >= 3
+        and service_year <= person.service_year
     )
     prosecution_risk = bool(
         is_current_or_completed_year and not is_on_hold and (
