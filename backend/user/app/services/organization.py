@@ -192,7 +192,6 @@ def delete_unit(db: Session, node_id: int) -> None:
         db.rollback()
         raise
 
-
 def assign_vacancies(db: Session, selected_id: int) -> dict[str, object]:
     """Fill vacancies in existing squads without changing the hierarchy."""
     nodes = _nodes(db)

@@ -39,6 +39,12 @@ type TrainingProgress = {
   completed_hours: number
   remaining_hours: number
   prosecution_risk: boolean
+  consecutive_unexcused_absences?: number
+  current_zero_training_hours?: boolean
+  consecutive_zero_training_years?: number
+  prosecution_status?: string | null
+  prosecution_reason?: string | null
+  training_status?: string
   completed: boolean
 }
 type TrainingRecord = {
@@ -303,11 +309,16 @@ function DetailModal(props: {
 }
 
 function ProfileTab({ person, progress }: { person: Person; progress: TrainingProgress[] }) {
-  const risks = progress.filter(x => x.prosecution_risk).map(x => x.service_year)
+  const absenceStreak = Math.max(...progress.map(item => item.consecutive_unexcused_absences ?? 0), 0)
+  const isProsecutionTarget = progress.some(item => item.prosecution_status === '고발대상자')
+  const prosecutionReason = progress.find(item => item.prosecution_status === '고발대상자')?.prosecution_reason
+  const currentZeroHours = progress.find(item => item.service_year === person.service_year)?.current_zero_training_hours
+  const incompleteYears = progress.filter(item => item.training_status === '훈련 미이수' && (person.service_year == null || item.service_year <= person.service_year)).map(item => item.service_year)
   const currentProgress = progress.find(item => item.service_year === person.service_year)
   const mobilizationStatus = person.squad_id ? '동원지정' : '동원미지정'
   return <div className="modal-body"><div className="profile-status"><StatusBadge status={person.status} /><span>{person.service_year}년차 · {mobilizationStatus} · {currentProgress?.training_plan.map(item => item.name).join(', ') || '훈련 대상 확인 필요'}</span></div>
-    {risks.length > 0 && <section className="prosecution-warning"><b>!</b><div><strong>고발 조치 검토가 필요한 예비군입니다</strong><p>{risks.map(y => `${y}년차`).join(', ')} 훈련에서 고발 위험 기록이 확인되었습니다.</p></div></section>}
+    {(absenceStreak > 0 || currentZeroHours || isProsecutionTarget) && <section className={`prosecution-warning ${isProsecutionTarget ? '' : 'prosecution-warning--notice'}`}><b>!</b><div><strong>{isProsecutionTarget ? '고발대상자' : currentZeroHours ? '현재 연차 훈련 미이수' : '무단불참 기록'}</strong><p>{isProsecutionTarget ? `${prosecutionReason ?? '훈련 미이수'}로 고발 대상입니다.` : currentZeroHours ? `${person.service_year}년차 훈련시간을 아직 이수하지 않았습니다.` : `연속 무단불참 ${absenceStreak}회입니다. 3회 연속 무단불참 시 고발 대상이 됩니다.`}</p></div></section>}
+    {incompleteYears.length > 0 && <section className="training-incomplete-notice"><strong>훈련 미이수</strong><p>{incompleteYears.map(year => `${year}년차`).join(', ')} 훈련이 완료되지 않았습니다.</p></section>}
     <section className="info-grid"><Info label="현재 복무연차" value={person.service_year != null ? `${person.service_year}년차` : null} /><Info label="계급" value={person.rank} /><Info label="군종" value={person.branch} /><Info label="소속부대" value={person.unit} /><Info label="특기" value={person.specialty} /><Info label="직책" value={person.position} /><Info label="등록구분" value={person.registration_type} /><Info label="분대" value={person.squad_id ? `${person.squad_id}분대` : '-'} /></section>
   </div>
 }
@@ -315,7 +326,7 @@ function ProgressTab({ progress }: { progress: TrainingProgress[] }) {
   return <div className="modal-body"><div className="section-heading"><h3>훈련 이수 현황</h3>{progress.some(x => x.prosecution_risk) && <span className="risk-summary">고발 위험 연차 있음</span>}</div><TrainingTable progress={progress} /></div>
 }
 function TrainingTable({ progress }: { progress: TrainingProgress[] }) {
-  return <div className="table-wrap"><table><thead><tr><th>연차</th><th>동원상태</th><th>훈련종류</th><th>목표시간</th><th>이수시간</th><th>잔여시간</th><th>고발위험</th></tr></thead><tbody>{progress.map(x => <tr className={x.prosecution_risk ? 'risk-row' : ''} key={x.service_year}><td>{x.service_year}년차</td><td>{x.mobilization_status ?? '-'}</td><td>{x.training_plan.map(p => `${p.name} ${p.hours}시간`).join(', ') || '-'}</td><td>{x.target_hours}시간</td><td>{x.completed_hours}시간</td><td>{x.remaining_hours}시간</td><td>{x.prosecution_risk ? <span className="risk-badge">주의</span> : '-'}</td></tr>)}</tbody></table></div>
+  return <div className="table-wrap"><table><thead><tr><th>연차</th><th>동원상태</th><th>훈련종류</th><th>훈련상태</th><th>목표시간</th><th>이수시간</th><th>잔여시간</th><th>고발위험</th></tr></thead><tbody>{progress.map(x => <tr className={x.prosecution_risk ? 'risk-row' : ''} key={x.service_year}><td>{x.service_year}년차</td><td>{x.mobilization_status ?? '-'}</td><td>{x.training_plan.map(p => `${p.name} ${p.hours}시간`).join(', ') || '-'}</td><td>{x.training_status === '훈련 미이수' ? <span className="risk-badge">훈련 미이수</span> : x.training_status ?? '-'}</td><td>{x.target_hours}시간</td><td>{x.completed_hours}시간</td><td>{x.remaining_hours}시간</td><td>{x.prosecution_risk ? <span className="risk-badge">주의</span> : '-'}</td></tr>)}</tbody></table></div>
 }
 function getRequired(progress: TrainingProgress[], year: number) {
   const p = progress.find(x => x.service_year === year)

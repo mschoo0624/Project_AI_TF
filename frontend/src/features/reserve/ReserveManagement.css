@@ -97,6 +97,8 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
 .prosecution-warning { display:grid; grid-template-columns:32px 1fr; gap:12px; margin-bottom:18px; padding:15px; border:1px solid #e1a29d; border-left:5px solid var(--red); border-radius:7px; background:#fff1ef; color:#70221e; }
 .prosecution-warning>b { width:28px; height:28px; display:grid; place-items:center; border-radius:50%; background:var(--red); color:#fff; }
 .prosecution-warning p { margin:5px 0 0; font-size:12px; }
+.training-incomplete-notice { margin-bottom:18px; padding:12px 15px; border-left:5px solid #c47b22; border-radius:7px; background:#fff7e8; color:#7b4d13; }
+.training-incomplete-notice p { margin:5px 0 0; font-size:12px; }
 .risk-summary,.risk-badge { padding:5px 8px; border-radius:4px; background:var(--red-bg); color:var(--red); font-size:11px; font-weight:700; }
 .risk-row { color:var(--red); background:#fffaf9; }
 .records-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; color:var(--muted); font-size:12px; }
