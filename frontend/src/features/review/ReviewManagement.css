@@ -94,7 +94,7 @@
 .review-verify-notice.has-number { border-color: #cfd2d8; background: #c3d3e54c; }
 .review-document-link { display: block; margin-bottom: 13px; padding: 9px; border: 1px solid #cfd3dc; border-radius: 4px; color: #475467; text-align: center; text-decoration: none; }
 .review-document-link:hover { background: #f3f7fa; }
-.review-actions { display: grid; gap: 7px; }
+.review-management .review-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
 .review-actions button { height: 39px; padding: 7px 10px; border: 1px solid; border-radius: 4px; background: #fff; font-size: 14px; font-weight: 600; }
 .review-actions .approve { border-color: #065f46; background: #065f46; color: #fff; }
 .review-actions .reject { border-color: #be123c; color: #be123c; }
