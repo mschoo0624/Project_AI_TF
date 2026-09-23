@@ -318,7 +318,7 @@ type ForecastPayload = {
 }
 
 const forecastYears = [2024, 2025, 2026, 2027, 2028]
-const requiredFormationPopulation = 3.5 // Chart values are in units of 10,000 people.
+const requiredFormationPopulation = 7 // Chart values are in units of 10,000 people.
 
 function HomeForecast() {
   const [forecast, setForecast] = useState<ForecastPayload | null>(null)
