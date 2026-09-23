@@ -91,8 +91,8 @@
 .review-class-chip.deferred { border-color: #166534; color: #166534; }
 .review-class-chip.postponed { border-color: #a16207; color: #92400e; }
 .review-verify-notice { display: grid; gap: 3px; margin: 0 0 13px; padding: 11px; border: 1px solid #fcd34d; border-radius: 4px; background: #fffbeb; font-size: 12px; }
-.review-verify-notice.has-number { border-color: #a7f3d0; background: #ecfdf5; }
-.review-document-link { display: block; margin-bottom: 13px; padding: 9px; border: 1px solid #cfd3dc; border-radius: 4px; color: #075d47; text-align: center; text-decoration: none; }
+.review-verify-notice.has-number { border-color: #cfd2d8; background: #c3d3e54c; }
+.review-document-link { display: block; margin-bottom: 13px; padding: 9px; border: 1px solid #cfd3dc; border-radius: 4px; color: #475467; text-align: center; text-decoration: none; }
 .review-document-link:hover { background: #f3f7fa; }
 .review-actions { display: grid; gap: 7px; }
 .review-actions button { height: 39px; padding: 7px 10px; border: 1px solid; border-radius: 4px; background: #fff; font-size: 14px; font-weight: 600; }
@@ -100,7 +100,7 @@
 .review-actions .reject { border-color: #be123c; color: #be123c; }
 .review-actions .verify { border-color: #b45309; color: #92400e; }
 .review-reason-picker { display: grid; gap: 7px; margin-top: 12px; padding: 10px; border: 1px solid #dce2e8; border-radius: 4px; background: #f8fafc; }
-.review-reason-picker p { margin: 0 0 3px; color: #617182; font-size: 12px; }
+.review-reason-picker p { margin: 0 0 3px; color: #2f2f30; font-size: 12px; }
 .review-reason-picker button { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px; padding: 7px; border: 1px solid #cdd6df; border-radius: 4px; background: #fff; color: #202d36; font-size: 12px; text-align: left; }
 .review-reason-picker button small { color: #637080; }
 .review-reason-picker button em { flex-basis: 100%; color: #637080; font-style: normal; font-size: 11px; }
