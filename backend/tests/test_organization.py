@@ -12,7 +12,7 @@ from user.app.models.organization import OrganizationNode
 from user.app.models.person import Person
 from user.app.models.squad import Squad
 from user.app.services.organization import (
-    assign_vacancies, create_unit, delete_unit, expand_formation, hierarchy, move_unit,
+    assign_vacancies, create_unit, delete_unit, expand_formation, hierarchy, move_unit, release_members, rename_unit,
 )
 
 
@@ -27,6 +27,67 @@ def add_person(db: Session, number: str, squad_id: int | None = None, branch: st
     db.add(Person(military_number=number, name=number, branch=branch, rank="병장",
                   specialty="3111101", position="행정병", service_year=1,
                   status="active", squad_id=squad_id))
+
+
+@pytest.mark.parametrize("scope", ["single", "squad", "platoon"])
+def test_release_members_respects_scope_and_updates_records(scope: str) -> None:
+    from datetime import date
+
+    with make_session() as db:
+        root = OrganizationNode(kind="root", name="root")
+        db.add(root)
+        db.commit()
+        platoon = create_unit(db, root.id, "platoon", "platoon")
+        first = create_unit(db, platoon.id, "squad", "first")
+        second = create_unit(db, platoon.id, "squad", "second")
+        outside = create_unit(db, root.id, "squad", "outside")
+        memberships = {"one": first.squad_id, "two": first.squad_id,
+                       "three": second.squad_id, "outside": outside.squad_id}
+        for number, squad_id in memberships.items():
+            add_person(db, number, squad_id)
+            db.add(Assignment(person_id=number, squad_id=squad_id,
+                              assigned_date=date.today(), status="assigned"))
+        db.commit()
+        target = platoon.id if scope == "platoon" else first.id
+        person_id = "one" if scope == "single" else None
+        released = {"one"} if scope == "single" else {"one", "two"}
+        if scope == "platoon":
+            released.add("three")
+        assert release_members(db, target, person_id) == {"released_count": len(released)}
+        for number, squad_id in memberships.items():
+            assert db.get(Person, number).squad_id == (None if number in released else squad_id)
+        assert {item.person_id for item in db.scalars(select(Assignment))} == set(memberships) - released
+        tree = hierarchy(db)
+        assert next(node for node in tree if node["id"] == root.id)["person_count"] == 4 - len(released)
+        with pytest.raises(ValueError):
+            release_members(db, first.id, "outside")
+        with pytest.raises(ValueError):
+            release_members(db, -1)
+        assert db.get(Person, "outside").squad_id == outside.squad_id
+        if person_id is None:
+            assert release_members(db, target) == {"released_count": 0}
+
+
+def test_rename_unit_syncs_squad_and_preserves_membership() -> None:
+    with make_session() as db:
+        root = OrganizationNode(kind="root", name="root")
+        db.add(root)
+        db.commit()
+        squad = create_unit(db, root.id, "squad", "old")
+        add_person(db, "member", squad.squad_id)
+        db.commit()
+        rename_unit(db, squad.id, "  new name  ")
+        assert db.get(OrganizationNode, squad.id).name == "new name"
+        assert db.get(Squad, squad.squad_id).name == "new name"
+        assert db.get(Person, "member").squad_id == squad.squad_id
+        rename_unit(db, root.id, "new root")
+        assert db.get(OrganizationNode, root.id).name == "new root"
+        for invalid in [" ", "x" * 101]:
+            with pytest.raises(ValueError):
+                rename_unit(db, squad.id, invalid)
+        with pytest.raises(ValueError):
+            rename_unit(db, -1, "missing")
+        assert db.get(Squad, squad.squad_id).name == "new name"
 
 
 def test_hierarchy_create_move_and_guard_delete() -> None:

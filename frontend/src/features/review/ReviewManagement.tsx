@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  acceptDocument, fetchBootstrap, rejectDocument, verifyDocument,
+  acceptDocument, fetchBootstrap, rejectDocument, verifyDocument, reviewReason,
   type Bootstrap, type Person, type QueueItem,
 } from './api'
 import './ReviewManagement.css'
@@ -21,13 +21,6 @@ function applicationDate(item: QueueItem): string {
   // The current API exports `issued`, not the date of an application.
   const value = dated.application_date ?? dated.applied_at ?? dated.submitted_at
   return value ? value.slice(0, 10).replace(/-/g, '.') : '—'
-}
-
-function reviewReason(item: QueueItem): string {
-  const classification = item.if_accepted_classification || item.current_classification || ''
-  if (classification.includes('연기')) return '연기자'
-  if (classification.includes('보류') || classification.includes('후순위')) return '보류자'
-  return item.type
 }
 
 function ClassChip({ label }: { label: string }) {

@@ -41,6 +41,8 @@ from user.app.schemas.education import (
 from user.app.services.training import (
 	all_training_progress,
     COMPLETED,
+    mobilization_status_for_year,
+    training_record_required_hours,
 )
 
 router = APIRouter(prefix="/reservists", tags=["training"])
@@ -91,6 +93,11 @@ def get_training_hours(
 				),
 				"attendance_status": record.attendance_status,
 				"training_hours": record.training_hours,
+				"required_hours": training_record_required_hours(
+					record.training_type, record.education_year,
+					mobilization_status_for_year(db, person, record.education_year),
+					person.branch, person.rank,
+				),
 				"notes": record.notes,
 			}
 			for record in db.scalars(

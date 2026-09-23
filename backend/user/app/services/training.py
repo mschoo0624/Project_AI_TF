@@ -85,6 +85,25 @@ def training_plan(
     return []
 
 
+def training_record_required_hours(
+    training_type: str, service_year: int, mobilization_status: str | None,
+    branch: str | None, rank: str | None,
+) -> int | None:
+    """Resolve record requirements from the same plans used for annual targets."""
+    name = training_type.strip()
+    plan = training_plan(service_year, mobilization_status, branch, rank)
+    if not name or name == "훈련":
+        return int(plan[0]["hours"]) if len(plan) == 1 else None
+    # A historical record can differ from the person's current annual plan.
+    catalog = [
+        *training_plan(1, "동원지정", branch, "병장"),
+        *training_plan(1, "동원미지정", branch, "병장"),
+        *training_plan(1, "학생예비군", branch, "병장"),
+        *training_plan(5, "동원지정", branch, "병장"),
+    ]
+    return next((int(item["hours"]) for item in [*plan, *catalog] if item["name"] == name), None)
+
+
 def completed_training_hours(db: Session, person_id: str, service_year: int) -> int:
     """Sum all recorded training hours for one person and service year."""
     return int(

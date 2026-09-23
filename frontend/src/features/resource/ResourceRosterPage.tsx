@@ -31,9 +31,44 @@ type TrainingRecord = {
   training_round: number
   attendance_status: string
   training_hours: number
+  required_hours: number | null
+}
+
+type TrainingProgress = {
+  service_year: number
+  training_plan: { name: string; hours: number }[]
+}
+
+function trainingHistory(records: TrainingRecord[], progress: TrainingProgress[]) {
+  const rows = new Map<string, { name: string; serviceYear: number; completed: number; required: number | null }>()
+  for (const record of records) {
+    const plan = progress.find(item => item.service_year === record.education_year)?.training_plan ?? []
+    const rawName = record.training_type.trim()
+    const generic = !rawName || rawName === '훈련'
+    const component = plan.find(item => item.name === rawName)
+      ?? (generic && plan.length === 1 ? plan[0] : undefined)
+    const name = component?.name ?? (generic ? '훈련 종류 미상' : rawName)
+    const key = `${record.education_year}:${name}`
+    const row = rows.get(key) ?? { name, serviceYear: record.education_year, completed: 0, required: record.required_hours ?? component?.hours ?? null }
+    if (record.attendance_status === 'completed' || record.attendance_status === '이수') {
+      row.completed += record.training_hours
+    }
+    rows.set(key, row)
+  }
+  return [...rows.values()].sort((a, b) => b.serviceYear - a.serviceYear || a.name.localeCompare(b.name, 'ko'))
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
+type SortKey = 'checked' | 'number' | 'name' | 'military_number' | 'unit' | 'squad_id' | 'status' | 'position' | 'service_year'
+const rosterColumns: { key: SortKey; label: string }[] = [
+  { key: 'checked', label: '선택' }, { key: 'number', label: 'No.' },
+  { key: 'name', label: '이름' }, { key: 'military_number', label: '군번' },
+  { key: 'unit', label: '소속' }, { key: 'squad_id', label: '편성 부대' },
+  { key: 'status', label: '상태' }, { key: 'position', label: '직책' },
+  { key: 'service_year', label: '연차' },
+]
+const rosterCollator = new Intl.Collator('ko', { numeric: true })
+const statusLabel = (status: string) => status === 'active' ? '복무 중' : status === 'on_leave' ? '휴가 중' : status
 
 async function responseError(response: Response, fallback: string) {
   try {
@@ -60,9 +95,11 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
     query: '', unit: '', status: '', position: '', year: '',
   })
   const [page, setPage] = useState(1)
+  const [sort, setSort] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'squad_id', direction: 'ascending' })
   const [checked, setChecked] = useState<Set<string>>(() => new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [records, setRecords] = useState<TrainingRecord[]>([])
+  const [trainingProgress, setTrainingProgress] = useState<TrainingProgress[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
 
@@ -109,8 +146,11 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
         const response = await fetch(`${API_BASE}/reservists/${encodeURIComponent(selectedId)}/training-hours`,
           { signal: controller.signal })
         if (!response.ok) throw new Error(await responseError(response, '훈련 기록을 불러오지 못했습니다.'))
-        const result = await response.json() as { records: TrainingRecord[] }
-        if (!controller.signal.aborted) setRecords(result.records ?? [])
+        const result = await response.json() as { records: TrainingRecord[]; progress: TrainingProgress[] }
+        if (!controller.signal.aborted) {
+          setRecords(result.records ?? [])
+          setTrainingProgress(result.progress ?? [])
+        }
       } catch (cause) {
         if (!controller.signal.aborted) setDetailError(cause instanceof Error ? cause.message : '훈련 기록을 불러오지 못했습니다.')
       } finally {
@@ -135,14 +175,42 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
       && (!appliedFilters.position || person.position === appliedFilters.position)
       && (!appliedFilters.year || String(person.service_year) === appliedFilters.year)
   }), [people, appliedFilters])
+  const personNumbers = useMemo(() => new Map(people.map((person, index) => [person.military_number, index + 1])), [people])
+  const sorted = useMemo(() => {
+    const value = (person: ResourcePerson): string | number | null => {
+      switch (sort.key) {
+        case 'checked': return Number(checked.has(person.military_number))
+        case 'number': return personNumbers.get(person.military_number) ?? 0
+        case 'squad_id': return person.squad_id === null ? null : (squadNames.get(person.squad_id) ?? `${person.squad_id}번 분대`)
+        case 'status': return statusLabel(person.status)
+        default: return person[sort.key]
+      }
+    }
+    return [...filtered].sort((a, b) => {
+      const left = value(a)
+      const right = value(b)
+      // 미편성 인원은 편성 부대 내림차순에서 맨 앞에 표시합니다.
+      if (left === null || right === null) {
+        const comparison = left === right ? 0 : left === null ? 1 : -1
+        return sort.key === 'squad_id' && sort.direction === 'descending' ? -comparison : comparison
+      }
+      const comparison = typeof left === 'number' && typeof right === 'number'
+        ? left - right : rosterCollator.compare(String(left), String(right))
+      return sort.direction === 'ascending' ? comparison : -comparison
+    })
+  }, [filtered, sort, checked, personNumbers, squadNames])
+  const changeSort = (key: SortKey) => {
+    setSort(previous => ({ key, direction: previous.key === key && previous.direction === 'ascending' ? 'descending' : 'ascending' }))
+    setPage(1)
+  }
   const pageSize = 20
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
   const actualPage = Math.min(page, pageCount)
-  const pageRows = filtered.slice((actualPage - 1) * pageSize, actualPage * pageSize)
+  const pageRows = sorted.slice((actualPage - 1) * pageSize, actualPage * pageSize)
   const selected = people.find(person => person.military_number === selectedId) ?? null
   const checkedOnPage = pageRows.length > 0 && pageRows.every(person => checked.has(person.military_number))
   const squadLabel = (person: ResourcePerson) => person.squad_id === null
-    ? '소속 분대 없음' : (squadNames.get(person.squad_id) ?? `${person.squad_id}번 분대`)
+    ? '-' : (squadNames.get(person.squad_id) ?? `${person.squad_id}번 분대`)
 
   const openPerson = (id: string) => { setRecords([]); setDetailError(''); setDetailLoading(true); setSelectedId(id) }
   const closePerson = () => { setSelectedId(null); setRecords([]); setDetailError('') }
@@ -215,9 +283,15 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
         {loading ? <p className="rm-list-message">인원 목록을 불러오는 중입니다.</p>
           : error ? <p className="rm-list-message rm-error">{error}</p>
           : <div className="rm-list-scroll"><table className="rm-person-table">
-            <thead><tr><th scope="col">선택</th><th scope="col">No.</th><th scope="col">이름</th><th scope="col">군번</th>
-              <th scope="col">소속 / 편성 분대</th><th scope="col">상태</th><th scope="col">직책</th><th scope="col">연차</th><th scope="col">상세</th></tr></thead>
-            <tbody>{pageRows.map((person, index) => <tr key={person.military_number}
+            <thead><tr>{rosterColumns.map(column => <th key={column.key} scope="col"
+              aria-sort={sort.key === column.key ? sort.direction : 'none'}>
+              <button type="button" className="rm-sort-button" onClick={() => changeSort(column.key)}
+                aria-label={`${column.label}, ${sort.key === column.key && sort.direction === 'ascending' ? '내림차순' : '오름차순'} 정렬`}>
+                <span>{column.label}</span>
+                <span className="rm-sort-indicator" aria-hidden="true">{sort.key === column.key ? (sort.direction === 'ascending' ? '▼' : '▲') : ''}</span>
+              </button>
+            </th>)}</tr></thead>
+            <tbody>{pageRows.map(person => <tr key={person.military_number}
               className={selectedId === person.military_number ? 'is-selected' : ''}
               tabIndex={0} aria-selected={selectedId === person.military_number}
               onClick={() => openPerson(person.military_number)}
@@ -231,14 +305,14 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
               <td><input type="checkbox" aria-label={`${person.name} 선택`} checked={checked.has(person.military_number)}
                 onClick={event => event.stopPropagation()}
                 onChange={event => toggleChecked(person.military_number, event.target.checked)} /></td>
-              <td>{(actualPage - 1) * pageSize + index + 1}</td><td className="rm-table-name">{person.name}</td>
+              <td>{personNumbers.get(person.military_number)}</td><td className="rm-table-name">{person.name}</td>
               <td className="rm-num">{person.military_number}</td>
-              <td><span className="rm-unit">{person.unit ?? '소속 정보 없음'}</span><small>{squadLabel(person)}</small></td>
+              <td><span className="rm-unit">{person.unit ?? '소속 정보 없음'}</span></td>
+              <td>{squadLabel(person)}</td>
               <td><span className={`rm-status ${person.status === 'active' ? 'active' : 'other'}`}>
                 {person.status === 'active' ? '복무 중' : person.status === 'on_leave' ? '휴가 중' : person.status}
               </span></td>
               <td>{person.position ?? '—'}</td><td>{person.service_year === null ? '—' : `${person.service_year}년차`}</td>
-              <td><button type="button" className="rm-detail-button" onClick={event => { event.stopPropagation(); openPerson(person.military_number) }}>보기</button></td>
             </tr>)}</tbody>
           </table>{filtered.length === 0 && <p className="rm-list-message">검색 결과가 없습니다.</p>}</div>}
         <footer className="rm-person-footer"><span>총 {filtered.length.toLocaleString('ko-KR')}명 중 {filtered.length ? (actualPage - 1) * pageSize + 1 : 0}–{Math.min(actualPage * pageSize, filtered.length)}명 표시</span>
@@ -277,10 +351,12 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
         {detailLoading ? <p className="rm-detail-note">훈련 이력을 불러오는 중입니다.</p>
           : detailError ? <p className="rm-detail-note rm-error">{detailError}</p>
           : records.length === 0 ? <p className="rm-detail-note">등록된 훈련 기록이 없습니다.</p>
-          : <div className="rm-training-records">{[...records]
-              .sort((a, b) => (b.training_year ?? 0) - (a.training_year ?? 0) || b.id - a.id)
-              .slice(0, 8).map(record => <div key={record.id}>
-                <span>{record.training_year ?? '연도 미상'} · {record.training_type}</span><b>{record.attendance_status}</b>
+          : <div className="rm-training-records">{trainingHistory(records, trainingProgress)
+              .map(record => <div key={`${record.serviceYear}:${record.name}`}>
+                <span>{record.serviceYear}년차 · {record.name}</span>
+                <b aria-label={`이수 ${record.completed}시간, 필요 ${record.required === null ? '확인 필요' : `${record.required}시간`}`}>
+                  {record.completed}/{record.required ?? '—'}시간
+                </b>
               </div>)}</div>}
         <p className="rm-detail-note">전화번호·주소·이메일은 현재 인원 API에서 제공하지 않습니다.</p>
       </div>

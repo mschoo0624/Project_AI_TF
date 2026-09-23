@@ -4,7 +4,7 @@
   --review-blue: #087af4;
   --review-line: #cfd2d8;
   min-width: 0;
-  min-height: calc(100vh - var(--topbar-height, 48px) - var(--workspace-tabs-height, 31px));
+  min-height: calc(var(--screen-height) - var(--topbar-height, 48px) - var(--workspace-tabs-height, 31px));
   background: #fafbff;
   color: #181b20;
   font-family: 'IBM Plex Sans KR', Arial, sans-serif;
@@ -37,7 +37,7 @@
 .review-inbox-grid {
   display: grid; grid-template-columns: 350px minmax(0, 1fr) 376px;
   gap: 26px; min-width: 0;
-  height: calc(100vh - var(--topbar-height, 48px) - var(--workspace-tabs-height, 31px) - 45px - 23px);
+  height: calc(var(--screen-height) - var(--topbar-height, 48px) - var(--workspace-tabs-height, 31px) - 45px - 23px);
   min-height: 530px;
   align-items: stretch;
 }
@@ -119,7 +119,7 @@
 .review-management .review-roster-table tbody tr { cursor: pointer; }
 .review-management .review-roster-table tbody tr:hover { background: #edf6ff; }
 .review-modal-backdrop { position: fixed; z-index: 60; inset: 0; display: grid; place-items: center; padding: 24px; background: #0f172a73; }
-.review-person-modal { width: min(680px, 100%); max-height: 88vh; overflow-y: auto; border: 1px solid #cbd1d8; border-radius: 8px; background: #fff; box-shadow: 0 15px 42px #0003; }
+.review-person-modal { width: min(680px, 100%); max-height: 844.8px; overflow-y: auto; border: 1px solid #cbd1d8; border-radius: 8px; background: #fff; box-shadow: 0 15px 42px #0003; }
 .review-person-modal-header { display: flex; align-items: start; justify-content: space-between; gap: 15px; padding: 16px 23px; border-bottom: 1px solid #e4e8ee; }
 .review-person-modal-header h2 { margin: 2px 0; font-size: 23px; }
 .review-modal-eyebrow { margin: 0; color: #166534; font-size: 11px; font-weight: 700; }
@@ -148,5 +148,3 @@
 .review-empty-state { margin: 13px; color: #697581; font-size: 13px; }
 .review-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 /* Keep reference widths; on narrow workspaces the three-column layout scrolls instead of overlapping the sidebar. */
-@media (max-width: 1280px) { .review-main-content { overflow-x: auto; } .review-inbox-grid { min-width: 1090px; } }
-@media (max-width: 700px) { .review-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

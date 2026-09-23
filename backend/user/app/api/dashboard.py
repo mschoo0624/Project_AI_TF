@@ -10,12 +10,15 @@
 분대별 인원 수
 """
 from fastapi import APIRouter, Depends
+from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from prediction.cache import get_prediction_cache
 from user.app.database import get_db
 from user.app.models.person import Person
 from user.app.models.squad import Squad
+from user.app.services.dashboard import dashboard_counts, daily_counts, composition_counts
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -27,7 +30,6 @@ def grouped_counts(db: Session, field: object) -> dict[str, int]:
 
 @router.get("/summary")
 def dashboard_summary(db: Session = Depends(get_db)) -> dict[str, object]:
-	total_people = db.scalar(select(func.count()).select_from(Person)) or 0
 	active_people = db.scalar(
 		select(func.count()).select_from(Person).where(Person.status == "active")
 	) or 0
@@ -42,9 +44,21 @@ def dashboard_summary(db: Session = Depends(get_db)) -> dict[str, object]:
 	)
 
 	return {
-		"total_people": total_people,
+		**dashboard_counts(db),
+		"composition": composition_counts(db),
 		"active_people": active_people,
 		"by_branch": grouped_counts(db, Person.branch),
 		"by_rank": grouped_counts(db, Person.rank),
 		"by_squad": squad_counts,
 	}
+
+
+@router.get("/forecast")
+def dashboard_forecast() -> dict[str, object]:
+	"""Return the startup-generated population forecast cache."""
+	return get_prediction_cache()
+
+
+@router.get("/daily")
+def dashboard_daily(day: date | None = None, db: Session = Depends(get_db)) -> dict[str, object]:
+    return daily_counts(db, day or datetime.now(timezone(timedelta(hours=9))).date())
