@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from prediction.cache import get_prediction_cache
+from prediction.cache import get_attendance_cache, get_prediction_cache
 from user.app.database import get_db
 from user.app.models.person import Person
 from user.app.models.squad import Squad
@@ -57,6 +57,12 @@ def dashboard_summary(db: Session = Depends(get_db)) -> dict[str, object]:
 def dashboard_forecast() -> dict[str, object]:
 	"""Return the startup-generated population forecast cache."""
 	return get_prediction_cache()
+
+
+@router.get("/attendance-forecast")
+def dashboard_attendance_forecast() -> dict[str, object]:
+	"""Return the startup-generated attendance-rate forecast cache."""
+	return get_attendance_cache()
 
 
 @router.get("/daily")

@@ -112,7 +112,7 @@ button { cursor:pointer; }
 
 
 /* Live reserve-force population forecast */
-.home-forecast { padding:14px 16px 12px; border:1px solid #e1e7ef; border-radius:10px; }
+.home-forecast { padding:14px 16px 12px; border:1px solid #e1e7ef; border-radius:10px; overflow-y:auto; overflow-x:hidden; }
 .home-forecast-status { display:flex; min-height:390px; flex-direction:column; align-items:center; justify-content:center; gap:7px; color:#4d5d70; }
 .home-forecast-status strong { font-size:15px; }
 .home-forecast-status span { font-size:12px; color:#7b8796; }
@@ -138,3 +138,17 @@ button { cursor:pointer; }
 .forecast-required-label { fill:#c52c2c; font-size:12px; font-weight:700; paint-order:stroke; stroke:#fff; stroke-width:4; stroke-linejoin:round; }
 .forecast-point { fill:#397fba; stroke:#fff; stroke-width:2; }
 .forecast-value { fill:#245782; font-size:13px; font-weight:700; paint-order:stroke; stroke:#fff; stroke-width:4; stroke-linejoin:round; }
+.forecast-view-toggle { display:flex; gap:6px; margin-bottom:12px; }
+.attendance-chart-wrap { margin-top:10px; }
+.forecast-view-tab { height:30px; padding:0 14px; border:1px solid #d6dde7; border-radius:8px; background:#f7f9fc; color:#5c6b80; font-size:12.5px; font-weight:600; }
+.forecast-view-tab:hover { background:#eef3fa; }
+.forecast-view-tab.is-active { background:#137ae8; border-color:#137ae8; color:#fff; }
+.forecast-axis-sub { fill:#9aa4b2; font-size:10px; }
+.forecast-rate-label { fill:#8b95a5; font-size:11px; font-variant-numeric:tabular-nums; }
+.forecast-note { margin:10px 2px 0; color:#7b8796; font-size:11px; line-height:1.5; }
+.attendance-details { margin-top:8px; }
+.attendance-details summary { cursor:pointer; font-size:12px; font-weight:600; color:#4d5d70; margin-bottom:6px; }
+.attendance-table { width:100%; border-collapse:collapse; font-size:11.5px; }
+.attendance-table th, .attendance-table td { padding:5px 6px; text-align:right; border-bottom:1px solid #e9edf3; font-variant-numeric:tabular-nums; }
+.attendance-table th:first-child, .attendance-table td:first-child { text-align:left; }
+.attendance-table th { color:#8b95a5; font-weight:600; }
