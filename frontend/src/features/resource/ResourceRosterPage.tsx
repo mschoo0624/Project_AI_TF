@@ -401,16 +401,13 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
           <h3>{selected.name}</h3><p>군번: {selected.military_number}</p>
           <span className="rm-detail-tag">{squadLabel(selected)}</span>
         </div></div>
-        <dl className="rm-detail-fields">
-          {[
-            ['성명', selected.name], ['군번', selected.military_number], ['소속 부대', selected.unit ?? '미등록'],
-            ['편성 분대', squadLabel(selected)], ['군종', selected.branch], ['계급', selected.rank ?? '미등록'],
-            ['상태', selected.status === 'active' ? '복무 중' : selected.status === 'on_leave' ? '휴가 중' : selected.status],
-            ['동원 상태', selected.mobilization_status ?? '미등록'], ['직책', selected.position ?? '미등록'],
-            ['주특기', selected.specialty ?? '미등록'],
-            ['연차', selected.service_year === null ? '미등록' : `${selected.service_year}년차`],
-          ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
-        </dl>
+        <PersonProfileFields key={selected.military_number} person={selected} squadName={squadLabel(selected)} onSaved={updated => {
+          const oldNumber = selected.military_number
+          setPeople(current => current.map(person => person.military_number === oldNumber ? { ...person, ...updated } : person))
+          setSelectedId(current => current === oldNumber ? updated.military_number : current)
+          setChecked(current => { const next = new Set(current); if (next.delete(oldNumber)) next.add(updated.military_number); return next })
+          onDataChanged()
+        }} />
         <nav className="rm-detail-tabs" aria-label="훈련 상세 메뉴">
           <button type="button" className={detailTab === 'progress' ? 'is-active' : ''} onClick={() => setDetailTab('progress')}>훈련 현황</button>
           <button type="button" className={detailTab === 'records' ? 'is-active' : ''} onClick={() => setDetailTab('records')}>훈련 기록 ({records.length})</button>
