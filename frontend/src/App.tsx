@@ -3,6 +3,8 @@ import type { FormEvent } from 'react'
 import './App.css'
 import { forecastThreshold } from './forecastThreshold'
 import ResourceManagement from './features/resource/ResourceManagement'
+import { resourceTabs } from './features/resource/resourceTabs'
+import type { ResourceTabId } from './features/resource/resourceTabs'
 import WorkLogManagement from './features/worklog/WorkLogManagement'
 import { countReviewDocuments, fetchBootstrap } from './features/review/api'
 
@@ -120,7 +122,8 @@ const initialSchedules: Schedule[] = [
 function App() {
   const [homeRevision, setHomeRevision] = useState(0)
   const [activePage, setActivePage] = useState<PageId>('home')
-  const [resourceLanding, setResourceLanding] = useState<'roster' | 'organization' | 'hold' | 'prosecution' | 'travel'>('organization')
+  const [resourceLanding, setResourceLanding] = useState<ResourceTabId>('organization')
+  const [expandedMenus, setExpandedMenus] = useState<Set<FeaturePageId>>(() => new Set())
   const navigate = (destination: HomeDestination) => {
     if (destination === 'home') setHomeRevision(value => value + 1)
     if (destination === 'resource:hold' || destination === 'resource:prosecution' || destination === 'resource:travel') {
@@ -144,17 +147,30 @@ function App() {
         <button className={`user-icon ${activePage === 'home' ? 'active' : ''}`} type="button" onClick={() => navigate('home')} aria-label="홈으로 이동" title="홈으로 이동">
           <span className="user-icon-figure"><Icon name="person" size={28} /></span>
         </button>
-        {featurePages.map(page =>
-          <button key={page.id} type="button" className={`side-button ${activePage === page.id ? 'active' : ''}`} onClick={() => navigate(page.id)}>
-            {page.label}
-          </button>
-        )}
+        {featurePages.map(page => {
+          const hasSubmenus = page.id === 'resource' || page.id === 'worklog'
+          const expanded = expandedMenus.has(page.id)
+          return <div key={page.id} className="side-menu-group">
+            <div className={`side-menu-row ${activePage === page.id ? 'active' : ''}`}>
+              <button type="button" className="side-button" onClick={() => navigate(page.id)}>{page.label}</button>
+              <button type="button" className="side-menu-toggle" aria-label={`${page.label} 하위 메뉴 ${expanded ? '접기' : '펼치기'}`}
+                aria-expanded={expanded} aria-controls={hasSubmenus ? `submenu-${page.id}` : undefined}
+                onClick={() => setExpandedMenus(current => { const next = new Set(current); if (next.has(page.id)) next.delete(page.id); else next.add(page.id); return next })}>{expanded ? '▲' : '▼'}</button>
+            </div>
+            {hasSubmenus && <div id={`submenu-${page.id}`} className="side-submenu" hidden={!expanded}>
+              {page.id === 'resource' ? resourceTabs.map(tab => <button key={tab.id} type="button"
+                aria-current={activePage === 'resource' && resourceLanding === tab.id ? 'page' : undefined}
+                onClick={() => { setResourceLanding(tab.id); setActivePage('resource') }}>{tab.label}</button>)
+                : <button type="button" aria-current={activePage === 'worklog' ? 'page' : undefined} onClick={() => navigate('worklog')}>업무일지 목록</button>}
+            </div>}
+          </div>
+        })}
       </aside>
       <main className="workspace">
         <div className="workspace-content">
           {activePage === 'home'
             ? <Home key={homeRevision} onNavigate={navigate} />
-            : activePage === 'resource' ? <ResourceManagement initialTab={resourceLanding} key={`resource-${resourceLanding}`} />
+            : activePage === 'resource' ? <ResourceManagement selectedTab={resourceLanding} onTabChange={setResourceLanding} />
             : ActiveComponent ? <ActiveComponent key={activePage} /> : null}
         </div>
       </main>

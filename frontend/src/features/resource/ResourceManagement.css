@@ -555,7 +555,7 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
 .rm-org-tree-item { display:flex; align-items:center; gap:calc(var(--rm-unit) * 4); min-height:calc(var(--rm-unit) * 29); padding:0 calc(var(--rm-unit) * 10) 0 calc(var(--rm-unit) * 12); border-left:3px solid transparent; }
 .rm-org-tree-item.is-active { border-left-color:#3474ef; background:#eaf3ff; color:#245ede; }
 .rm-org-tree-item:hover:not(.is-active) { background:#f4f7fb; }
-.rm-org-toggle,.rm-org-toggle-placeholder { width:13px; height:calc(var(--rm-unit) * 24); flex:none; padding:0; border:0; background:none; color:#536a85; font-size:19px; line-height:calc(var(--rm-unit) * 20); }
+.rm-org-toggle,.rm-org-toggle-placeholder { width:13px; height:calc(var(--rm-unit) * 24); flex:none; padding:0; border:0; background:none; color:#536a85; font-size:10px; line-height:calc(var(--rm-unit) * 20); }
 .rm-org-tree-select { display:flex; align-items:center; gap:calc(var(--rm-unit) * 5); flex:1; min-width:0; border:0; padding:calc(var(--rm-unit) * 3) 0; background:none; color:inherit; font-size:12px; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rm-org-tree-item.is-active .rm-org-tree-select { font-weight:700; }
 .rm-org-folder { color:#667b96; font-size:15px; }
