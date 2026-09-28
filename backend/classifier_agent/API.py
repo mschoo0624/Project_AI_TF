@@ -58,10 +58,14 @@ def upload_submission(file: UploadFile = File(...), military_number: str | None 
     except RuntimeError as exc:
         fields = {"error": str(exc), "source_file": file.filename, "anomaly_flags": []}
 
-    try:
-        category = reason_classifier.predict(doc_text)
-    except FileNotFoundError:
-        category = None
+    parsed_reason = reason_classifier.parse_reason_confirmation(doc_text)
+    reason_text = parsed_reason[1] if parsed_reason else reason_classifier.parse_diagnosis(doc_text)
+    category = None
+    if reason_text:
+        try:
+            category = reason_classifier.predict(reason_text)
+        except FileNotFoundError:
+            pass
 
     return submissions.create(
         filename=file.filename,
