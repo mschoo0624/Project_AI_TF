@@ -52,7 +52,7 @@ export default function ResourceManagement(
     </nav>
 
     <div className="rm-tab-pane" hidden={activeTab !== 'roster'}>
-      <ResourceRosterPage revision={revision} />
+      <ResourceRosterPage revision={revision} onDataChanged={refreshResourceData} />
     </div>
     <div className="rm-tab-pane" hidden={activeTab !== 'organization'}>
       <OrganizationPage revision={revision} onDataChanged={refreshResourceData} />

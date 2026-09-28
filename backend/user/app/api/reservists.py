@@ -21,7 +21,8 @@ from user.app.models.annual_status import AnnualStatus
 from user.app.models.assignment import Assignment
 from user.app.models.education import Education
 from user.app.models.person import Person
-from user.app.schemas.person import PersonCreate, PersonRead, PersonUpdate
+from user.app.schemas.person import PersonCreate, PersonRead, PersonUpdate, PersonProfileUpdate
+from user.app.services.person_profile import ProfileError, profile_options, save_profile
 from user.app.services.assignment import grouped_candidates
 from user.app.services.person import create_person
 from user.app.services.training import all_training_progress, apply_mobilization_status_change
@@ -108,6 +109,30 @@ def list_reservists(
 	if mobilization_status:
 		query = query.where(Person.mobilization_status == mobilization_status)
 	return list(db.scalars(query.order_by(Person.military_number)).all())
+
+@persons_router.get("/profile-options")
+def get_profile_options():
+	return profile_options()
+
+
+@persons_router.patch("/{military_number}/profile", response_model=PersonRead)
+def update_profile(military_number: str, payload: PersonProfileUpdate, db: Session = Depends(get_db)):
+	person = _profile_person(db, military_number)
+	try:
+		return save_profile(db, person, payload.model_dump())
+	except ProfileError as error:
+		raise HTTPException(status_code=422, detail={"fields": error.fields}) from error
+	except IntegrityError as error:
+		db.rollback()
+		raise HTTPException(status_code=409, detail="군번 중복 또는 연결 정보 충돌로 저장하지 못했습니다.") from error
+
+
+def _profile_person(db: Session, military_number: str):
+	person = db.get(Person, military_number)
+	if person is None:
+		raise HTTPException(status_code=404, detail="대상자를 찾을 수 없습니다. 목록을 새로고침하세요.")
+	return person
+
 
 @router.get("/{military_number}", response_model=PersonRead)
 @persons_router.get("/{military_number}", response_model=PersonRead)

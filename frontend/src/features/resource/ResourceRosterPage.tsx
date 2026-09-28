@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import PersonProfileFields from './PersonProfileFields'
 
 type Squad = {
   id: number
@@ -80,7 +81,7 @@ async function responseError(response: Response, fallback: string) {
   }
 }
 
-export default function ResourceRosterPage({ revision }: { revision: number }) {
+export default function ResourceRosterPage({ revision, onDataChanged }: { revision: number; onDataChanged: () => void }) {
   const [squads, setSquads] = useState<Squad[]>([])
   const [people, setPeople] = useState<ResourcePerson[]>([])
   const [loading, setLoading] = useState(true)
@@ -340,16 +341,13 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
           <h3>{selected.name}</h3><p>군번: {selected.military_number}</p>
           <span className="rm-detail-tag">{squadLabel(selected)}</span>
         </div></div>
-        <dl className="rm-detail-fields">
-          {[
-            ['성명', selected.name], ['군번', selected.military_number], ['소속 부대', selected.unit ?? '미등록'],
-            ['편성 분대', squadLabel(selected)], ['군별', selected.branch], ['계급', selected.rank ?? '미등록'],
-            ['상태', selected.status === 'active' ? '복무 중' : selected.status === 'on_leave' ? '휴가 중' : selected.status],
-            ['동원 상태', selected.mobilization_status ?? '미등록'], ['직책', selected.position ?? '미등록'],
-            ['주특기', selected.specialty ?? '미등록'],
-            ['연차', selected.service_year === null ? '미등록' : `${selected.service_year}년차`],
-          ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
-        </dl>
+        <PersonProfileFields key={selected.military_number} person={selected} squadName={squadLabel(selected)} onSaved={updated => {
+          const oldNumber = selected.military_number
+          setPeople(current => current.map(person => person.military_number === oldNumber ? { ...person, ...updated } : person))
+          setSelectedId(current => current === oldNumber ? updated.military_number : current)
+          setChecked(current => { const next = new Set(current); if (next.delete(oldNumber)) next.add(updated.military_number); return next })
+          onDataChanged()
+        }} />
         <h4>훈련 이력</h4>
         {detailLoading ? <p className="rm-detail-note">훈련 이력을 불러오는 중입니다.</p>
           : detailError ? <p className="rm-detail-note rm-error">{detailError}</p>

@@ -56,6 +56,17 @@ class PersonUpdate(BaseModel):
 	status: str | None = None
 	squad_id: int | None = None
 
+class PersonProfileUpdate(BaseModel):
+	model_config = ConfigDict(extra="forbid")
+	military_number: str
+	name: str
+	unit: str
+	branch: str
+	status: str
+	mobilization_status: str
+	position: str
+	specialty: str
+
 class PersonRead(PersonBase):
 	model_config = ConfigDict(from_attributes=True)
 

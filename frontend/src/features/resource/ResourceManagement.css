@@ -436,6 +436,13 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
 .rm-detail-person p { margin:3px 0 4px; color:#556476; font-size:12px; }
 .rm-detail-tag { display:inline-block; max-width:230px; padding:2px 6px; border:1px solid #cfe0fa; border-radius:4px; color:#176dd6; font-size:11px; }
 .rm-detail-fields { margin:12px 18px 22px; }
+.rm-profile-actions { display:flex; justify-content:flex-end; gap:6px; margin:10px 18px 0; }
+.rm-profile-actions button { padding:4px 9px; border:1px solid #cbd9ed; border-radius:5px; background:#fff; color:#2162c7; font-size:11px; }
+.rm-profile-form input,.rm-profile-form select { width:100%; min-width:0; padding:5px 6px; border:1px solid #cbd9ed; border-radius:4px; background:#fff; font-size:12px; }
+.rm-profile-form [aria-invalid=true] { border-color:#c93636; }
+.rm-profile-error { margin:10px 18px; padding:8px; color:#a52c2c; background:#fff3f3; border:1px solid #f0b8b8; border-radius:5px; font-size:12px; }
+.rm-profile-field-error { display:block; margin-top:4px; color:#b52d2d; font-size:11px; font-weight:400; }
+.rm-profile-readonly { display:block; color:#8b96a4; font-size:10px; font-weight:400; }
 .rm-detail-fields>div {
   display:grid;
   grid-template-columns:88px minmax(0,1fr);
