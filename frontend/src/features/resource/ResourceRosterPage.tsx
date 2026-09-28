@@ -31,32 +31,32 @@ type TrainingRecord = {
   training_round: number
   attendance_status: string
   training_hours: number
-  required_hours: number | null
+  notes: string | null
 }
 
 type TrainingProgress = {
   service_year: number
+  mobilization_status: string | null
   training_plan: { name: string; hours: number }[]
+  target_hours: number
+  required_hours: number
+  completed_hours: number
+  remaining_hours: number
+  training_status: string
+  prosecution_risk: boolean
 }
 
-function trainingHistory(records: TrainingRecord[], progress: TrainingProgress[]) {
-  const rows = new Map<string, { name: string; serviceYear: number; completed: number; required: number | null }>()
-  for (const record of records) {
-    const plan = progress.find(item => item.service_year === record.education_year)?.training_plan ?? []
-    const rawName = record.training_type.trim()
-    const generic = !rawName || rawName === '훈련'
-    const component = plan.find(item => item.name === rawName)
-      ?? (generic && plan.length === 1 ? plan[0] : undefined)
-    const name = component?.name ?? (generic ? '훈련 종류 미상' : rawName)
-    const key = `${record.education_year}:${name}`
-    const row = rows.get(key) ?? { name, serviceYear: record.education_year, completed: 0, required: record.required_hours ?? component?.hours ?? null }
-    if (record.attendance_status === 'completed' || record.attendance_status === '이수') {
-      row.completed += record.training_hours
-    }
-    rows.set(key, row)
-  }
-  return [...rows.values()].sort((a, b) => b.serviceYear - a.serviceYear || a.name.localeCompare(b.name, 'ko'))
+type TrainingRecordForm = {
+  service_year: number
+  training_year: number
+  training_type: string
+  training_round: number
+  attendance_status: string
+  training_hours: number
+  notes: string
 }
+
+const trainingTypes = ['기본훈련', '동원훈련Ⅰ형', '동원훈련Ⅱ형', '작계훈련(전·후반기)']
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
 type SortKey = 'checked' | 'number' | 'name' | 'military_number' | 'unit' | 'squad_id' | 'status' | 'position' | 'service_year'
@@ -102,6 +102,10 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
   const [trainingProgress, setTrainingProgress] = useState<TrainingProgress[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
+  const [detailTab, setDetailTab] = useState<'progress' | 'records'>('progress')
+  const [recordForm, setRecordForm] = useState<TrainingRecordForm | null>(null)
+  const [editingRecord, setEditingRecord] = useState<number | null>(null)
+  const [actionError, setActionError] = useState('')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -212,8 +216,64 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
   const squadLabel = (person: ResourcePerson) => person.squad_id === null
     ? '-' : (squadNames.get(person.squad_id) ?? `${person.squad_id}번 분대`)
 
-  const openPerson = (id: string) => { setRecords([]); setDetailError(''); setDetailLoading(true); setSelectedId(id) }
-  const closePerson = () => { setSelectedId(null); setRecords([]); setDetailError('') }
+  const openPerson = (id: string) => {
+    setRecords([]); setDetailError(''); setActionError(''); setRecordForm(null); setEditingRecord(null)
+    setDetailTab('progress'); setDetailLoading(true); setSelectedId(id)
+  }
+  const closePerson = () => {
+    setSelectedId(null); setRecords([]); setDetailError(''); setActionError(''); setRecordForm(null); setEditingRecord(null)
+  }
+  const refreshDetails = () => {
+    if (!selectedId) return
+    setDetailError('')
+    setDetailLoading(true)
+    fetch(`${API_BASE}/reservists/${encodeURIComponent(selectedId)}/training-hours`)
+      .then(async response => {
+        if (!response.ok) throw new Error(await responseError(response, '훈련 정보를 불러오지 못했습니다.'))
+        return response.json() as Promise<{ records: TrainingRecord[]; progress: TrainingProgress[] }>
+      })
+      .then(result => { setRecords(result.records ?? []); setTrainingProgress(result.progress ?? []) })
+      .catch(cause => setActionError(cause instanceof Error ? cause.message : '훈련 정보를 불러오지 못했습니다.'))
+      .finally(() => setDetailLoading(false))
+  }
+  const startAddRecord = () => {
+    const serviceYear = selected?.service_year && selected.service_year <= 6 ? selected.service_year : 1
+    setActionError(''); setEditingRecord(null); setRecordForm({
+      service_year: serviceYear, training_year: new Date().getFullYear(), training_type: '기본훈련',
+      training_round: 1, attendance_status: 'postponed', training_hours: 0, notes: '',
+    })
+    setDetailTab('records')
+  }
+  const startEditRecord = (record: TrainingRecord) => {
+    setActionError(''); setEditingRecord(record.id); setRecordForm({
+      service_year: record.education_year, training_year: record.training_year ?? new Date().getFullYear(),
+      training_type: record.training_type, training_round: record.training_round,
+      attendance_status: record.attendance_status, training_hours: record.training_hours, notes: record.notes ?? '',
+    })
+    setDetailTab('records')
+  }
+  const saveRecord = async () => {
+    if (!selectedId || !recordForm) return
+    const url = editingRecord === null
+      ? `${API_BASE}/reservists/${encodeURIComponent(selectedId)}/training-hours`
+      : `${API_BASE}/reservists/${encodeURIComponent(selectedId)}/training-hours/${editingRecord}`
+    try {
+      const response = await fetch(url, {
+        method: editingRecord === null ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(recordForm),
+      })
+      if (!response.ok) throw new Error(await responseError(response, '훈련 기록 저장에 실패했습니다.'))
+      setRecordForm(null); setEditingRecord(null); refreshDetails()
+    } catch (cause) { setActionError(cause instanceof Error ? cause.message : '훈련 기록 저장에 실패했습니다.') }
+  }
+  const deleteRecord = async (id: number) => {
+    if (!selectedId || !window.confirm('이 훈련 기록을 삭제하시겠습니까?')) return
+    try {
+      const response = await fetch(`${API_BASE}/reservists/${encodeURIComponent(selectedId)}/training-hours/${id}`, { method: 'DELETE' })
+      if (!response.ok) throw new Error(await responseError(response, '훈련 기록 삭제에 실패했습니다.'))
+      refreshDetails()
+    } catch (cause) { setActionError(cause instanceof Error ? cause.message : '훈련 기록 삭제에 실패했습니다.') }
+  }
   const toggleChecked = (id: string, value: boolean) => setChecked(previous => {
     const next = new Set(previous)
     if (value) next.add(id)
@@ -347,20 +407,74 @@ export default function ResourceRosterPage({ revision }: { revision: number }) {
             ['연차', selected.service_year === null ? '미등록' : `${selected.service_year}년차`],
           ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
         </dl>
-        <h4>훈련 이력</h4>
-        {detailLoading ? <p className="rm-detail-note">훈련 이력을 불러오는 중입니다.</p>
+        <nav className="rm-detail-tabs" aria-label="훈련 상세 메뉴">
+          <button type="button" className={detailTab === 'progress' ? 'is-active' : ''} onClick={() => setDetailTab('progress')}>훈련 현황</button>
+          <button type="button" className={detailTab === 'records' ? 'is-active' : ''} onClick={() => setDetailTab('records')}>훈련 기록 ({records.length})</button>
+        </nav>
+        {actionError && <p className="rm-detail-note rm-error">{actionError}</p>}
+        {detailLoading ? <p className="rm-detail-note">훈련 정보를 불러오는 중입니다.</p>
           : detailError ? <p className="rm-detail-note rm-error">{detailError}</p>
-          : records.length === 0 ? <p className="rm-detail-note">등록된 훈련 기록이 없습니다.</p>
-          : <div className="rm-training-records">{trainingHistory(records, trainingProgress)
-              .map(record => <div key={`${record.serviceYear}:${record.name}`}>
-                <span>{record.serviceYear}년차 · {record.name}</span>
-                <b aria-label={`이수 ${record.completed}시간, 필요 ${record.required === null ? '확인 필요' : `${record.required}시간`}`}>
-                  {record.completed}/{record.required ?? '—'}시간
-                </b>
-              </div>)}</div>}
+          : detailTab === 'progress' ? <TrainingProgressPanel currentYear={selected.service_year} progress={trainingProgress} />
+          : <TrainingRecordsPanel records={records} form={recordForm} editingId={editingRecord}
+              onAdd={startAddRecord} onEdit={startEditRecord} onChange={setRecordForm} onCancel={() => { setRecordForm(null); setEditingRecord(null) }}
+              onSave={saveRecord} onDelete={deleteRecord} />}
         <p className="rm-detail-note">전화번호·주소·이메일은 현재 인원 API에서 제공하지 않습니다.</p>
       </div>
     </aside>}
+  </div>
+}
+
+function TrainingProgressPanel({ currentYear, progress }: { currentYear: number | null; progress: TrainingProgress[] }) {
+  const current = progress.find(item => item.service_year === currentYear)
+  return <div className="rm-training-panel">
+    <div className="rm-training-panel-heading"><h4>연차별 훈련 현황</h4><span>현재 및 과거 연차</span></div>
+    {current && <section className={`rm-current-training ${current.prosecution_risk ? 'is-risk' : ''}`}>
+      <div><span>현재 {current.service_year}년차 훈련시간</span><strong>{current.completed_hours} / {current.required_hours}시간</strong></div>
+      <b>잔여 {current.remaining_hours}시간</b>
+    </section>}
+    <div className="rm-training-progress-list">
+      {progress.filter(item => item.service_year > 0).map(item => {
+        const isPreviousIncomplete = currentYear !== null && item.service_year < currentYear && item.remaining_hours > 0
+        return <div className={`rm-training-progress-row ${item.prosecution_risk ? 'is-risk' : isPreviousIncomplete ? 'is-incomplete' : ''}`} key={item.service_year}>
+        <div><strong>{item.service_year}년차</strong><small>{item.training_plan.map(plan => `${plan.name} ${plan.hours}시간`).join(', ') || '훈련 대상 아님'}</small></div>
+        <span>{item.completed_hours}/{item.required_hours}시간</span>
+        <b className={isPreviousIncomplete ? 'incomplete-label' : ''}>{isPreviousIncomplete ? '훈련 미이수' : item.training_status}</b>
+      </div>
+      })}
+    </div>
+  </div>
+}
+
+function TrainingRecordsPanel({
+  records, form, editingId, onAdd, onEdit, onChange, onCancel, onSave, onDelete,
+}: {
+  records: TrainingRecord[]
+  form: TrainingRecordForm | null
+  editingId: number | null
+  onAdd: () => void
+  onEdit: (record: TrainingRecord) => void
+  onChange: (form: TrainingRecordForm | null) => void
+  onCancel: () => void
+  onSave: () => void
+  onDelete: (id: number) => void
+}) {
+  const update = (key: keyof TrainingRecordForm, value: string | number) => {
+    if (form) onChange({ ...form, [key]: value })
+  }
+  return <div className="rm-training-panel">
+    <div className="rm-training-panel-heading"><h4>훈련 기록</h4><button type="button" className="rm-btn rm-btn-primary" onClick={onAdd}>+ 기록 추가</button></div>
+    {form && <div className="rm-record-editor">
+      <label>복무연차<input type="number" min="1" max="6" value={form.service_year} onChange={event => update('service_year', Number(event.target.value))} /></label>
+      <label>훈련연도<input type="number" value={form.training_year} onChange={event => update('training_year', Number(event.target.value))} /></label>
+      <label>훈련종류<select value={form.training_type} onChange={event => update('training_type', event.target.value)}>{trainingTypes.map(type => <option key={type}>{type}</option>)}</select></label>
+      <label>차수<select value={form.training_round} onChange={event => update('training_round', Number(event.target.value))}><option value={1}>1차</option><option value={2}>2차</option><option value={3}>3차</option></select></label>
+      <label>출결<select value={form.attendance_status} onChange={event => update('attendance_status', event.target.value)}><option value="completed">이수</option><option value="무단불참">무단불참</option><option value="postponed">연기</option></select></label>
+      <label>훈련시간<input type="number" min="0" value={form.training_hours} onChange={event => update('training_hours', Number(event.target.value))} /></label>
+      <label className="wide">메모<input value={form.notes} onChange={event => update('notes', event.target.value)} /></label>
+      <div className="rm-record-actions wide"><button type="button" className="rm-btn" onClick={onCancel}>취소</button><button type="button" className="rm-btn rm-btn-primary" onClick={onSave}>{editingId === null ? '추가' : '저장'}</button></div>
+    </div>}
+    {records.length === 0 ? <p className="rm-detail-note">등록된 훈련 기록이 없습니다.</p> : <div className="rm-record-table-wrap"><table className="rm-record-table"><thead><tr><th>연차</th><th>훈련연도</th><th>종류</th><th>차수</th><th>출결</th><th>시간</th><th>관리</th></tr></thead><tbody>{records.map(record => <tr key={record.id}><td>{record.education_year}년차</td><td>{record.training_year ?? '-'}</td><td>{record.training_type}</td><td>{record.training_round}차</td><td>{record.attendance_status}</td><td>{record.training_hours}시간</td><td><button type="button" className="rm-record-action" onClick={() => onEdit(record)}>수정</button><button type="button" className="rm-record-action danger" onClick={() => onDelete(record.id)}>삭제</button></td></tr>)}</tbody></table></div>}
+    <p className="rm-detail-note">훈련시간은 해당 연차의 목표시간을 초과할 수 없습니다.</p>
   </div>
 }
 

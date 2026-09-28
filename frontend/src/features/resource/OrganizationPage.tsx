@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import HoldButton from '../../components/HoldButton'
 
 type Squad = {
   id: number
@@ -100,9 +101,7 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
   const [draft, setDraft] = useState({ query: '', status: '', category: '', position: '' })
   const [applied, setApplied] = useState(draft)
   const [page, setPage] = useState(1)
-  const [releaseTarget, setReleaseTarget] = useState<{ id: number; name: string } | null>(null)
   const [releaseError, setReleaseError] = useState('')
-  const releaseDialog = useRef<HTMLDialogElement>(null)
   const unitDialog = useRef<HTMLDialogElement>(null)
   const [unitEditor, setUnitEditor] = useState<{ mode: 'add' | 'rename'; node: OrganizationNode } | null>(null)
   const [unitKind, setUnitKind] = useState<OrganizationNode['kind']>('squad')
@@ -114,11 +113,6 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
     else unitDialog.current?.close()
   }, [unitEditor])
 
-  useEffect(() => {
-    if (releaseTarget) releaseDialog.current?.showModal()
-    else releaseDialog.current?.close()
-  }, [releaseTarget])
-
   const releaseMembers = async (nodeId: number, personId?: string) => {
     if (working) return
     setWorking(true); setError(''); setReleaseError(''); setResult(null)
@@ -128,7 +122,6 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
         body: JSON.stringify(personId === undefined ? {} : { person_id: personId }),
       })
       if (!response.ok) throw new Error(await responseError(response, '편성 해제에 실패했습니다.'))
-      setReleaseTarget(null)
       onRefresh()
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : '편성 해제에 실패했습니다.'
@@ -332,12 +325,18 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
           <button type="submit" className="rm-org-primary">검색</button>
           <button type="button" onClick={() => { setDraft({ query: '', status: '', category: '', position: '' }); setApplied({ query: '', status: '', category: '', position: '' }); setPage(1) }}>↶ 초기화</button>
         </form>
+        <section className="rm-org-danger-actions" aria-label="위험한 편제 작업">
+          <div><strong>전체 편성 해제</strong><span>현재 선택한 편제의 모든 인원을 해제합니다.</span></div>
+          <HoldButton
+            disabled={working || roster.length === 0}
+            doneLabel="해제 완료"
+            onHold={() => { setReleaseError(''); void releaseMembers(selected.id) }}
+          >전체 편성 해제</HoldButton>
+        </section>
+        {releaseError && <p className="rm-org-error" role="alert">{releaseError}</p>}
         <section className="rm-org-roster" aria-label="편성 인원 목록">
           <div className="rm-org-table-scroll"><table>
-            <thead><tr><th>번호</th><th>성명</th><th>군번</th><th>구분</th><th>소속 분대</th><th>병과·직책</th><th className="rm-org-release-column">
-              <button type="button" className="rm-org-release" disabled={working || roster.length === 0}
-                onClick={() => { setReleaseError(''); setReleaseTarget({ id: selected.id, name: breadcrumb.map(node => node.name).join('>') }) }}>전체 편성 해제</button>
-            </th></tr></thead>
+            <thead><tr><th>번호</th><th>성명</th><th>군번</th><th>구분</th><th>소속 분대</th><th>병과·직책</th><th className="rm-org-release-column">개별 해제</th></tr></thead>
             <tbody>{pageRows.map((person, index) => <tr key={person.military_number}>
               <td>{(actualPage - 1) * pageSize + index + 1}</td><td><b>{person.name}</b></td><td>{person.military_number}</td>
               <td>{person.category}</td><td>{person.squadName}</td><td>{person.position ?? '—'}</td>
@@ -416,16 +415,6 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
           <button type="button" disabled={working} onClick={() => setUnitEditor(null)}>취소</button>
         </div>
       </form>
-    </dialog>
-    <dialog ref={releaseDialog} className="rm-org-release-dialog" aria-labelledby="rm-release-question"
-      onCancel={event => { if (working) event.preventDefault(); else setReleaseTarget(null) }}>
-      <p id="rm-release-question"><strong>{releaseTarget?.name}</strong>의 편성인원을 전부 해제하시겠습니까?</p>
-      {releaseError && <p className="rm-org-error" role="alert">{releaseError}</p>}
-      <div className="rm-org-release-actions">
-        <button type="button" className="rm-org-release" disabled={working}
-          onClick={() => { if (releaseTarget) void releaseMembers(releaseTarget.id) }}>{working ? '해제 중…' : '확인'}</button>
-        <button type="button" autoFocus disabled={working} onClick={() => setReleaseTarget(null)}>취소</button>
-      </div>
     </dialog>
   </div>
 }
