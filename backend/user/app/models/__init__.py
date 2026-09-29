@@ -5,6 +5,7 @@ from user.app.models.education import Education
 from user.app.models.person import Person
 from user.app.models.postpoment import Postponement
 from user.app.models.squad import Squad
+from user.app.models.transfer_intake import TransferIntake
 from user.app.models.user import User
 
 __all__ = [
@@ -15,6 +16,7 @@ __all__ = [
     "Person",
     "Postponement",
     "Squad",
+    "TransferIntake",
     "User",
 ]
 from user.app.models.organization import OrganizationNode

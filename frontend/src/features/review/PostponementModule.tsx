@@ -20,6 +20,8 @@ type Extraction = {
   document_type?: string | null
   stamp_present?: boolean | null
   confidence?: number | null
+  confidence_basis?: string
+  confidence_details?: string[]
   anomaly_flags?: string[]
   error?: string
 }
@@ -94,9 +96,13 @@ function SubmissionDetails({
       <div><dt>서류 종류</dt><dd>{extraction.document_type ?? '—'}</dd></div>
       <div><dt>유효기간</dt><dd>{extraction.valid_until ?? '—'}</dd></div>
       <div><dt>사유 분류</dt><dd>{submission.reason_category ?? '미분류'}</dd></div>
-      <div><dt>모델 신뢰도</dt><dd>{extraction.confidence != null ? `${Math.round(extraction.confidence * 100)}%` : '—'}</dd></div>
+      <div><dt>텍스트 근거 일치율</dt><dd>{extraction.confidence != null ? `${Math.round(extraction.confidence * 100)}%` : '—'}</dd></div>
       <div><dt>도장/서명 인식</dt><dd>{extraction.stamp_present == null ? '확인 필요' : extraction.stamp_present ? '감지됨' : '감지되지 않음'}</dd></div>
     </dl>
+    {extraction.confidence_basis === 'text_evidence_match_rate_uncalibrated' && <p className="review-ai-score-note">원문 텍스트와 추출 결과의 일치율입니다. 통계적으로 보정된 정확도 확률은 아닙니다.</p>}
+    {extraction.confidence_details?.length ? <ul className="review-ai-confidence-details">
+      {extraction.confidence_details.map((detail, index) => <li key={`${detail}-${index}`}>{detail}</li>)}
+    </ul> : null}
     {extraction.error && <p className="review-ai-alert" role="alert">AI 분석 오류: {extraction.error}</p>}
     {extraction.anomaly_flags?.length ? <div className="review-ai-alert"><strong>이상 신호</strong>{extraction.anomaly_flags.map((flag, index) => <p key={`${flag}-${index}`}>! {flag}</p>)}</div> :
       <p className="review-ai-notice">자동 추출에서 표시한 이상 신호가 없습니다. 원본 확인과 별개입니다.</p>}

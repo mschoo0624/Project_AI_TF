@@ -46,6 +46,8 @@
 .review-ai-facts>div { min-width:0; padding:12px; background:#fff; overflow-wrap:anywhere; }
 .review-ai-facts dt { margin:0 0 6px; color:#738398; font-size:12px; }
 .review-ai-facts dd { margin:0; font-size:13px; font-weight:600; }
+.review-ai-score-note { margin:-5px 0 8px; color:#738398; font-size:11px; }
+.review-ai-confidence-details { display:grid; gap:4px; margin:0 0 13px; padding:9px 12px 9px 28px; border-left:2px solid #9dbbe5; background:#f6f9fd; color:#53667d; font-size:11px; }
 .review-ai-alert, .review-ai-notice, .review-ai-unlinked { padding:10px 12px; margin:0 0 13px; border:1px solid #f0b6ac; border-radius:5px; font-size:13px; }
 .review-ai-alert p { margin:6px 0 0; }
 .review-ai-notice { border-color:#c2e0cc; background:#f2faf5; color:#2e6a45; }
