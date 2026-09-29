@@ -48,9 +48,8 @@ JSON_SCHEMA = {
         "valid_until": {"type": "string"},
         "document_type": {"type": "string"},
         "stamp_present": {"type": "boolean"},
-        "confidence": {"type": "number"},
     },
-    "required": ["name", "valid_until", "document_type", "stamp_present", "confidence"],
+    "required": ["name", "valid_until", "document_type", "stamp_present"],
 }
 
 VALID_UNTIL_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -79,7 +78,6 @@ class ExtractionResult:
             valid_until=str(data.get("valid_until", "")),
             document_type=str(data.get("document_type", "")),
             stamp_present=bool(data.get("stamp_present", False)),
-            confidence=float(data["confidence"]) if _is_number(data.get("confidence")) else 0.0,
             raw_output=output,
         )
         result.errors = result._validate(data)
@@ -92,8 +90,6 @@ class ExtractionResult:
                 errors.append(f"필드 누락: {req}")
         if self.valid_until and not VALID_UNTIL_RE.match(self.valid_until):
             errors.append(f"valid_until 형식 오류: {self.valid_until!r} (YYYY-MM-DD 필요)")
-        if not 0.0 <= self.confidence <= 1.0:
-            errors.append(f"confidence 범위 오류: {self.confidence}")
         return errors
 
     @property
@@ -135,7 +131,6 @@ EXTRACTION_SYSTEM_PROMPT = """당신은 예비군 관련 서류(진단서, 재�
 - document_type: 서류 최상단 제목에 적힌 서류 종류 (예: 진단서, 재직증명서, 사유확인서, 재학증명서, 출입국사실증명서 등).
   '사유 구분'란에 적힌 값(질병, 천재지변, 시험응시 등)은 document_type이 아니라 사유 분류이므로 절대 여기에 넣지 마세요.
 - stamp_present: 도장/직인/[인] 표시가 있는 것으로 보이면 true, 아니면 false
-- confidence: 추출 결과에 대한 0~1 사이의 신뢰도 in float
 다른 설명 없이 JSON_SCHEMA 형식으로 반환하세요."""
 
 KOREAN_DATE_RE = re.compile(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일")
@@ -164,6 +159,60 @@ def _detect_document_type(doc_text: str) -> str:
         if normalized in KNOWN_DOCUMENT_TYPES:
             return normalized
     return ""
+
+
+def _normalized_evidence_text(value: str) -> str:
+    return re.sub(r"[\W_]+", "", value, flags=re.UNICODE).casefold()
+
+
+def _date_supported_by_text(value: str, doc_text: str) -> bool:
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        return False
+    normalized_text = _normalized_evidence_text(doc_text)
+    iso_date = _normalized_evidence_text(parsed.isoformat())
+    korean_date = _normalized_evidence_text(
+        f"{parsed.year}년{parsed.month}월{parsed.day}일"
+    )
+    return iso_date in normalized_text or korean_date in normalized_text
+
+
+def _text_evidence_confidence(fields: dict, doc_text: str) -> tuple[float, list[str]]:
+    """Return the share of extracted claims that can be verified in PDF text.
+
+    This is an evidence match rate, not a statistically calibrated probability.
+    Text-only extraction cannot verify a visually stamped seal when no seal text
+    is present, so that claim is reported separately and excluded from the score.
+    """
+    normalized_text = _normalized_evidence_text(doc_text)
+    claims = (
+        ("성명", "name", lambda value: _normalized_evidence_text(value) in normalized_text),
+        ("유효기간", "valid_until", lambda value: _date_supported_by_text(value, doc_text)),
+        ("문서 종류", "document_type", lambda value: _normalized_evidence_text(value) in normalized_text),
+    )
+    checked: list[bool] = []
+    details: list[str] = []
+
+    for label, field_name, check in claims:
+        value = str(fields.get(field_name) or "").strip()
+        if not value:
+            details.append(f"{label}: 추출된 값 없음")
+            continue
+        supported = bool(normalized_text) and check(value)
+        checked.append(supported)
+        details.append(f"{label}: {'원문에서 확인' if supported else '원문 근거 불일치'}")
+
+    stamp_markers = ("(인)", "[인]", "직인", "인장")
+    has_stamp_text = any(marker in doc_text for marker in stamp_markers)
+    if fields.get("stamp_present") and has_stamp_text:
+        checked.append(True)
+        details.append("도장/서명: 원문 텍스트 표기 확인")
+    else:
+        details.append("도장/서명: 텍스트 추출만으로 시각 확인 불가")
+
+    score = sum(checked) / len(checked) if checked else 0.0
+    return round(score, 2), details
 
 
 DOCUMENT_EXTRACTIONS_PATH = Path(__file__).with_name("document_extractions.jsonl")
@@ -256,6 +305,22 @@ def _chat(messages: list[dict]) -> str:
 
 def extract_pdf(doc_text: str, source_file: str | None = None) -> dict:
     """문서 텍스트에서 필드를 추출. 스키마 검증 실패 시 모델에게 재요청합니다."""
+    if not doc_text.strip():
+        result = {
+            "name": "",
+            "valid_until": "",
+            "document_type": "",
+            "stamp_present": False,
+            "confidence": 0.0,
+            "confidence_basis": "text_evidence_match_rate_uncalibrated",
+            "confidence_details": ["PDF에서 텍스트를 추출하지 못했습니다. 스캔본은 OCR이 필요합니다."],
+            "error": "PDF에서 텍스트를 추출하지 못했습니다. 이미지 전용 PDF에는 OCR이 필요합니다.",
+            "anomaly_flags": [],
+            "source_file": source_file,
+        }
+        record_document_extraction(doc_text, result, source_file)
+        return result
+
     messages = [
         {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
         {"role": "user", "content": doc_text},
@@ -280,6 +345,8 @@ def extract_pdf(doc_text: str, source_file: str | None = None) -> dict:
     detected_type = _detect_document_type(doc_text)
     if detected_type:
         res["document_type"] = detected_type
+    res["confidence"], res["confidence_details"] = _text_evidence_confidence(res, doc_text)
+    res["confidence_basis"] = "text_evidence_match_rate_uncalibrated"
     if not result.is_valid:
         res["_raw_error"] = result.raw_output
         res["_errors"] = result.errors
