@@ -338,12 +338,12 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
             <div><h2>전투편성 AI</h2><p>선택한 단위의 빈 자리를 호환되는 인원으로 채웁니다.</p></div>
           </div>
           <div className="rm-org-ai-actions">
-            <button type="button" disabled={working || !canAutoFill} onClick={() => void autoFill()}>
-              {working ? '편성 중...' : '자동편성'}
-            </button>
             {selected.kind === 'root' && <button type="button" className="is-secondary" disabled={working} onClick={() => void expandFormation()}>
               소대·분대 확장
             </button>}
+            <button type="button" disabled={working || !canAutoFill} onClick={() => void autoFill()}>
+              {working ? '편성 중...' : '자동편성'}
+            </button>
           </div>
           {(result || expansionResult || !canAutoFill) && <div className="rm-org-ai-feedback" role="status">
             {result && <span>{result.total_assigned}명 편성 · 잔여 부족 {result.total_shortfall}명</span>}
