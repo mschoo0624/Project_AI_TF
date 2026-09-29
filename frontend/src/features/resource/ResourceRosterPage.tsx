@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import PersonProfileFields from './PersonProfileFields'
+import type { FormEvent } from 'react'
 
 type Squad = {
   id: number
@@ -57,7 +57,29 @@ type TrainingRecordForm = {
   notes: string
 }
 
+type CreatePersonForm = {
+  military_number: string
+  name: string
+  branch: string
+  rank: string
+  unit: string
+  specialty: string
+  service_year: number
+  position: string
+  mobilization_status: string
+  status: string
+  previous_training_hours: string
+}
+
 const trainingTypes = ['기본훈련', '동원훈련Ⅰ형', '동원훈련Ⅱ형', '작계훈련(전·후반기)']
+const personBranches = ['육군', '해군', '공군', '해병대']
+const personRanks = ['이병', '일병', '상병', '병장', '하사', '중사', '상사', '소위', '중위', '대위']
+const personMobilizationStatuses = ['동원지정', '동원미지정', '학생예비군', '일부보류', '해당없음']
+const initialCreatePersonForm: CreatePersonForm = {
+  military_number: '', name: '', branch: '육군', rank: '병장', unit: '', specialty: '',
+  service_year: 1, position: '소총수', mobilization_status: '동원미지정', status: 'active',
+  previous_training_hours: '',
+}
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
 type SortKey = 'checked' | 'number' | 'name' | 'military_number' | 'branch' | 'rank' | 'squad_id' | 'status' | 'position' | 'mobilization_status' | 'service_year'
@@ -74,8 +96,20 @@ const statusLabel = (status: string) => status === 'active' ? '복무 중' : sta
 
 async function responseError(response: Response, fallback: string) {
   try {
-    const data = await response.json() as { detail?: string }
-    return data.detail ?? fallback
+    const data = await response.json() as { detail?: unknown }
+    if (typeof data.detail === 'string') return data.detail
+    if (Array.isArray(data.detail)) {
+      const messages = data.detail.map((item: unknown) => {
+        if (typeof item !== 'object' || item === null || !('msg' in item)) return String(item)
+        const message = String(item.msg)
+        const location = 'loc' in item && Array.isArray(item.loc)
+          ? item.loc.map(String).join('.')
+          : ''
+        return location ? `${location}: ${message}` : message
+      })
+      return messages.join('; ') || fallback
+    }
+    return fallback
   } catch {
     return fallback
   }
@@ -108,6 +142,11 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
   const [recordForm, setRecordForm] = useState<TrainingRecordForm | null>(null)
   const [editingRecord, setEditingRecord] = useState<number | null>(null)
   const [actionError, setActionError] = useState('')
+  const [assignmentLoading, setAssignmentLoading] = useState(false)
+  const [createPersonOpen, setCreatePersonOpen] = useState(false)
+  const [createPersonForm, setCreatePersonForm] = useState<CreatePersonForm>(initialCreatePersonForm)
+  const [createPersonLoading, setCreatePersonLoading] = useState(false)
+  const [createPersonError, setCreatePersonError] = useState('')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -225,6 +264,30 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
   const closePerson = () => {
     setSelectedId(null); setRecords([]); setDetailError(''); setActionError(''); setRecordForm(null); setEditingRecord(null)
   }
+  const autoAssignPerson = async () => {
+    if (!selected || selected.squad_id !== null || assignmentLoading) return
+    setActionError('')
+    setAssignmentLoading(true)
+    try {
+      const recommendationsResponse = await fetch(`${API_BASE}/squads/assignments/recommendations/${encodeURIComponent(selected.military_number)}`)
+      if (!recommendationsResponse.ok) throw new Error(await responseError(recommendationsResponse, '자동편성 추천을 불러오지 못했습니다.'))
+      const recommendations = await recommendationsResponse.json() as { squad_id: number }[]
+      if (recommendations.length === 0) throw new Error('호환되는 분대가 없습니다. 먼저 편제에 분대를 추가하세요.')
+
+      const response = await fetch(`${API_BASE}/squads/assignments/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignments: [{ person_id: selected.military_number, squad_id: recommendations[0].squad_id }] }),
+      })
+      if (!response.ok) throw new Error(await responseError(response, '자동편성에 실패했습니다.'))
+      setActionError('')
+      onDataChanged()
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : '자동편성에 실패했습니다.')
+    } finally {
+      setAssignmentLoading(false)
+    }
+  }
   const refreshDetails = () => {
     if (!selectedId) return
     setDetailError('')
@@ -276,6 +339,48 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
       refreshDetails()
     } catch (cause) { setActionError(cause instanceof Error ? cause.message : '훈련 기록 삭제에 실패했습니다.') }
   }
+  const submitCreatePerson = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setCreatePersonError('')
+    const previousHours = createPersonForm.previous_training_hours.trim()
+    if (!createPersonForm.military_number.trim() || !createPersonForm.name.trim()) {
+      setCreatePersonError('군번과 이름은 필수 입력 항목입니다.')
+      return
+    }
+    if (previousHours && (!Number.isInteger(Number(previousHours)) || Number(previousHours) < 0)) {
+      setCreatePersonError('이전 훈련시간은 0 이상의 정수로 입력하세요.')
+      return
+    }
+
+    setCreatePersonLoading(true)
+    try {
+      const payload = {
+        ...createPersonForm,
+        military_number: createPersonForm.military_number.trim(),
+        name: createPersonForm.name.trim(),
+        unit: createPersonForm.unit.trim() || null,
+        specialty: createPersonForm.specialty.trim() || null,
+        previous_training_hours: previousHours ? Number(previousHours) : null,
+      }
+      const response = await fetch(`${API_BASE}/persons`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!response.ok) throw new Error(await responseError(response, '인원 등록에 실패했습니다.'))
+
+      setCreatePersonOpen(false)
+      setCreatePersonForm(initialCreatePersonForm)
+      setInput(''); setUnit(''); setStatus(''); setPosition(''); setYear('')
+      setAppliedFilters({ query: '', unit: '', status: '', position: '', year: '' })
+      setPage(1); setChecked(new Set())
+      onDataChanged()
+    } catch (cause) {
+      setCreatePersonError(cause instanceof Error ? cause.message : '인원 등록에 실패했습니다.')
+    } finally {
+      setCreatePersonLoading(false)
+    }
+  }
   const toggleChecked = (id: string, value: boolean) => setChecked(previous => {
     const next = new Set(previous)
     if (value) next.add(id)
@@ -299,7 +404,7 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
     { label: '복무 중', number: people.filter(person => person.status === 'active').length, description: '현재 등록 상태 기준', color: 'green' },
   ]
 
-  return <div className={`rm-roster-layout ${selected ? 'has-detail' : ''}`}>
+  return <div className="rm-roster-layout">
     <div className="rm-roster-main">
       <h1 className="rm-roster-title"><svg aria-hidden="true" viewBox="0 0 32 26" width="33" height="27" fill="currentColor"><circle cx="16" cy="6" r="4"/><circle cx="5" cy="11" r="3"/><circle cx="27" cy="11" r="3"/><path d="M7 25v-5c0-5 4-8 9-8s9 3 9 8v5H7ZM0 25v-5c0-3 2-5 5-5 1 0 2 .2 3 .8C6 18 5 21 5 25H0ZM27 25v-4c0-2-.8-4-2-5.2a6 6 0 0 1 3-.8c3 0 4 2 4 5v5h-5Z"/></svg> 예비군 대상자 관리</h1>
       <div className="rm-summary-grid">
@@ -341,6 +446,11 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
             }} />현재 페이지 전체선택</label>
           <span>선택 {checked.size}명</span>
           <span className="rm-list-total">총 {filtered.length.toLocaleString('ko-KR')}명</span>
+          <button type="button" className="rm-roster-add-button" onClick={() => {
+            setCreatePersonForm(initialCreatePersonForm)
+            setCreatePersonError('')
+            setCreatePersonOpen(true)
+          }}>+ 인원 추가</button>
         </div>
         {loading ? <p className="rm-list-message">인원 목록을 불러오는 중입니다.</p>
           : error ? <p className="rm-list-message rm-error">{error}</p>
@@ -393,9 +503,17 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
         </footer>
       </section>
     </div>
-    {selected && <aside className="rm-person-detail" aria-label="대상자 상세 정보">
-      <header className="rm-detail-heading"><h2>대상자 상세 정보</h2><button type="button"
-        onClick={closePerson}>닫기</button></header>
+    {selected && <div className="rm-person-detail-backdrop" onMouseDown={event => {
+      if (event.target === event.currentTarget) closePerson()
+    }}>
+      <section className="rm-person-detail" role="dialog" aria-modal="true" aria-label="대상자 상세 정보">
+      <header className="rm-detail-heading"><h2>대상자 상세 정보</h2><div className="rm-detail-heading-actions">
+        {selected.squad_id === null && <button type="button" className="rm-detail-auto-assign"
+          disabled={assignmentLoading || selected.status !== 'active' || selected.service_year === null}
+          title={selected.status !== 'active' ? '복무 중인 인원만 자동편성할 수 있습니다.' : selected.service_year === null ? '복무연차 정보가 필요합니다.' : '호환되는 분대에 자동편성'}
+          onClick={() => void autoAssignPerson()}>{assignmentLoading ? '편성 중...' : '자동편성'}</button>}
+        <button type="button" onClick={closePerson}>닫기</button>
+      </div></header>
       <div className="rm-detail-body">
         <div className="rm-detail-person"><span className="rm-detail-avatar" aria-hidden="true">♙</span><div>
           <h3>{selected.name}</h3><p>군번: {selected.military_number}</p>
@@ -424,7 +542,36 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
               onSave={saveRecord} onDelete={deleteRecord} />}
         <p className="rm-detail-note">전화번호·주소·이메일은 현재 인원 API에서 제공하지 않습니다.</p>
       </div>
-    </aside>}
+      </section>
+    </div>}
+    {createPersonOpen && <div className="rm-create-person-backdrop" onMouseDown={event => {
+      if (event.target === event.currentTarget && !createPersonLoading) setCreatePersonOpen(false)
+    }}>
+      <section className="rm-create-person-dialog" role="dialog" aria-modal="true" aria-labelledby="rm-create-person-title">
+        <header><div><span>NEW RESERVIST</span><h2 id="rm-create-person-title">신규 인원 추가</h2></div>
+          <button type="button" aria-label="닫기" disabled={createPersonLoading} onClick={() => setCreatePersonOpen(false)}>×</button>
+        </header>
+        <form onSubmit={submitCreatePerson}>
+          <div className="rm-create-person-grid">
+            <label>군번 *<input autoFocus required value={createPersonForm.military_number} onChange={event => setCreatePersonForm(form => ({ ...form, military_number: event.target.value }))} /></label>
+            <label>이름 *<input required value={createPersonForm.name} onChange={event => setCreatePersonForm(form => ({ ...form, name: event.target.value }))} /></label>
+            <label>군종<select value={createPersonForm.branch} onChange={event => setCreatePersonForm(form => ({ ...form, branch: event.target.value }))}>{personBranches.map(branch => <option key={branch}>{branch}</option>)}</select></label>
+            <label>계급<select value={createPersonForm.rank} onChange={event => setCreatePersonForm(form => ({ ...form, rank: event.target.value }))}>{personRanks.map(rank => <option key={rank}>{rank}</option>)}</select></label>
+            <label>복무연차<input type="number" min="1" max="8" required value={createPersonForm.service_year} onChange={event => setCreatePersonForm(form => ({ ...form, service_year: Number(event.target.value) }))} /></label>
+            <label>동원상태<select value={createPersonForm.mobilization_status} onChange={event => setCreatePersonForm(form => ({ ...form, mobilization_status: event.target.value }))}>{personMobilizationStatuses.filter(status => createPersonForm.service_year > 4 || status !== '해당없음').map(status => <option key={status}>{status}</option>)}</select></label>
+            <label>직책 *<input required value={createPersonForm.position} onChange={event => setCreatePersonForm(form => ({ ...form, position: event.target.value }))} /></label>
+            <label>소속부대<input value={createPersonForm.unit} onChange={event => setCreatePersonForm(form => ({ ...form, unit: event.target.value }))} /></label>
+            <label>주특기<input value={createPersonForm.specialty} onChange={event => setCreatePersonForm(form => ({ ...form, specialty: event.target.value }))} /></label>
+            <label>이전 훈련시간<input type="number" min="0" step="1" value={createPersonForm.previous_training_hours} onChange={event => setCreatePersonForm(form => ({ ...form, previous_training_hours: event.target.value }))} /><small>이수시간이 있으면 전입 인원으로 등록됩니다.</small></label>
+            <label>상태<select value={createPersonForm.status} onChange={event => setCreatePersonForm(form => ({ ...form, status: event.target.value }))}><option value="active">복무 중</option><option value="on_leave">휴가 중</option></select></label>
+          </div>
+          <p className="rm-create-person-note">새 인원은 미편성 상태로 등록됩니다. 부대 배정은 전투편성기구도에서 진행할 수 있습니다.</p>
+          {createPersonError && <p className="rm-create-person-error" role="alert">{createPersonError}</p>}
+          <footer><button type="button" disabled={createPersonLoading} onClick={() => setCreatePersonOpen(false)}>취소</button>
+            <button type="submit" disabled={createPersonLoading}>{createPersonLoading ? '등록 중...' : '인원 등록'}</button></footer>
+        </form>
+      </section>
+    </div>}
   </div>
 }
 

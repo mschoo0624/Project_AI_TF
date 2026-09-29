@@ -8,6 +8,19 @@ from user.app.schemas.education import TrainingRecordCreate, TrainingRecordUpdat
 from user.app.api.training import add_training_record, update_training_record
 
 
+def test_training_year_accepts_calendar_year_for_create_and_update() -> None:
+    record = TrainingRecordCreate(
+        service_year=3,
+        training_year=2026,
+        training_hours=8,
+        attendance_status="completed",
+    )
+    update = TrainingRecordUpdate(training_year=2026)
+
+    assert record.training_year == 2026
+    assert update.training_year == 2026
+
+
 def make_session() -> Session:
     engine = create_engine(
         "sqlite://",

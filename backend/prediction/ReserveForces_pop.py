@@ -10,6 +10,7 @@ from sklearn.linear_model import LinearRegression
 
 PROJECT_DIR = Path(__file__).resolve().parent
 _configured_data_dir = os.getenv("RESERVE_FORCES_DATA_DIR")
+
 if _configured_data_dir:
     BASE = Path(_configured_data_dir).expanduser()
 else:
@@ -299,6 +300,7 @@ def get_net_mig(region, year, toggle=0.0):
     if h not in mig_models:
         base_val = net_mig.get((region, BASE_YEAR))
     else:
+        # 순이동_올해, 순이동_lag1, 순이동_lag5
         v0, lag1, lag5 = net_mig.get((region, BASE_YEAR)), net_mig.get((region, BASE_YEAR - 1)), net_mig.get((region, BASE_YEAR - 5))
         gr = growth_rate.get(BASE_YEAR)
         if any(pd.isna(x) for x in [v0, lag1, lag5, gr]):

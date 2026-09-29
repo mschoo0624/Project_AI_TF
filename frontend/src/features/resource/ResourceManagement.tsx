@@ -3,6 +3,7 @@ import './ResourceManagement.css'
 import ReviewManagement from '../review/ReviewManagement'
 import ResourceRosterPage from './ResourceRosterPage'
 import OrganizationPage from './OrganizationPage'
+import TransferIntakePage from './TransferIntakePage'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
@@ -41,6 +42,7 @@ type ProsecutionTrainingRecord = {
 }
 
 type ResourceTabId = 'roster' | 'organization' | 'hold' | 'travel' | 'prosecution'
+type RosterSubTabId = 'people' | 'transfers'
 
 const resourceTabs: { id: ResourceTabId; label: string }[] = [
   { id: 'roster', label: '편성인원목록' },
@@ -54,9 +56,23 @@ export default function ResourceManagement(
   { initialTab = 'organization' }: { initialTab?: ResourceTabId } = {},
 ) {
   const [activeTab, setActiveTab] = useState<ResourceTabId>(initialTab)
+  const [rosterSubTab, setRosterSubTab] = useState<RosterSubTabId>('people')
   const [revision, setRevision] = useState(0)
+  const [pendingTransfers, setPendingTransfers] = useState(0)
 
   const refreshResourceData = () => setRevision(value => value + 1)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch(`${API_BASE}/transfers`, { signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error('전입자 수를 불러오지 못했습니다.')
+        return response.json() as Promise<unknown[]>
+      })
+      .then(transfers => { if (!controller.signal.aborted) setPendingTransfers(transfers.length) })
+      .catch(() => { if (!controller.signal.aborted) setPendingTransfers(0) })
+    return () => controller.abort()
+  }, [revision])
 
   return <section className={`rm-shell${activeTab === 'organization' ? ' rm-shell--organization' : ''}`} aria-label="자원관리">
     <nav className="rm-top-tabs" aria-label="자원관리 하위 메뉴">
@@ -73,7 +89,24 @@ export default function ResourceManagement(
     </nav>
 
     <div className="rm-tab-pane" hidden={activeTab !== 'roster'}>
-      <ResourceRosterPage revision={revision} onDataChanged={refreshResourceData} />
+      <div className="rm-roster-tab-container">
+        <nav className="rm-roster-subtabs" aria-label="편성인원목록 메뉴">
+          <button type="button" className={rosterSubTab === 'people' ? 'is-active' : ''}
+            aria-current={rosterSubTab === 'people' ? 'page' : undefined} onClick={() => setRosterSubTab('people')}>편성인원목록</button>
+          <button type="button" className={rosterSubTab === 'transfers' ? 'is-active' : ''}
+            aria-current={rosterSubTab === 'transfers' ? 'page' : undefined} onClick={() => setRosterSubTab('transfers')}>
+            전입자{pendingTransfers > 0 && <span className="rm-transfer-tab-count" aria-label={`확인 대기 ${pendingTransfers}명`}>
+              {pendingTransfers > 99 ? '99+' : pendingTransfers}
+            </span>}
+          </button>
+        </nav>
+        <div className="rm-roster-subtab-pane" hidden={rosterSubTab !== 'people'}>
+          <ResourceRosterPage revision={revision} onDataChanged={refreshResourceData} />
+        </div>
+        <div className="rm-roster-subtab-pane" hidden={rosterSubTab !== 'transfers'}>
+          <TransferIntakePage revision={revision} onDataChanged={refreshResourceData} onPendingCountChange={setPendingTransfers} />
+        </div>
+      </div>
     </div>
     <div className="rm-tab-pane" hidden={activeTab !== 'organization'}>
       <OrganizationPage revision={revision} onDataChanged={refreshResourceData} />
