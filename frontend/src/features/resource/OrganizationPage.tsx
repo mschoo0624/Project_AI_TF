@@ -332,6 +332,25 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
       {selected && <>
         <div className="rm-org-breadcrumb">{breadcrumb.map((node, index) =>
           <span key={node.id}>{index > 0 ? ' › ' : ''}{node.name}</span>)}</div>
+        <section className="rm-org-ai-toolbar" aria-label="전투편성 AI">
+          <div className="rm-org-ai-summary">
+            <span aria-hidden="true">AI</span>
+            <div><h2>전투편성 AI</h2><p>선택한 단위의 빈 자리를 호환되는 인원으로 채웁니다.</p></div>
+          </div>
+          <div className="rm-org-ai-actions">
+            <button type="button" disabled={working || !canAutoFill} onClick={() => void autoFill()}>
+              {working ? '편성 중...' : '자동편성'}
+            </button>
+            {selected.kind === 'root' && <button type="button" className="is-secondary" disabled={working} onClick={() => void expandFormation()}>
+              소대·분대 확장
+            </button>}
+          </div>
+          {(result || expansionResult || !canAutoFill) && <div className="rm-org-ai-feedback" role="status">
+            {result && <span>{result.total_assigned}명 편성 · 잔여 부족 {result.total_shortfall}명</span>}
+            {expansionResult && <span>소대 {expansionResult.total_platoons}개 · 분대 {expansionResult.total_squads}개 구성</span>}
+            {!canAutoFill && <span>이 단위에 분대가 없습니다.</span>}
+          </div>}
+        </section>
         <div className="rm-org-metrics">
           <section><span>계획인원</span><b>{selected.planned_strength === null ? '미설정' : `${selected.planned_strength}명`}</b></section>
           <section><span>편성인원</span><b>{selected.person_count}명</b></section>
@@ -403,12 +422,6 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
         <p className="rm-org-shortfall">편성 부족인원 <b>{selected.shortfall === null ? '미설정' : `${selected.shortfall}명`}</b></p>
         {selected.planned_strength !== null && <div className="rm-org-rate">분대 정원 기준 편성률 <b>{selected.planned_strength > 0 ? Math.round((selected.planned_actual ?? 0) / selected.planned_strength * 100) : 0}%</b>
           <div><i style={{ width: `${Math.min(100, selected.planned_strength > 0 ? (selected.planned_actual ?? 0) / selected.planned_strength * 100 : 0)}%` }} /></div></div>}
-        <section className="rm-org-assistant"><div><h3>AI 어시스턴트</h3><button type="button" disabled={working || !canAutoFill} onClick={() => void autoFill()}>자동편성</button>{selected.kind === 'root' && <button type="button" disabled={working} onClick={() => void expandFormation()}>소대·분대 추가</button>}</div>
-          <p>자동편성은 기존 분대의 빈 자리만 채웁니다. 소대와 분대를 늘리려면 별도 확장 버튼을 사용하세요.</p>
-          {result && <p className="rm-org-success" role="status">{result.total_assigned}명 추가 편성 · 잔여 부족 {result.total_shortfall}명</p>}
-          {expansionResult && <p className="rm-org-success" role="status">현재 소대 {expansionResult.total_platoons}개 · 분대 {expansionResult.total_squads}개</p>}
-          {!canAutoFill && <p>이 단위에 분대가 없습니다. 왼쪽 아래 + 버튼으로 분대를 추가하세요.</p>}
-        </section>
         <section className="rm-org-breakdown"><h3>편성 요약</h3>
           {Object.entries(roster.reduce<Record<string, number>>((acc, person) => {
             const position = person.position || '미지정'
