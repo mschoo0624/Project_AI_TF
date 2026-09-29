@@ -55,7 +55,6 @@ JSON_SCHEMA = {
 
 VALID_UNTIL_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-
 @dataclass
 class ExtractionResult:
     """구조화된 추출 결과 + 검증. 스키마 위반 필드는 errors 에 쌓입니다."""

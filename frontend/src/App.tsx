@@ -318,7 +318,7 @@ function Home({ onNavigate }: { onNavigate: (page: HomeDestination) => void }) {
       {reviewError && <p className="home-data-note" role="alert">{reviewError}</p>}
     </section>
 
-    <HomeForecast />
+    <HomeForecastSection />
 
     <CompositionPanel data={summary?.composition ?? null} error={summaryError} />
   </section>
@@ -336,7 +336,118 @@ type ForecastPayload = {
 const forecastYears = [2024, 2025, 2026, 2027, 2028]
 const requiredFormationPopulation = 7 // Chart values are in units of 10,000 people.
 
-function HomeForecast() {
+type ForecastView = 'population' | 'attendance'
+const forecastViewTabs: { id: ForecastView; label: string }[] = [
+  { id: 'population', label: '정원 워치' },
+  { id: 'attendance', label: '참석 예측' },
+]
+
+function HomeForecastSection() {
+  const [view, setView] = useState<ForecastView>('population')
+  return <section className="home-forecast" aria-label="예비군 예상 추이">
+    <div className="forecast-view-toggle" role="tablist" aria-label="예측 화면 전환">
+      {forecastViewTabs.map(tab =>
+        <button key={tab.id} type="button" role="tab" aria-selected={view === tab.id}
+          className={`forecast-view-tab ${view === tab.id ? 'is-active' : ''}`}
+          onClick={() => setView(tab.id)}>{tab.label}</button>
+      )}
+    </div>
+    {view === 'population' ? <PopulationForecast /> : <AttendanceForecast />}
+  </section>
+}
+
+type AttendanceRound = { round: string; date: string; planned: number; final: number; attended: number; absent: number; rate: number }
+type AttendancePayload = { rounds: AttendanceRound[]; history_sessions: number }
+
+function AttendanceForecast() {
+  const [payload, setPayload] = useState<AttendancePayload | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    const load = () => fetch('/api/dashboard/attendance-forecast', { cache: 'no-store' })
+      .then(async response => {
+        if (!response.ok) throw new Error(`참석 예측 API 응답 오류 (${response.status})`)
+        return response.json() as Promise<AttendancePayload>
+      })
+      .then(data => { if (!cancelled) setPayload(data) })
+      .catch(reason => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : '참석 예측 데이터를 불러오지 못했습니다.')
+      })
+    void Promise.resolve().then(() => { if (!cancelled) return load() })
+    return () => { cancelled = true }
+  }, [])
+
+  if (error) return <div className="home-forecast-status"><strong>참석 예측 데이터를 불러오지 못했습니다.</strong><span>{error}</span></div>
+  if (!payload) return <div className="home-forecast-status"><strong>참석 예측 데이터 로딩 중…</strong></div>
+
+  const attendanceRounds = payload.rounds
+  const values = attendanceRounds.map(round => round.attended)
+  const dataMin = Math.min(...values)
+  const dataMax = Math.max(...values)
+  const margin = Math.max((dataMax - dataMin) * 0.6, dataMax * 0.12)
+  const maxValue = dataMax + margin
+  const minValue = Math.max(0, dataMin - margin)
+  const W = 760, H = 208, pad = { l: 58, r: 42, t: 26, b: 34 }
+  const x = (index: number) => pad.l + (W - pad.l - pad.r) * index / (attendanceRounds.length - 1)
+  const y = (value: number) => pad.t + (H - pad.t - pad.b) * (1 - (value - minValue) / (maxValue - minValue))
+  const path = attendanceRounds.map((round, index) => `${index === 0 ? 'M' : 'L'} ${x(index)} ${y(round.attended)}`).join(' ')
+  const totalFinal = attendanceRounds.reduce((sum, round) => sum + round.final, 0)
+  const totalAttended = attendanceRounds.reduce((sum, round) => sum + round.attended, 0)
+
+  return <>
+    <div className="forecast-header">
+      <div>
+        <h2>예비군 참석 예측</h2>
+        <p>회차별(1차~3차) 참석 예측 · 과거 세션 평균 참석률 기반 · 2026년</p>
+      </div>
+    </div>
+
+    <div className="forecast-chart-wrap attendance-chart-wrap">
+      <svg className="forecast-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="2026년 회차별 참석 예측 인원, 단위 명">
+        <text x={pad.l} y={13} className="forecast-axis">단위: 명</text>
+        {Array.from({ length: 5 }, (_, index) => {
+          const value = minValue + (maxValue - minValue) * index / 4
+          const yy = y(value)
+          return <g key={index}>
+            <line x1={pad.l} x2={W - pad.r} y1={yy} y2={yy} className="forecast-gridline" />
+            <text x={pad.l - 10} y={yy + 4} className="forecast-axis" textAnchor="end">{Math.round(value)}</text>
+          </g>
+        })}
+        <path d={path} className="forecast-line" />
+        {attendanceRounds.map((round, index) => <g key={round.round}>
+          <circle cx={x(index)} cy={y(round.attended)} r="5" className="forecast-point"><title>{round.round} {round.attended}명 (참석률 {(round.rate * 100).toFixed(1)}%)</title></circle>
+          <text x={x(index)} y={y(round.attended) - 10} className="forecast-value" textAnchor="middle">{round.attended}</text>
+          <text x={x(index)} y={y(round.attended) + 17} className="forecast-rate-label" textAnchor="middle">참석률 {(round.rate * 100).toFixed(1)}%</text>
+          <text x={x(index)} y={H - 16} className="forecast-axis" textAnchor="middle">{round.round}</text>
+          <text x={x(index)} y={H - 4} className="forecast-axis forecast-axis-sub" textAnchor="middle">{round.date.slice(5).replace('-', '/')}</text>
+        </g>)}
+      </svg>
+    </div>
+
+    <p className="forecast-note">올해 전체 총원 {totalFinal}명 중 {totalAttended}명 참석 예상. 훈련이 끝날 때마다 로그를 갱신해 정확도를 높이세요.</p>
+
+    <details className="attendance-details">
+      <summary>회차별 표로 보기</summary>
+      <table className="attendance-table">
+        <thead><tr><th>회차</th><th>훈련일</th><th>총원(최종대상)</th><th>참석</th><th>불참</th><th>참석률</th></tr></thead>
+        <tbody>
+          {attendanceRounds.map(round => <tr key={round.round}>
+            <td>{round.round}</td><td>{round.date}</td><td>{round.final}</td>
+            <td>{round.attended}</td><td>{round.absent}</td><td>{(round.rate * 100).toFixed(1)}%</td>
+          </tr>)}
+          <tr>
+            <td><strong>합계</strong></td><td>-</td><td><strong>{totalFinal}</strong></td>
+            <td><strong>{totalAttended}</strong></td><td><strong>{totalFinal - totalAttended}</strong></td>
+            <td><strong>{(totalAttended / totalFinal * 100).toFixed(1)}%</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </details>
+  </>
+}
+
+function PopulationForecast() {
   const [forecast, setForecast] = useState<ForecastPayload | null>(null)
   const [region, setRegion] = useState('전라남도')
   const [error, setError] = useState('')
@@ -365,8 +476,8 @@ function HomeForecast() {
     value: forecast?.data.baseline[region]?.[String(year)] ?? null,
   })), [forecast, region])
 
-  if (error) return <section className="home-forecast home-forecast-status" aria-label="예비군 예상 추이"><strong>예측 데이터를 불러오지 못했습니다.</strong><span>{error}</span></section>
-  if (!forecast) return <section className="home-forecast home-forecast-status" aria-label="예비군 예상 추이"><strong>예측 데이터 로딩 중…</strong></section>
+  if (error) return <div className="home-forecast-status"><strong>예측 데이터를 불러오지 못했습니다.</strong><span>{error}</span></div>
+  if (!forecast) return <div className="home-forecast-status"><strong>예측 데이터 로딩 중…</strong></div>
 
   const thresholdResult = forecastThreshold(forecast.years, forecast.data.baseline[region] ?? {}, forecast.hist_cutoff, requiredFormationPopulation)
   const thresholdText = thresholdResult.status === 'breach'
@@ -392,7 +503,7 @@ function HomeForecast() {
     return `${command} ${x(index)} ${y(row.value)}`
   }).join(' ')
 
-  return <section className="home-forecast" aria-label="예비군 예상 추이">
+  return <>
     <div className="forecast-header">
       <div>
         <h2>예비군 정원 워치</h2>
@@ -425,7 +536,7 @@ function HomeForecast() {
         <span>필요 병력 {requiredFormationPopulation}만명 기준</span>
       </aside>
     </div>
-  </section>
+  </>
 }
 export default App
 

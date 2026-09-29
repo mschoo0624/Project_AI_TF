@@ -16,6 +16,7 @@ from pathlib import Path
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
 from sklearn.pipeline import Pipeline
 
@@ -146,17 +147,48 @@ def train() -> Pipeline:
 
 
 def evaluate() -> dict:
-    """데이터가 적으므로 K-fold 교차검증으로 정확도를 추정 (홀드아웃 대신)."""
+    """중복 텍스트를 제외한 K-fold 교차검증으로 새 사유에 대한 성능을 추정."""
     texts, labels = load_labeled_examples()
-    counts = Counter(labels)
+    unique_examples = {}
+    for text, label in zip(texts, labels):
+        if text in unique_examples and unique_examples[text] != label:
+            raise ValueError("동일한 텍스트에 서로 다른 라벨이 있습니다.")
+        unique_examples[text] = label
+
+    unique_texts = list(unique_examples)
+    unique_labels = list(unique_examples.values())
+    counts = Counter(unique_labels)
     n_splits = min(5, min(counts.values())) if counts else 0
     if n_splits < 2:
-        raise RuntimeError("교차검증을 하기엔 각 카테고리별 예시가 너무 적습니다 (최소 2건/카테고리 필요).")
+        raise RuntimeError("교차검증을 하기엔 각 카테고리별 고유 텍스트가 너무 적습니다 (최소 2건/카테고리 필요).")
 
     pipeline = build_pipeline()
-    preds = cross_val_predict(pipeline, texts, labels, cv=StratifiedKFold(n_splits=n_splits))
-    accuracy = sum(p == y for p, y in zip(preds, labels)) / len(labels)
-    return {"accuracy": accuracy, "n_examples": len(labels), "n_splits": n_splits, "label_counts": dict(counts)}
+    preds = cross_val_predict(
+        pipeline, unique_texts, unique_labels,
+        cv=StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42),
+    )
+    categories = sorted(counts)
+    precision, recall, f1, support = precision_recall_fscore_support(
+        unique_labels, preds, labels=categories, zero_division=0,
+    )
+    accuracy = sum(pred == label for pred, label in zip(preds, unique_labels)) / len(unique_labels)
+    return {
+        "accuracy": accuracy,
+        "macro_f1": float(f1.mean()),
+        "n_examples": len(unique_labels),
+        "n_labeled_examples": len(labels),
+        "n_splits": n_splits,
+        "label_counts": dict(counts),
+        "per_class": {
+            category: {"precision": float(precision[index]), "recall": float(recall[index]),
+                       "f1": float(f1[index]), "support": int(support[index])}
+            for index, category in enumerate(categories)
+        },
+        "confusion_matrix": {
+            "labels": categories,
+            "counts": confusion_matrix(unique_labels, preds, labels=categories).tolist(),
+        },
+    }
 
 
 def load_model() -> Pipeline:
