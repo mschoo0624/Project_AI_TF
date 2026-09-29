@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
+import ministryLogo from './assets/마크 국영문서체 조합형(가로).png'
 import { forecastThreshold } from './forecastThreshold'
 import ResourceManagement from './features/resource/ResourceManagement'
 import { resourceTabs } from './features/resource/resourceTabs'
@@ -139,7 +140,7 @@ function App() {
 
   return <div className="app">
     <header className="system-topbar">
-      <div className="system-brand">예비군 업무체계</div>
+      <div className="system-brand"><img className="system-brand-logo" src={ministryLogo} alt="대한민국 국방부" /><span>예비군 업무체계</span></div>
       <div className="account-area" />
     </header>
     <div className="system-body">
