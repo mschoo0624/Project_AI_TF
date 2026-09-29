@@ -3,13 +3,11 @@ import './ResourceManagement.css'
 import ReviewManagement from '../review/ReviewManagement'
 import ResourceRosterPage from './ResourceRosterPage'
 import OrganizationPage from './OrganizationPage'
+import TransferIntakePage from './TransferIntakePage'
 import { resourceTabs } from './resourceTabs'
 import type { ResourceTabId } from './resourceTabs'
-import TransferIntakePage from './TransferIntakePage'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
-
-type RosterSubTabId = 'people' | 'transfers'
 
 type ProsecutionTarget = {
   military_number: string
@@ -45,6 +43,7 @@ type ProsecutionTrainingRecord = {
   notes: string | null
 }
 
+type RosterSubTabId = 'people' | 'transfers'
 export default function ResourceManagement(
   { initialTab = 'organization', selectedTab, onTabChange }: { initialTab?: ResourceTabId; selectedTab?: ResourceTabId; onTabChange?: (tab: ResourceTabId) => void } = {},
 ) {
