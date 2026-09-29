@@ -4,6 +4,8 @@ import ReviewManagement from '../review/ReviewManagement'
 import ResourceRosterPage from './ResourceRosterPage'
 import OrganizationPage from './OrganizationPage'
 import TransferIntakePage from './TransferIntakePage'
+import { resourceTabs } from './resourceTabs'
+import type { ResourceTabId } from './resourceTabs'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
@@ -41,21 +43,13 @@ type ProsecutionTrainingRecord = {
   notes: string | null
 }
 
-type ResourceTabId = 'roster' | 'organization' | 'hold' | 'travel' | 'prosecution'
 type RosterSubTabId = 'people' | 'transfers'
-
-const resourceTabs: { id: ResourceTabId; label: string }[] = [
-  { id: 'roster', label: '편성인원목록' },
-  { id: 'organization', label: '전투편성기구도' },
-  { id: 'hold', label: '보류자/연기자' },
-  { id: 'travel', label: '출국자/귀국자' },
-  { id: 'prosecution', label: '고발대상자' },
-]
-
 export default function ResourceManagement(
-  { initialTab = 'organization' }: { initialTab?: ResourceTabId } = {},
+  { initialTab = 'organization', selectedTab, onTabChange }: { initialTab?: ResourceTabId; selectedTab?: ResourceTabId; onTabChange?: (tab: ResourceTabId) => void } = {},
 ) {
-  const [activeTab, setActiveTab] = useState<ResourceTabId>(initialTab)
+  const [localTab, setLocalTab] = useState<ResourceTabId>(initialTab)
+  const activeTab = selectedTab ?? localTab
+  const setActiveTab = (tab: ResourceTabId) => { setLocalTab(tab); onTabChange?.(tab) }
   const [rosterSubTab, setRosterSubTab] = useState<RosterSubTabId>('people')
   const [revision, setRevision] = useState(0)
   const [pendingTransfers, setPendingTransfers] = useState(0)

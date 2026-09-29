@@ -293,7 +293,7 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
           {hasChildren ? <button type="button" className="rm-org-toggle"
             aria-label={`${node.name} ${open ? '접기' : '펼치기'}`} aria-expanded={open}
             onClick={() => setExpanded(old => { const next = new Set(old); if (next.has(node.id)) next.delete(node.id); else next.add(node.id); return next })}>
-            {open ? '⌄' : '›'}</button> : <span className="rm-org-toggle-placeholder" />}
+            {open ? '▲' : '▼'}</button> : <span className="rm-org-toggle-placeholder" />}
           <button type="button" className="rm-org-tree-select" onClick={() => {
             setSelectedId(node.id); setPage(1); setResult(null); setCheckedMembers(new Set())
           }} aria-current={selectedId === node.id ? 'page' : undefined}>
@@ -307,7 +307,7 @@ function OrganizationView({ squads, refreshKey, onRefresh, rosterError }: {
 
   return <div className="rm-org-layout">
     <aside className="rm-org-navigator" aria-label="전투편성 트리">
-      <header><strong>전투편성표</strong><span>⌄</span></header>
+      <header><strong>전투편성표</strong><span aria-hidden="true">▼</span></header>
       <div className="rm-org-tree" tabIndex={0} aria-label="편제 목록">{treeRows(null, 0)}
       <div className="rm-org-nav-footer">
         <strong>편성 기준</strong>

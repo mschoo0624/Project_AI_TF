@@ -160,17 +160,15 @@
   background: #f9fafe;
 }
 .worklog-chevron::after {
-  content: '';
+  content: '▲';
   position: absolute;
-  left: 9px;
-  top: 9px;
-  width: 7px;
-  height: 7px;
-  transform: rotate(45deg);
-  border-right: 1.8px solid #202833;
-  border-bottom: 1.8px solid #202833;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: #202833;
 }
-.worklog-chevron--closed::after { transform: rotate(-45deg); left: 8px; top: 9px; }
+.worklog-chevron--closed::after { content: '▼'; }
 .worklog-explorer-actions {
   flex: 0 0 auto;
   padding: 12px 14px 13px;

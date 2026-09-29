@@ -189,7 +189,7 @@ export default function WorkLogManagement() {
         <nav className="worklog-tree" aria-label="연도 및 월">
           <div className="worklog-tree-label">
             <strong>연도 / 월</strong>
-            <span className="worklog-chevron" aria-hidden="true" />
+            <span className="worklog-chevron worklog-chevron--closed" aria-hidden="true" />
           </div>
           {years.map(year => <div key={year}>
             <button

@@ -263,7 +263,7 @@ function InboxView({ queue, bootstrap }: { queue: QueueItem[]; bootstrap: Bootst
     <aside className="review-confirm-panel" aria-label="검토 대상자 확인">
       <button type="button" className="review-confirm-title" aria-expanded={showReview} onClick={() => setShowReview(current => !current)}>
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M6 2.5h8l5 5V21H6z"/><path d="M14 2.5V8h5M9 14l2 2 4-5"/></svg>
-        <span>검토대상자확인</span><small>{showReview ? '접기' : '펼치기'}</small>
+        <span>검토대상자확인</span><small>{showReview ? '접기 ▲' : '펼치기 ▼'}</small>
       </button>
       {showReview && (selected ? <ReviewPanel key={selected.id} item={selected} reasons={bootstrap.reject_reasons} verifyReasons={bootstrap.verify_reasons} onDone={onDone} /> :
         <p className="review-empty-state">검토 대기 서류가 없습니다.</p>)}
