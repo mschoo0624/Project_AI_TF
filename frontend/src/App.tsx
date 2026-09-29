@@ -120,6 +120,16 @@ const initialSchedules: Schedule[] = [
   { id: 2, date: '01/15', title: '월 중간 결산' },
 ]
 
+function HeaderClock() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const time = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+  return <time className="system-clock" dateTime={time} aria-label={`현재 시간 ${time}`}>{time}</time>
+}
+
 function App() {
   const [homeRevision, setHomeRevision] = useState(0)
   const [activePage, setActivePage] = useState<PageId>('home')
@@ -140,7 +150,7 @@ function App() {
 
   return <div className="app">
     <header className="system-topbar">
-      <div className="system-brand"><img className="system-brand-logo" src={ministryLogo} alt="대한민국 국방부" /><span>예비군 업무체계</span></div>
+      <div className="system-brand"><img className="system-brand-logo" src={ministryLogo} alt="대한민국 국방부" /><span>예비군 업무체계</span><HeaderClock /></div>
       <div className="account-area" />
     </header>
     <div className="system-body">

@@ -28,6 +28,7 @@ button { cursor:pointer; }
 .system-topbar { height:var(--topbar-height); display:flex; align-items:center; justify-content:space-between; padding:0 9px; border-bottom:1px solid #c9c9c9; background:#fff; }
 .system-brand { display:flex; align-items:center; gap:12px; font-size:15px; font-weight:600; color:#262d38; }
 .system-brand-logo { display:block; height:32px; width:auto; object-fit:contain; }
+.system-clock { font-family:'Space Mono',monospace; font-size:16px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .account-area { width:260px; height:100%; }
 .system-body { min-height:calc(var(--screen-height) - var(--topbar-height)); display:grid; grid-template-columns:var(--sidebar-width) minmax(0,1fr); }
 .sidebar { width:var(--sidebar-width); min-height:calc(var(--screen-height) - var(--topbar-height)); background:#1e293b; border-right:1px solid #273f52; }
