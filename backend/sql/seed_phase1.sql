@@ -169,71 +169,91 @@ SELECT
 FROM numbers
 WHERE number % 10 <> 0;
 
-/* Add varied training history for portal verification.
-   random() creates different values per seed run; all rows retain a unique
-   person's military number through the person_id foreign key. */
-WITH RECURSIVE numbers(number) AS (
-    SELECT 1
-    UNION ALL
-    SELECT number + 1 FROM numbers WHERE number < 500
-), training_candidates AS (
+/* Seed completed training that matches each person's annual training plan.
+   The calendar year is derived from the current year and service-year offset. */
+WITH training_candidates AS (
     SELECT
-        number,
-        (number - 1) % 9 AS service_year,
+        person.military_number,
+        person.branch,
+        person.rank,
+        person.service_year AS current_service_year,
+        annual_status.service_year,
+        annual_status.mobilization_status,
         CASE
-            WHEN (number - 1) % 9 BETWEEN 1 AND 4 AND number % 10 = 0 THEN 8
-            WHEN (number - 1) % 9 BETWEEN 1 AND 4 AND number % 2 = 0 THEN 28
-            WHEN (number - 1) % 9 BETWEEN 1 AND 4
-                AND ((number * 17 + number / 4 * 3) % 4) IN (1, 2) THEN 28
-            WHEN (number - 1) % 9 BETWEEN 1 AND 4 THEN 32
-            WHEN (number - 1) % 9 BETWEEN 5 AND 6 THEN 20
-            ELSE 0
-        END AS required_hours,
-        CASE WHEN number % 7 = 0 THEN '무단불참' ELSE 'completed' END AS attendance_status
-    FROM numbers
-), training_values AS (
+            WHEN annual_status.service_year BETWEEN 1 AND 6
+                AND person.rank IN ('하사', '중사', '상사', '원사', '소위', '중위', '대위', '소령', '중령', '대령')
+                AND annual_status.mobilization_status = '동원지정'
+                THEN 'type_i'
+            WHEN annual_status.service_year BETWEEN 1 AND 6
+                AND person.rank IN ('하사', '중사', '상사', '원사', '소위', '중위', '대위', '소령', '중령', '대령')
+                THEN 'type_ii'
+            WHEN annual_status.service_year BETWEEN 1 AND 6
+                AND annual_status.mobilization_status = '학생예비군'
+                THEN 'student'
+            WHEN annual_status.service_year BETWEEN 1 AND 4
+                AND annual_status.mobilization_status = '동원지정'
+                THEN 'type_i'
+            WHEN annual_status.service_year BETWEEN 1 AND 4
+                AND annual_status.mobilization_status = '동원미지정'
+                THEN 'type_ii'
+            WHEN annual_status.service_year BETWEEN 5 AND 6
+                THEN 'basic_and_operations'
+            ELSE 'none'
+        END AS plan_kind
+    FROM person
+    JOIN annual_status ON annual_status.person_id = person.military_number
+    WHERE annual_status.service_year BETWEEN 1 AND person.service_year
+), training_records AS (
     SELECT
-        number,
+        military_number,
+        current_service_year,
         service_year,
-        required_hours,
-        attendance_status,
+        CASE plan_kind
+            WHEN 'type_i' THEN '동원훈련Ⅰ형'
+            WHEN 'type_ii' THEN '동원훈련Ⅱ형'
+            WHEN 'student' THEN '학생예비군'
+            WHEN 'basic_and_operations' THEN '기본훈련'
+        END AS training_type,
         CASE
-            WHEN attendance_status = '무단불참' THEN 0
-            WHEN number % 5 = 0 THEN max(required_hours, 1)
-            ELSE max(1, 1 + abs(random()) % required_hours)
+            WHEN plan_kind = 'student' THEN 8
+            WHEN plan_kind = 'type_i' THEN 28
+            WHEN plan_kind = 'type_ii' AND branch = '공군' THEN 28
+            WHEN plan_kind = 'type_ii' AND rank IN ('하사', '중사', '상사', '원사', '소위', '중위', '대위', '소령', '중령', '대령') THEN 28
+            WHEN plan_kind = 'type_ii' THEN 32
+            WHEN plan_kind = 'basic_and_operations' THEN 8
         END AS training_hours
     FROM training_candidates
-    WHERE service_year BETWEEN 1 AND 6
-      AND (number % 3 <> 0 OR number % 7 = 0)
+    WHERE plan_kind <> 'none'
+    UNION ALL
+    SELECT
+        military_number,
+        current_service_year,
+        service_year,
+        '작계훈련(전·후반기)',
+        12
+    FROM training_candidates
+    WHERE plan_kind = 'basic_and_operations'
 )
 INSERT INTO education (
     person_id,
     education_year,
     training_year,
+    training_type,
     training_round,
     attendance_status,
     training_hours,
     notes
 )
 SELECT
-    printf('26-%08d', 72000000 + number),
+    military_number,
     service_year,
-    CASE
-        WHEN training_hours < required_hours THEN min(service_year + 1, 8)
-        ELSE service_year
-    END,
-    CASE
-        WHEN attendance_status = '무단불참' THEN 1 + abs(random()) % 3
-        ELSE 1
-    END,
-    attendance_status,
+    CAST(strftime('%Y', 'now') AS INTEGER) - current_service_year + service_year,
+    training_type,
+    1,
+    'completed',
     training_hours,
-    CASE
-        WHEN attendance_status = '무단불참' THEN '무단불참 이월 훈련 기록'
-        WHEN training_hours < required_hours THEN '부분 이수 후 잔여시간 이월 기록'
-        ELSE '훈련시간 전부 이수 기록'
-    END
-FROM training_values;
+    '개발용 연차별 훈련계획 이수 기록'
+FROM training_records;
 
 /* Add a pending postponement for every tenth person. */
 WITH RECURSIVE numbers(number) AS (

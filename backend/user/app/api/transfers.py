@@ -39,18 +39,22 @@ def _validate_training_hours(payload: TransferIntakeCreate) -> None:
 	for record in payload.training_records:
 		totals[record.service_year] = totals.get(record.service_year, 0) + record.training_hours
 
-	for service_year, hours in totals.items():
+	carryover = 0
+	for service_year in range(1, payload.person.service_year + 1):
 		target = target_training_hours(
 			service_year,
 			payload.person.mobilization_status,
 			payload.person.branch,
 			payload.person.rank,
 		)
-		if hours > target:
+		required = target + carryover
+		hours = totals.get(service_year, 0)
+		if hours > required:
 			raise HTTPException(
 				status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-				detail=f"Year {service_year} training hours exceed the {target}-hour target",
+				detail=f"Year {service_year} training hours exceed the {required}-hour requirement including carryover",
 			)
+		carryover = required - hours
 
 
 @router.get("", response_model=list[TransferIntakeRead])

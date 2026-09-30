@@ -16,8 +16,14 @@ STUDENT = {"학생", "학생예비군", "student"}
 # 예비군훈련 일부 보류자: hold status independent of designation.
 PARTIAL_HOLD = {"보류", "일부보류", "훈련일부보류", "partial_hold"}
 NAVY_AIR = {"해군", "공군"}
+AIR_FORCE = {"공군"}
 COMPLETED = {"이수", "completed"}
 UNEXCUSED_ABSENCE = {"무단불참", "무단_불참", "unexcused_absence"}
+TYPE_I_TRAINING_NAMES = {"동원훈련Ⅰ형", "동원훈련I형", "동원훈련1형"}
+ROUND_ESCALATION_TRAINING_NAMES = {
+    "동원훈련Ⅱ형", "동원훈련II형", "동원훈련2형", "동미참훈련",
+    "기본훈련", "작계훈련", "작계훈련(전·후반기)", "학생예비군",
+}
 # 부사관/장교는 6년차까지 동원훈련Ⅰ형 대상, 병은 4년차까지만 해당.
 OFFICER_CATEGORIES = {"부사관", "장교"}
 
@@ -32,7 +38,7 @@ def target_training_hours(
     rank: str | None = None,
 ) -> int:
     """Return the required hours for a reserve service year."""
-    # 간부(부사관/장교)는 동원상태와 무관하게 1~6년차 항상 동원훈련Ⅰ형만 대상이다.
+    # 간부 1~6년차는 28시간 대상이며 지정 여부에 따라 I형/II형이 달라진다.
     if is_officer_reservist(rank) and 1 <= service_year <= 6:
         return 28
     if mobilization_status in STUDENT and 1 <= service_year <= 6:
@@ -41,11 +47,11 @@ def target_training_hours(
         if mobilization_status in DESIGNATED:
             return 28
         if mobilization_status in NON_DESIGNATED:
-            return 28 if branch in NAVY_AIR else 32
+            return 28 if branch in AIR_FORCE or is_officer_reservist(rank) else 32
         return 0
     if 5 <= service_year <= 6:
-        # 병의 미지정/일부보류는 동원훈련Ⅱ형 대상이다.
-        if mobilization_status in NON_DESIGNATED or mobilization_status in PARTIAL_HOLD:
+        # 병 5~6년차는 기본훈련과 작계훈련이 기본. 일부보류는 별도 유형이다.
+        if mobilization_status in PARTIAL_HOLD:
             return 28 if branch in NAVY_AIR else 32
         # 그 외는 기본훈련 + 작계훈련.
         return 20
@@ -63,19 +69,19 @@ def training_plan(
 ) -> list[dict[str, int | str]]:
     """Return the training components that make up the annual target."""
     if is_officer_reservist(rank) and 1 <= service_year <= 6:
-        return [{"name": "동원훈련Ⅰ형", "hours": 28}]
+        training_type = "동원훈련Ⅰ형" if mobilization_status in DESIGNATED else "동원훈련Ⅱ형"
+        return [{"name": training_type, "hours": 28}]
     if mobilization_status in STUDENT and 1 <= service_year <= 6:
         return [{"name": "학생예비군", "hours": 8}]
     if 1 <= service_year <= 4:
         if mobilization_status in DESIGNATED:
             return [{"name": "동원훈련Ⅰ형", "hours": 28}]
         if mobilization_status in NON_DESIGNATED:
-            if branch in NAVY_AIR:
-                return [{"name": "동원훈련Ⅱ형", "hours": 28}]
-            return [{"name": "동원훈련Ⅱ형", "hours": 32}]
+            hours = 28 if branch in AIR_FORCE or is_officer_reservist(rank) else 32
+            return [{"name": "동원훈련Ⅱ형", "hours": hours}]
         return []
     if 5 <= service_year <= 6:
-        if mobilization_status in NON_DESIGNATED or mobilization_status in PARTIAL_HOLD:
+        if mobilization_status in PARTIAL_HOLD:
             hours = 28 if branch in NAVY_AIR else 32
             return [{"name": "동원훈련Ⅱ형", "hours": hours}]
         return [
@@ -92,6 +98,8 @@ def training_record_required_hours(
     """Resolve record requirements from the same plans used for annual targets."""
     name = training_type.strip()
     plan = training_plan(service_year, mobilization_status, branch, rank)
+    if name in {"동원훈련Ⅱ형", "동원훈련II형", "동원훈련2형"}:
+        return 28 if branch in NAVY_AIR else 32
     if not name or name == "훈련":
         return int(plan[0]["hours"]) if len(plan) == 1 else None
     # A historical record can differ from the person's current annual plan.
@@ -229,12 +237,20 @@ def training_completion_risk(
             for record in year_records
             if record.attendance_status in COMPLETED
         )
-        has_mobilization_record = any(
-            record.training_type.startswith("동원훈련") for record in year_records
+        has_type_i_no_show = any(
+            record.training_type.replace(" ", "") in TYPE_I_TRAINING_NAMES
+            and record.attendance_status in UNEXCUSED_ABSENCE
+            and record.training_round == 1
+            for record in year_records
         )
-        reached_general_threshold = any(record.training_round >= 3 for record in year_records)
+        reached_general_threshold = any(
+            record.training_type.replace(" ", "") in ROUND_ESCALATION_TRAINING_NAMES
+            and record.training_round >= 3
+            and record.attendance_status in UNEXCUSED_ABSENCE
+            for record in year_records
+        )
         if has_non_postponed_record and completed_hours == 0 and (
-            has_mobilization_record or reached_general_threshold
+            has_type_i_no_show or reached_general_threshold
         ):
             zero_hour_years.add(year)
 
@@ -262,9 +278,13 @@ def training_absence_prosecution_reason(
                    Education.training_round, Education.id)
     ).all()
     for record in records:
-        if record.training_type.startswith("동원훈련"):
-            return "동원훈련 무단불참 1회"
-        if record.training_round >= 3:
+        training_type = record.training_type.replace(" ", "")
+        if training_type in TYPE_I_TRAINING_NAMES and record.training_round == 1:
+            return "동원훈련Ⅰ형 1차 무단불참"
+        if (
+            training_type in ROUND_ESCALATION_TRAINING_NAMES
+            and record.training_round >= 3
+        ):
             return "일반 예비군훈련 3차 무단불참"
     return None
 
@@ -335,20 +355,20 @@ def training_progress(
         "training_status": (
             "훈련 예정" if person.service_year is not None
             and service_year > person.service_year else
-            "훈련 미이수" if target > 0 and remaining > 0 else
-            "훈련 이수" if target > 0 else "훈련 대상 아님"
+            "훈련 미이수" if required > 0 and remaining > 0 else
+            "훈련 이수" if required > 0 else "훈련 대상 아님"
         ),
         "completed": remaining == 0,
     }
 
 
 def all_training_progress(db: Session, person: Person) -> list[dict[str, object]]:
-    """Return annual progress and roll incomplete hours through year six only."""
+    """Carry unfinished hours through the end of the enlisted eight-year term."""
     progress: list[dict[str, object]] = []
     carryover = 0
     for service_year in range(0, 9):
-        current_carryover = carryover if 1 <= service_year <= 6 else 0
+        current_carryover = carryover if 1 <= service_year <= 8 else 0
         current = training_progress(db, person, service_year, current_carryover)
         progress.append(current)
-        carryover = int(current["remaining_hours"]) if service_year < 6 else 0
+        carryover = int(current["remaining_hours"]) if service_year < 8 else 0
     return progress

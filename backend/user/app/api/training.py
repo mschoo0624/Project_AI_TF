@@ -130,11 +130,11 @@ def add_training_record(
 	progress = all_training_progress(db, person)
 	# Progress includes year 0, so the service year is its list index.
 	year_progress = progress[payload.service_year]
-	target = int(year_progress["target_hours"])
-	if target == 0:
+	required = int(year_progress["required_hours"])
+	if required == 0:
 		raise HTTPException(
 		status_code=400,
-		detail="This service year has no configured training requirement",
+		detail="This service year has no scheduled or carried-over training requirement",
 	)
 	completed = int(year_progress["completed_hours"])
 	if payload.attendance_status not in COMPLETED and payload.attendance_status not in {
@@ -149,10 +149,11 @@ def add_training_record(
 		raise HTTPException(status_code=422, detail="Completed training must include positive hours")
 	if payload.attendance_status not in COMPLETED and payload.training_hours != 0:
 		raise HTTPException(status_code=422, detail="Non-completed training must have zero hours")
-	if payload.attendance_status in COMPLETED and payload.training_hours > target - completed:
+	remaining = max(required - completed, 0)
+	if payload.attendance_status in COMPLETED and payload.training_hours > remaining:
 		raise HTTPException(
 		status_code=400,
-		detail=f"Training hours exceed the remaining allowance ({max(target - completed, 0)} hours)",
+		detail=f"Training hours exceed the remaining allowance ({remaining} hours)",
 	)
 
 	record = Education(
@@ -223,17 +224,18 @@ def update_training_record(
 
 	progress = all_training_progress(db, person)
 	year_progress = progress[new_service_year]
-	target = int(year_progress["target_hours"])
-	if target == 0:
+	required = int(year_progress["required_hours"])
+	if required == 0:
 		raise HTTPException(
 			status_code=400,
-			detail="This service year has no configured training requirement",
+			detail="This service year has no scheduled or carried-over training requirement",
 		)
 
-	if new_attendance_status in COMPLETED and new_training_hours > target - other_completed:
+	remaining = max(required - other_completed, 0)
+	if new_attendance_status in COMPLETED and new_training_hours > remaining:
 		raise HTTPException(
 			status_code=400,
-			detail=f"Training hours exceed the remaining allowance ({max(target - other_completed, 0)} hours)",
+			detail=f"Training hours exceed the remaining allowance ({remaining} hours)",
 		)
 
 	for field, value in payload.model_dump(exclude_unset=True).items():

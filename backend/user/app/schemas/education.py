@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class TrainingRecordCreate(BaseModel):
-	service_year: int = Field(ge=1, le=6, description="Original obligation year")
+	service_year: int = Field(ge=1, le=8, description="Original obligation year")
 	training_year: int | None = Field(default=None, ge=1)
 	training_type: str = Field(default="기본훈련")
 	training_hours: int = Field(ge=0)
@@ -14,7 +14,7 @@ class TrainingRecordCreate(BaseModel):
 
 
 class TrainingRecordUpdate(BaseModel):
-	service_year: int | None = Field(default=None, ge=1, le=6)
+	service_year: int | None = Field(default=None, ge=1, le=8)
 	training_year: int | None = Field(default=None, ge=1)
 	training_hours: int | None = Field(default=None, ge=0)
 	training_type: str | None = None

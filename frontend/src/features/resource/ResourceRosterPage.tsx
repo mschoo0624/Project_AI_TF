@@ -303,7 +303,7 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
       .finally(() => setDetailLoading(false))
   }
   const startAddRecord = () => {
-    const serviceYear = selected?.service_year && selected.service_year <= 6 ? selected.service_year : 1
+    const serviceYear = selected?.service_year && selected.service_year <= 8 ? selected.service_year : 1
     setActionError(''); setEditingRecord(null); setRecordForm({
       service_year: serviceYear, training_year: new Date().getFullYear(), training_type: '기본훈련',
       training_round: 1, attendance_status: 'postponed', training_hours: 0, notes: '',
@@ -613,7 +613,7 @@ function TrainingRecordsPanel({
   return <div className="rm-training-panel">
     <div className="rm-training-panel-heading"><h4>훈련 기록</h4><button type="button" className="rm-btn rm-btn-primary" onClick={onAdd}>+ 기록 추가</button></div>
     {form && <div className="rm-record-editor">
-      <label>복무연차<input type="number" min="1" max="6" value={form.service_year} onChange={event => update('service_year', Number(event.target.value))} /></label>
+      <label>복무연차<input type="number" min="1" max="8" value={form.service_year} onChange={event => update('service_year', Number(event.target.value))} /></label>
       <label>훈련연도<input type="number" value={form.training_year} onChange={event => update('training_year', Number(event.target.value))} /></label>
       <label>훈련종류<select value={form.training_type} onChange={event => update('training_type', event.target.value)}>{trainingTypes.map(type => <option key={type}>{type}</option>)}</select></label>
       <label>차수<select value={form.training_round} onChange={event => update('training_round', Number(event.target.value))}><option value={1}>1차</option><option value={2}>2차</option><option value={3}>3차</option></select></label>

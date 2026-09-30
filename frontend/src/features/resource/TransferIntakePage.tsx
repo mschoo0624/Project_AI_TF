@@ -362,11 +362,11 @@ export default function TransferIntakePage({ revision, onDataChanged, onPendingC
           </div></section>
           <section className="rm-transfer-form-training"><header><div><h3>이전 훈련 이력</h3><p>실제로 이수한 기록만 입력하세요.</p></div>
             <button type="button" onClick={() => setForm(current => ({ ...current, training_records: [...current.training_records, {
-              service_year: Math.min(current.service_year, 6), training_year: new Date().getFullYear(),
+              service_year: Math.min(current.service_year, 8), training_year: new Date().getFullYear(),
               training_type: '기본훈련', training_round: 1, training_hours: 1, notes: '',
             }] }))}>+ 훈련 기록</button></header>
             {form.training_records.map((record, index) => <div className="rm-transfer-record-form" key={index}>
-              <label>복무연차<select value={record.service_year} onChange={event => updateTrainingRecord(index, { service_year: Number(event.target.value) })}>{Array.from({ length: Math.min(form.service_year, 6) }, (_, yearIndex) => yearIndex + 1).map(year => <option key={year} value={year}>{year}년차</option>)}</select></label>
+              <label>복무연차<select value={record.service_year} onChange={event => updateTrainingRecord(index, { service_year: Number(event.target.value) })}>{Array.from({ length: Math.min(form.service_year, 8) }, (_, yearIndex) => yearIndex + 1).map(year => <option key={year} value={year}>{year}년차</option>)}</select></label>
               <label>훈련연도<input type="number" min="1" required value={record.training_year} onChange={event => updateTrainingRecord(index, { training_year: Number(event.target.value) })} /></label>
               <label>훈련종류<select value={record.training_type} onChange={event => updateTrainingRecord(index, { training_type: event.target.value })}>{trainingTypes.map(value => <option key={value}>{value}</option>)}</select></label>
               <label>차수<select value={record.training_round} onChange={event => updateTrainingRecord(index, { training_round: Number(event.target.value) })}><option value={1}>1차</option><option value={2}>2차</option><option value={3}>3차</option></select></label>

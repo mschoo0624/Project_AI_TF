@@ -280,7 +280,7 @@ function ReserveManagement() {
       onEdit={() => { if (selectedPerson) { setPersonForm(selectedPerson); setEditingPerson(true) } }} onDelete={deletePerson}
       editingPerson={editingPerson} personForm={personForm} setPersonForm={setPersonForm} onSavePerson={savePerson} onCancelPerson={() => setEditingPerson(false)}
       editingRecord={editingRecord} recordForm={recordForm} setRecordForm={setRecordForm} addingRecord={addingRecord}
-      onStartAdd={() => { setAddingRecord(true); setEditingRecord(null); setRecordForm({ service_year: selectedPerson?.service_year && selectedPerson.service_year <= 6 ? selectedPerson.service_year : 1, training_year: new Date().getFullYear(), training_type: '기본훈련', training_round: 1, attendance_status: 'postponed', training_hours: 0, notes: '' }) }}
+      onStartAdd={() => { setAddingRecord(true); setEditingRecord(null); setRecordForm({ service_year: selectedPerson?.service_year && selectedPerson.service_year <= 8 ? selectedPerson.service_year : 1, training_year: new Date().getFullYear(), training_type: '기본훈련', training_round: 1, attendance_status: 'postponed', training_hours: 0, notes: '' }) }}
       onEditRecord={r => { setEditingRecord(r.id); setAddingRecord(false); setRecordForm({ service_year: r.education_year, training_year: r.training_year ?? new Date().getFullYear(), training_type: r.training_type, training_round: r.training_round, attendance_status: r.attendance_status, training_hours: r.training_hours, notes: r.notes ?? '' }) }}
       onCancelRecord={() => { setEditingRecord(null); setAddingRecord(false); setRecordForm(null) }} onSaveRecord={saveRecord} onAddRecord={addRecord} onDeleteRecord={deleteRecord} actionError={actionError} />}
     <CreatePersonModal open={addingPerson} form={createPersonForm} setForm={setCreatePersonForm} loading={createPersonLoading} error={createPersonError} onClose={() => setAddingPerson(false)} onSubmit={submitCreatePerson} />
@@ -338,7 +338,7 @@ function RecordsTab({ progress, records, editingRecord, recordForm, setRecordFor
   const update = (k: keyof TrainingRecordForm, v: string | number) => recordForm && setRecordForm({ ...recordForm, [k]: v })
   return <div className="modal-body"><div className="records-toolbar"><span>훈련시간, 훈련연도, 종류, 차수, 출결을 관리합니다.</span><button className="button primary" onClick={onStartAdd}>+ 훈련 기록 추가</button></div>
     {(addingRecord || editingRecord !== null) && recordForm && <div className="record-editor">
-      <label>의무연차<input type="number" min="1" max="6" value={recordForm.service_year} onChange={e => update('service_year', Number(e.target.value))} /></label>
+      <label>의무연차<input type="number" min="1" max="8" value={recordForm.service_year} onChange={e => update('service_year', Number(e.target.value))} /></label>
       <label>훈련연도<input type="number" value={recordForm.training_year} onChange={e => update('training_year', Number(e.target.value))} /></label>
       <label>훈련 종류<select value={recordForm.training_type} onChange={e => update('training_type', e.target.value)}>{trainingTypes.map(t => <option key={t}>{t}</option>)}</select></label>
       <label>차수<select value={recordForm.training_round} onChange={e => update('training_round', Number(e.target.value))}><option value={1}>1차</option><option value={2}>2차</option><option value={3}>3차</option></select></label>

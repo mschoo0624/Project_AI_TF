@@ -39,9 +39,9 @@ def test_summary_uses_unique_people_and_current_service_year():
         result = dashboard_summary(db)
         assert result['total_people'] == 6
         assert result['held_or_delayed'] == 2
-        assert result['prosecution_people'] == 1
+        assert result['prosecution_people'] == 0
         assert result['absent_people'] == 1
-        assert result['training_targets'] == 4
+        assert result['training_targets'] == 5
         assert result['training_completed'] == 1
         # The dashboard must agree with the detailed training page, including carryover.
         progress = [all_training_progress(db, person)[person.service_year] for person in people]

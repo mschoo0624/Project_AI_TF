@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 from user.app.models.person import Person
 from user.app.services.training import (
+	all_training_progress,
     apply_mobilization_status_change,
     mobilization_status_for_year,
     target_training_hours,
@@ -27,13 +28,17 @@ def make_session() -> Session:
     return Session(engine)
 
 
-def test_officer_cadre_always_gets_type1_regardless_of_mobilization_status() -> None:
+def test_officer_training_type_tracks_mobilization_designation() -> None:
     for service_year in range(1, 7):
         for rank in ("하사", "중사", "소위", "대위"):
             assert target_training_hours(service_year, "동원미지정", "육군", rank) == 28
             assert target_training_hours(service_year, None, "육군", rank) == 28
-            plan = training_plan(service_year, "동원미지정", "육군", rank)
-            assert plan == [{"name": "동원훈련Ⅰ형", "hours": 28}]
+            assert training_plan(service_year, "동원미지정", "육군", rank) == [
+                {"name": "동원훈련Ⅱ형", "hours": 28}
+            ]
+            assert training_plan(service_year, "동원지정", "육군", rank) == [
+                {"name": "동원훈련Ⅰ형", "hours": 28}
+            ]
 
 
 def test_officer_cadre_has_no_alternative_training_choice() -> None:
@@ -47,11 +52,22 @@ def test_officer_years_seven_eight_are_exempt() -> None:
     assert target_training_hours(8, "동원미지정", "육군", "소령") == 0
 
 
-def test_enlisted_year_five_six_uses_type2_for_non_designated_and_partial_hold() -> None:
-    assert target_training_hours(5, "동원미지정", "육군", "병장") == 32
+def test_enlisted_year_five_six_uses_basic_operations_except_partial_hold() -> None:
+    assert target_training_hours(5, "동원미지정", "육군", "병장") == 20
     assert target_training_hours(5, "일부보류", "육군", "이병") == 32
-    # Navy/Air get the reduced 28-hour variant.
-    assert target_training_hours(5, "동원미지정", "해군", "병장") == 28
+    assert target_training_hours(5, "일부보류", "해군", "병장") == 28
+    assert training_plan(5, "동원미지정", "육군", "병장") == [
+        {"name": "기본훈련", "hours": 8},
+        {"name": "작계훈련(전·후반기)", "hours": 12},
+    ]
+
+
+def test_year_one_to_four_type_two_hours_follow_branch_and_rank() -> None:
+    assert target_training_hours(3, "동원미지정", "육군", "병장") == 32
+    assert target_training_hours(3, "동원미지정", "해군", "병장") == 32
+    assert target_training_hours(3, "동원미지정", "해병대", "병장") == 32
+    assert target_training_hours(3, "동원미지정", "공군", "병장") == 28
+    assert target_training_hours(3, "동원미지정", "육군", "하사") == 28
 
 
 def test_student_reservist_always_gets_flat_eight_hours() -> None:
@@ -97,7 +113,7 @@ def test_training_progress_reports_personnel_category_for_nco() -> None:
     progress = training_progress(db, person, 3)
     assert progress["personnel_category"] == "부사관"
     assert progress["target_hours"] == 28
-    assert progress["training_plan"] == [{"name": "동원훈련Ⅰ형", "hours": 28}]
+    assert progress["training_plan"] == [{"name": "동원훈련Ⅱ형", "hours": 28}]
 
     db.close()
 
@@ -200,7 +216,7 @@ def test_year_five_zero_hours_is_visible_as_prosecution_target() -> None:
     db.add(Education(
         person_id=person.military_number, education_year=5, training_year=2026,
         training_type="기본훈련", training_round=3,
-        attendance_status="completed", training_hours=0,
+        attendance_status="무단불참", training_hours=0,
     ))
     db.commit()
 
@@ -208,7 +224,7 @@ def test_year_five_zero_hours_is_visible_as_prosecution_target() -> None:
 
     assert progress["current_zero_training_hours"] is True
     assert progress["prosecution_status"] == "고발대상자"
-    assert progress["prosecution_reason"] == "현재 연차 훈련시간 미이수"
+    assert progress["prosecution_reason"] == "일반 예비군훈련 3차 무단불참"
     db.close()
 
 
@@ -267,7 +283,7 @@ def test_one_mobilization_absence_prosecutes_officer_too() -> None:
     progress = training_progress(db, person, 3)
 
     assert progress["prosecution_status"] == "고발대상자"
-    assert progress["prosecution_reason"] == "동원훈련 무단불참 1회"
+    assert progress["prosecution_reason"] == "동원훈련Ⅰ형 1차 무단불참"
     db.close()
 
 
@@ -295,6 +311,70 @@ def test_general_training_requires_third_round_absence() -> None:
     db.close()
 
 
+def test_general_training_rounds_do_not_carry_between_service_years() -> None:
+    db = make_session()
+    person = Person(
+        military_number="26-70100200", name="병사", branch="육군", rank="병장",
+        service_year=3, mobilization_status="동원미지정", status="active",
+    )
+    db.add(person)
+    db.flush()
+    db.add_all([
+        Education(person_id=person.military_number, education_year=1, training_year=2024,
+                  training_type="기본훈련", training_round=2, attendance_status="무단불참"),
+        Education(person_id=person.military_number, education_year=2, training_year=2025,
+                  training_type="기본훈련", training_round=1, attendance_status="무단불참"),
+    ])
+    db.commit()
+
+    progress = training_progress(db, person, 3)
+
+    assert progress["consecutive_unexcused_absences"] == 2
+    assert progress["prosecution_status"] is None
+    db.close()
+
+
+def test_unfinished_hours_carry_through_enlisted_years_seven_and_eight() -> None:
+    db = make_session()
+    person = Person(
+        military_number="26-70100300", name="병사", branch="육군", rank="병장",
+        service_year=8, mobilization_status="동원미지정", status="active",
+    )
+    db.add(person)
+    for year in range(1, 5):
+        db.add(Education(
+            person_id=person.military_number, education_year=year, training_year=2022 + year,
+            training_type="동원훈련Ⅱ형", training_round=1,
+            attendance_status="completed", training_hours=32,
+        ))
+    db.add_all([
+        Education(person_id=person.military_number, education_year=5, training_year=2026,
+                  training_type="기본훈련", training_round=1,
+                  attendance_status="completed", training_hours=8),
+        Education(person_id=person.military_number, education_year=5, training_year=2026,
+                  training_type="작계훈련(전·후반기)", training_round=1,
+              attendance_status="completed", training_hours=12),
+        Education(person_id=person.military_number, education_year=6, training_year=2026,
+                  training_type="기본훈련", training_round=1,
+              attendance_status="completed", training_hours=8),
+        Education(person_id=person.military_number, education_year=6, training_year=2026,
+                  training_type="작계훈련(전·후반기)", training_round=1,
+              attendance_status="completed", training_hours=8),
+    ])
+    db.commit()
+
+    progress = all_training_progress(db, person)
+
+    assert progress[6]["remaining_hours"] == 4
+    assert progress[7]["target_hours"] == 0
+    assert progress[7]["carryover_hours"] == 4
+    assert progress[7]["required_hours"] == 4
+    assert progress[8]["target_hours"] == 0
+    assert progress[8]["carryover_hours"] == 4
+    assert len(progress) == 9
+    db.close()
+
+
 def test_legacy_unassigned_person_uses_non_designated_training_status() -> None:
     db = make_session()
     person = Person(
@@ -307,5 +387,8 @@ def test_legacy_unassigned_person_uses_non_designated_training_status() -> None:
     progress = training_progress(db, person, 5)
 
     assert progress["mobilization_status"] == "동원미지정"
-    assert progress["training_plan"] == [{"name": "동원훈련Ⅱ형", "hours": 32}]
+    assert progress["training_plan"] == [
+        {"name": "기본훈련", "hours": 8},
+        {"name": "작계훈련(전·후반기)", "hours": 12},
+    ]
     db.close()

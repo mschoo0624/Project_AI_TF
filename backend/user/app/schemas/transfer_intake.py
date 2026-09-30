@@ -13,7 +13,7 @@ class TransferPersonDetails(PersonBase):
 
 
 class TransferTrainingRecord(BaseModel):
-	service_year: int = Field(ge=1, le=6)
+	service_year: int = Field(ge=1, le=8)
 	training_year: int = Field(ge=1)
 	training_type: str = Field(min_length=1, max_length=50)
 	training_round: int = Field(default=1, ge=1, le=3)

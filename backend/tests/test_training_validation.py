@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from user.app.models.person import Person
+from user.app.models.education import Education
 from user.app.schemas.education import TrainingRecordCreate, TrainingRecordUpdate
 from user.app.api.training import add_training_record, update_training_record
 
@@ -47,6 +48,14 @@ def test_cannot_exceed_training_hours_on_add_and_update() -> None:
         status="active",
     )
     db.add(person)
+    db.add(Education(
+        person_id=person.military_number,
+        education_year=1,
+        training_year=2025,
+        training_type="동원훈련Ⅰ형",
+        attendance_status="completed",
+        training_hours=28,
+    ))
     db.commit()
 
     # 1. 2년차에 30시간 추가 시도 -> 초과(28시간)로 인해 400 에러 발생해야 함
@@ -105,4 +114,52 @@ def test_cannot_exceed_training_hours_on_add_and_update() -> None:
     )
     assert updated.training_hours == 28
 
+    db.close()
+
+
+def test_can_record_carryover_hours_during_year_seven() -> None:
+    db = make_session()
+    person = Person(
+        military_number="26-70000011",
+        name="이월시험",
+        branch="육군",
+        rank="병장",
+        service_year=7,
+        position="소총수",
+        mobilization_status="동원미지정",
+        status="active",
+    )
+    db.add(person)
+    db.add_all([
+        Education(person_id=person.military_number, education_year=year, training_year=2020 + year,
+                  training_type="동원훈련Ⅱ형", attendance_status="completed", training_hours=32)
+        for year in range(1, 5)
+    ])
+    db.add_all([
+        Education(person_id=person.military_number, education_year=5, training_year=2025,
+                  training_type="기본훈련", attendance_status="completed", training_hours=8),
+        Education(person_id=person.military_number, education_year=5, training_year=2025,
+                  training_type="작계훈련(전·후반기)", attendance_status="completed", training_hours=12),
+        Education(person_id=person.military_number, education_year=6, training_year=2026,
+                  training_type="기본훈련", attendance_status="completed", training_hours=8),
+        Education(person_id=person.military_number, education_year=6, training_year=2026,
+                  training_type="작계훈련(전·후반기)", attendance_status="completed", training_hours=8),
+    ])
+    db.commit()
+
+    record = add_training_record(
+        person.military_number,
+        TrainingRecordCreate(
+            service_year=7,
+            training_year=2026,
+            training_type="작계훈련(전·후반기)",
+            training_round=2,
+            attendance_status="completed",
+            training_hours=4,
+        ),
+        db,
+    )
+
+    assert record.education_year == 7
+    assert record.training_hours == 4
     db.close()

@@ -10,7 +10,13 @@ from user.app.models.education import Education
 from user.app.models.person import Person
 from user.app.models.postpoment import Postponement
 from user.app.services.assignment import personnel_category
-from user.app.services.training import COMPLETED, DESIGNATED, PARTIAL_HOLD, UNEXCUSED_ABSENCE, target_training_hours
+from user.app.services.training import (
+    COMPLETED,
+    PARTIAL_HOLD,
+    UNEXCUSED_ABSENCE,
+    all_training_progress,
+    target_training_hours,
+)
 
 
 def dashboard_counts(db: Session) -> dict[str, int]:
@@ -44,9 +50,8 @@ def dashboard_counts(db: Session) -> dict[str, int]:
                 completed[row.education_year] += row.training_hours
             if row.attendance_status in UNEXCUSED_ABSENCE:
                 absent |= row.education_year == current
-                row_status = annual.get((person.military_number, row.education_year), person.mobilization_status)
-                risk |= row.education_year <= current and (
-                    row.training_round >= 3 or (1 <= row.education_year <= 4 and row_status in DESIGNATED))
+            current_progress = all_training_progress(db, person)[current]
+            risk = bool(current_progress["prosecution_risk"])
         counts["prosecution_people"] += int(risk)
         counts["absent_people"] += int(absent)
 
@@ -56,9 +61,9 @@ def dashboard_counts(db: Session) -> dict[str, int]:
         for year in range(current + 1):
             year_status = annual.get((person.military_number, year), person.mobilization_status)
             target = target_training_hours(year, year_status, person.branch, person.rank)
-            required = target + (carryover if 1 <= year <= 6 else 0)
+            required = target + (carryover if 1 <= year <= 8 else 0)
             remaining = max(required - completed[year], 0)
-            carryover = remaining if year < 6 else 0
+            carryover = remaining if year < 8 else 0
         if required > 0:
             counts["training_targets"] += 1
             counts["training_completed"] += int(remaining == 0)
