@@ -13,17 +13,20 @@ from user.app.services.assignment import personnel_category
 DESIGNATED = {"지정", "동원지정", "designated"}
 NON_DESIGNATED = {"미지정", "동원미지정", "non_designated"}
 STUDENT = {"학생", "학생예비군", "student"}
+# 동원훈련Ⅰ형: 총 28시간(입영). 동원훈련Ⅱ형: 4일간 출퇴근, 총 32시간(공군·간부는 28시간).
 # 예비군훈련 일부 보류자: hold status independent of designation.
 PARTIAL_HOLD = {"보류", "일부보류", "훈련일부보류", "partial_hold"}
 NAVY_AIR = {"해군", "공군"}
 AIR_FORCE = {"공군"}
 COMPLETED = {"이수", "completed"}
+ATTENDED = {"참석", "attended"}
 UNEXCUSED_ABSENCE = {"무단불참", "무단_불참", "unexcused_absence"}
-TYPE_I_TRAINING_NAMES = {"동원훈련Ⅰ형", "동원훈련I형", "동원훈련1형"}
-ROUND_ESCALATION_TRAINING_NAMES = {
-    "동원훈련Ⅱ형", "동원훈련II형", "동원훈련2형", "동미참훈련",
-    "기본훈련", "작계훈련", "작계훈련(전·후반기)", "학생예비군",
-}
+ROUND_POSTPONED = {"연기", "postponed"}
+ROUND_HOLD = {"보류", "round_hold"}
+# Any status requiring positive training hours vs. any status that must record zero hours.
+ATTENDANCE_HOURS_REQUIRED = COMPLETED | ATTENDED
+ATTENDANCE_ZERO_HOURS = UNEXCUSED_ABSENCE | ROUND_POSTPONED | ROUND_HOLD
+TYPE_II_TRAINING_NAMES = {"동원훈련Ⅱ형", "동원훈련II형", "동원훈련2형"}
 # 부사관/장교는 6년차까지 동원훈련Ⅰ형 대상, 병은 4년차까지만 해당.
 OFFICER_CATEGORIES = {"부사관", "장교"}
 
@@ -212,6 +215,21 @@ def consecutive_unexcused_absences(
     return longest
 
 
+def _prosecutable_failure_reason(year_records: list[Education]) -> str | None:
+    """무단불참은 즉시, 동원훈련Ⅱ형은 1~3차를 모두 거치고도 이수 못하면 고발 대상입니다."""
+    if any(record.attendance_status in UNEXCUSED_ABSENCE for record in year_records):
+        return "무단불참"
+    type_ii_records = [
+        record for record in year_records
+        if record.training_type.replace(" ", "") in TYPE_II_TRAINING_NAMES
+    ]
+    reached_round_three = any(record.training_round >= 3 for record in type_ii_records)
+    completed = any(record.attendance_status in COMPLETED for record in type_ii_records)
+    if reached_round_three and not completed:
+        return "동원훈련Ⅱ형 1~3차 미이수"
+    return None
+
+
 def training_completion_risk(
     db: Session, person_id: str, up_to_year: int
 ) -> tuple[bool, int, bool]:
@@ -237,21 +255,7 @@ def training_completion_risk(
             for record in year_records
             if record.attendance_status in COMPLETED
         )
-        has_type_i_no_show = any(
-            record.training_type.replace(" ", "") in TYPE_I_TRAINING_NAMES
-            and record.attendance_status in UNEXCUSED_ABSENCE
-            and record.training_round == 1
-            for record in year_records
-        )
-        reached_general_threshold = any(
-            record.training_type.replace(" ", "") in ROUND_ESCALATION_TRAINING_NAMES
-            and record.training_round >= 3
-            and record.attendance_status in UNEXCUSED_ABSENCE
-            for record in year_records
-        )
-        if has_non_postponed_record and completed_hours == 0 and (
-            has_type_i_no_show or reached_general_threshold
-        ):
+        if has_non_postponed_record and completed_hours == 0 and _prosecutable_failure_reason(year_records) is not None:
             zero_hour_years.add(year)
 
     longest = 0
@@ -268,24 +272,21 @@ def training_completion_risk(
 def training_absence_prosecution_reason(
     db: Session, person_id: str, up_to_year: int
 ) -> str | None:
-    """Apply criminal referral thresholds to unexcused training absences."""
+    """고발대상자 판단: 무단불참은 직접, 동원훈련Ⅱ형은 1~3차 모두 미이수 시 대상입니다."""
     records = db.scalars(
         select(Education).where(
             Education.person_id == person_id,
             Education.education_year.between(1, up_to_year),
-            Education.attendance_status.in_(UNEXCUSED_ABSENCE),
         ).order_by(Education.education_year, Education.training_year,
                    Education.training_round, Education.id)
     ).all()
+    by_year: dict[int, list[Education]] = {}
     for record in records:
-        training_type = record.training_type.replace(" ", "")
-        if training_type in TYPE_I_TRAINING_NAMES and record.training_round == 1:
-            return "동원훈련Ⅰ형 1차 무단불참"
-        if (
-            training_type in ROUND_ESCALATION_TRAINING_NAMES
-            and record.training_round >= 3
-        ):
-            return "일반 예비군훈련 3차 무단불참"
+        by_year.setdefault(record.education_year, []).append(record)
+    for year in sorted(by_year):
+        reason = _prosecutable_failure_reason(by_year[year])
+        if reason is not None:
+            return reason
     return None
 
 

@@ -1,9 +1,12 @@
 SHELL := /bin/bash
 
-.PHONY: dev frontend reset-test-db randomize-assignment-data test-portal assignment-portal kill-portal
+.PHONY: dev frontend reset-test-db randomize-assignment-data test-portal assignment-portal kill-portal stt-dev stt-kill-portal
 
 dev:
 	source venv/bin/activate && uv run uvicorn user.app.main:app --reload --port 8002
+
+stt-dev:
+	source venv/bin/activate && uv run uvicorn stt.app.main:app --reload --port 8003
 
 frontend:
 	cd ../frontend && npm run dev -- --host 0.0.0.0
@@ -24,3 +27,6 @@ assignment-portal: randomize-assignment-data
 
 kill-portal:
 	fuser -k 8002/tcp || true
+
+stt-kill-portal:
+	fuser -k 8003/tcp || true

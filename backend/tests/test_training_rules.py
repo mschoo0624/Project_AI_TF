@@ -1,6 +1,6 @@
 """Coverage for the rank/mobilization-status-aware training rules."""
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -224,7 +224,7 @@ def test_year_five_zero_hours_is_visible_as_prosecution_target() -> None:
 
     assert progress["current_zero_training_hours"] is True
     assert progress["prosecution_status"] == "고발대상자"
-    assert progress["prosecution_reason"] == "일반 예비군훈련 3차 무단불참"
+    assert progress["prosecution_reason"] == "무단불참"
     db.close()
 
 
@@ -283,11 +283,11 @@ def test_one_mobilization_absence_prosecutes_officer_too() -> None:
     progress = training_progress(db, person, 3)
 
     assert progress["prosecution_status"] == "고발대상자"
-    assert progress["prosecution_reason"] == "동원훈련Ⅰ형 1차 무단불참"
+    assert progress["prosecution_reason"] == "무단불참"
     db.close()
 
 
-def test_general_training_requires_third_round_absence() -> None:
+def test_general_training_absence_prosecutes_immediately() -> None:
     db = make_session()
     person = Person(
         military_number="26-70100100", name="병사", branch="육군", rank="병장",
@@ -296,25 +296,70 @@ def test_general_training_requires_third_round_absence() -> None:
     db.add(person)
     db.flush()
     db.add(Education(person_id=person.military_number, education_year=5, training_year=2026,
-                     training_type="기본훈련", training_round=2,
+                     training_type="기본훈련", training_round=1,
                      attendance_status="무단불참"))
     db.commit()
-    assert training_progress(db, person, 5)["prosecution_status"] is None
 
-    record = db.scalar(select(Education).where(Education.person_id == person.military_number))
-    record.training_round = 3
-    db.commit()
     progress = training_progress(db, person, 5)
 
     assert progress["prosecution_status"] == "고발대상자"
-    assert progress["prosecution_reason"] == "일반 예비군훈련 3차 무단불참"
+    assert progress["prosecution_reason"] == "무단불참"
     db.close()
 
 
-def test_general_training_rounds_do_not_carry_between_service_years() -> None:
+def test_type_ii_training_incomplete_after_three_rounds_is_prosecuted() -> None:
     db = make_session()
     person = Person(
         military_number="26-70100200", name="병사", branch="육군", rank="병장",
+        service_year=3, mobilization_status="동원미지정", status="active",
+    )
+    db.add(person)
+    db.flush()
+    db.add_all([
+        Education(person_id=person.military_number, education_year=3, training_year=2026,
+                  training_type="동원훈련Ⅱ형", training_round=1, attendance_status="연기"),
+        Education(person_id=person.military_number, education_year=3, training_year=2026,
+                  training_type="동원훈련Ⅱ형", training_round=2, attendance_status="연기"),
+        Education(person_id=person.military_number, education_year=3, training_year=2026,
+                  training_type="동원훈련Ⅱ형", training_round=3, attendance_status="연기"),
+    ])
+    db.commit()
+
+    progress = training_progress(db, person, 3)
+
+    assert progress["prosecution_status"] == "고발대상자"
+    assert progress["prosecution_reason"] == "동원훈련Ⅱ형 1~3차 미이수"
+    db.close()
+
+
+def test_type_ii_training_completed_by_third_round_is_not_prosecuted() -> None:
+    db = make_session()
+    person = Person(
+        military_number="26-70100300", name="병사", branch="육군", rank="병장",
+        service_year=3, mobilization_status="동원미지정", status="active",
+    )
+    db.add(person)
+    db.flush()
+    db.add_all([
+        Education(person_id=person.military_number, education_year=3, training_year=2026,
+                  training_type="동원훈련Ⅱ형", training_round=1, attendance_status="연기"),
+        Education(person_id=person.military_number, education_year=3, training_year=2026,
+                  training_type="동원훈련Ⅱ형", training_round=2, attendance_status="연기"),
+        Education(person_id=person.military_number, education_year=3, training_year=2026,
+                  training_type="동원훈련Ⅱ형", training_round=3, attendance_status="이수", training_hours=32),
+    ])
+    db.commit()
+
+    progress = training_progress(db, person, 3)
+
+    assert progress["prosecution_status"] is None
+    db.close()
+
+
+def test_absence_in_an_earlier_service_year_still_prosecutes_within_range() -> None:
+    db = make_session()
+    person = Person(
+        military_number="26-70100400", name="병사", branch="육군", rank="병장",
         service_year=3, mobilization_status="동원미지정", status="active",
     )
     db.add(person)
@@ -330,7 +375,8 @@ def test_general_training_rounds_do_not_carry_between_service_years() -> None:
     progress = training_progress(db, person, 3)
 
     assert progress["consecutive_unexcused_absences"] == 2
-    assert progress["prosecution_status"] is None
+    assert progress["prosecution_status"] == "고발대상자"
+    assert progress["prosecution_reason"] == "무단불참"
     db.close()
 
 

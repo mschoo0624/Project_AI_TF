@@ -95,6 +95,57 @@ const rosterColumns: { key: SortKey; label: string }[] = [
 const rosterCollator = new Intl.Collator('ko', { numeric: true })
 const statusLabel = (status: string) => status === 'active' ? '복무 중' : status === 'on_leave' ? '휴가 중' : status
 
+type GroupTab = 'none' | 'year' | 'rank' | 'rankYear' | 'branch' | 'specialty'
+const groupTabs: { key: GroupTab; label: string }[] = [
+  { key: 'none', label: '전체' },
+  { key: 'year', label: '연차별' },
+  { key: 'rank', label: '계급별' },
+  { key: 'rankYear', label: '계급/연차별' },
+  { key: 'branch', label: '군별' },
+  { key: 'specialty', label: '주특기별' },
+]
+const yearBucketOrder = ['0년차', '1~4년차', '5~6년차', '7~8년차', '연차 미등록']
+const yearBucketLabel = (year: number | null) => {
+  if (year === 0) return '0년차'
+  if (year !== null && year >= 1 && year <= 4) return '1~4년차'
+  if (year !== null && year >= 5 && year <= 6) return '5~6년차'
+  if (year !== null && year >= 7 && year <= 8) return '7~8년차'
+  return '연차 미등록'
+}
+const rankCategoryOrder = ['부사관', '장교', '병사', '기타']
+const soldierRanks = new Set(['이병', '일병', '상병', '병장'])
+const ncoRanks = new Set(['하사', '중사', '상사', '원사'])
+const officerRanks = new Set(['소위', '중위', '대위', '소령', '중령', '대령'])
+const rankCategoryLabel = (rank: string | null) => {
+  if (rank !== null && soldierRanks.has(rank)) return '병사'
+  if (rank !== null && ncoRanks.has(rank)) return '부사관'
+  if (rank !== null && officerRanks.has(rank)) return '장교'
+  return '기타'
+}
+const groupKeyFor = (person: ResourcePerson, tab: GroupTab): string => {
+  switch (tab) {
+    case 'year': return yearBucketLabel(person.service_year)
+    case 'rank': return person.rank ?? '계급 미등록'
+    case 'rankYear': return `${rankCategoryLabel(person.rank)} · ${yearBucketLabel(person.service_year)}`
+    case 'branch': return person.branch
+    case 'specialty': return person.specialty ?? '주특기 미등록'
+    default: return ''
+  }
+}
+const sortGroupValues = (values: string[], tab: GroupTab): string[] => [...values].sort((a, b) => {
+  if (tab === 'rankYear') {
+    const categoryA = rankCategoryOrder.findIndex(label => a.startsWith(label))
+    const categoryB = rankCategoryOrder.findIndex(label => b.startsWith(label))
+    if (categoryA !== categoryB) return categoryA - categoryB
+  }
+  if (tab === 'year' || tab === 'rankYear') {
+    const orderA = yearBucketOrder.findIndex(label => a.endsWith(label))
+    const orderB = yearBucketOrder.findIndex(label => b.endsWith(label))
+    if (orderA !== orderB) return orderA - orderB
+  }
+  return rosterCollator.compare(a, b)
+})
+
 async function responseError(response: Response, fallback: string) {
   try {
     const data = await response.json() as { detail?: unknown }
@@ -133,13 +184,15 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
   })
   const [page, setPage] = useState(1)
   const [sort, setSort] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'squad_id', direction: 'ascending' })
+  const [groupTab, setGroupTab] = useState<GroupTab>('none')
+  const [groupValue, setGroupValue] = useState<string | null>(null)
   const [checked, setChecked] = useState<Set<string>>(() => new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [records, setRecords] = useState<TrainingRecord[]>([])
   const [trainingProgress, setTrainingProgress] = useState<TrainingProgress[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
-  const [detailTab, setDetailTab] = useState<'progress' | 'records'>('progress')
+  const [detailTab, setDetailTab] = useState<'progress' | 'records' | 'results'>('progress')
   const [recordForm, setRecordForm] = useState<TrainingRecordForm | null>(null)
   const [editingRecord, setEditingRecord] = useState<number | null>(null)
   const [actionError, setActionError] = useState('')
@@ -212,7 +265,7 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
   const positions = useMemo(() => [...new Set(people.map(person => person.position).filter((name): name is string => !!name))].sort(), [people])
   const years = useMemo(() => [...new Set(people.map(person => person.service_year)
     .filter((number): number is number => number !== null))].sort((a, b) => a - b), [people])
-  const filtered = useMemo(() => people.filter(person => {
+  const searchFiltered = useMemo(() => people.filter(person => {
     const term = appliedFilters.query.toLocaleLowerCase()
     return (!term || person.name.toLocaleLowerCase().includes(term) || person.military_number.toLocaleLowerCase().includes(term))
       && (!appliedFilters.unit || (appliedFilters.unit === '__unassigned__'
@@ -221,6 +274,14 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
       && (!appliedFilters.position || person.position === appliedFilters.position)
       && (!appliedFilters.year || String(person.service_year) === appliedFilters.year)
   }), [people, appliedFilters])
+  const groupOptions = useMemo(() => {
+    if (groupTab === 'none') return []
+    return sortGroupValues([...new Set(searchFiltered.map(person => groupKeyFor(person, groupTab)))], groupTab)
+  }, [searchFiltered, groupTab])
+  const filtered = useMemo(() => {
+    if (groupTab === 'none' || groupValue === null) return searchFiltered
+    return searchFiltered.filter(person => groupKeyFor(person, groupTab) === groupValue)
+  }, [searchFiltered, groupTab, groupValue])
   const personNumbers = useMemo(() => new Map(people.map((person, index) => [person.military_number, index + 1])), [people])
   const sorted = useMemo(() => {
     const value = (person: ResourcePerson): string | number | null => {
@@ -249,6 +310,38 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
     setSort(previous => ({ key, direction: previous.key === key && previous.direction === 'ascending' ? 'descending' : 'ascending' }))
     setPage(1)
   }
+  const selectGroupTab = (tab: GroupTab) => {
+    setGroupTab(tab)
+    setPage(1)
+    if (tab === 'none') { setGroupValue(null); return }
+    const values = sortGroupValues([...new Set(searchFiltered.map(person => groupKeyFor(person, tab)))], tab)
+    setGroupValue(values[0] ?? null)
+  }
+  const selectGroupValue = (value: string) => { setGroupValue(value); setPage(1) }
+  const renderPersonRow = (person: ResourcePerson) => <tr key={person.military_number}
+    className={selectedId === person.military_number ? 'is-selected' : ''}
+    tabIndex={0} aria-selected={selectedId === person.military_number}
+    onClick={() => openPerson(person.military_number)}
+    onKeyDown={event => {
+      if (event.target !== event.currentTarget) return
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        openPerson(person.military_number)
+      }
+    }}>
+    <td><input type="checkbox" aria-label={`${person.name} 선택`} checked={checked.has(person.military_number)}
+      onClick={event => event.stopPropagation()}
+      onChange={event => toggleChecked(person.military_number, event.target.checked)} /></td>
+    <td>{personNumbers.get(person.military_number)}</td><td className="rm-table-name">{person.name}</td>
+    <td className="rm-num">{person.military_number}</td>
+    <td>{person.branch}</td><td>{person.rank ?? '—'}</td>
+    <td title={person.position ?? undefined}>{person.position ?? '—'}</td>
+    <td title={squadLabel(person)}>{squadLabel(person)}</td>
+    <td><span className={`rm-status ${person.status === 'active' ? 'active' : 'other'}`}>
+      {person.status === 'active' ? '복무 중' : person.status === 'on_leave' ? '휴가 중' : person.status}
+    </span></td>
+    <td>{person.mobilization_status ?? '—'}</td><td>{person.service_year === null ? '—' : `${person.service_year}년차`}</td>
+  </tr>
   const pageSize = 20
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
   const actualPage = Math.min(page, pageCount)
@@ -397,6 +490,8 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
     setAppliedFilters({ query: '', unit: '', status: '', position: '', year: '' })
     setPage(1)
     setChecked(new Set())
+    setGroupTab('none')
+    setGroupValue(null)
   }
   const metrics = [
     { label: '전체 대상자', number: people.length, description: '전체 예비군 등록 인원', color: 'blue' },
@@ -435,6 +530,19 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
         <button type="button" className="rm-btn" onClick={reset}>초기화</button>
       </form>
       <section className="rm-person-list" aria-label="편성인원 목록">
+        <nav className="rm-group-tabs" aria-label="편성인원목록 정렬 기준">
+          {groupTabs.map(tab => <button key={tab.key} type="button"
+            className={groupTab === tab.key ? 'is-active' : ''}
+            aria-current={groupTab === tab.key ? 'page' : undefined}
+            onClick={() => selectGroupTab(tab.key)}>{tab.label}</button>)}
+        </nav>
+        {groupTab !== 'none' && <nav className="rm-group-options" aria-label="세부 목록 선택">
+          {groupOptions.length === 0 ? <span className="rm-group-options-empty">해당 조건의 목록이 없습니다.</span>
+            : groupOptions.map(value => <button key={value} type="button"
+              className={groupValue === value ? 'is-active' : ''}
+              aria-current={groupValue === value ? 'page' : undefined}
+              onClick={() => selectGroupValue(value)}>{value}</button>)}
+        </nav>}
         <div className="rm-person-list-toolbar">
           <label><input type="checkbox" checked={checkedOnPage} disabled={pageRows.length === 0}
             onChange={event => {
@@ -465,30 +573,7 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
                 <span className="rm-sort-indicator" aria-hidden="true">{sort.key === column.key ? (sort.direction === 'ascending' ? '▼' : '▲') : ''}</span>
               </button>
             </th>)}</tr></thead>
-            <tbody>{pageRows.map(person => <tr key={person.military_number}
-              className={selectedId === person.military_number ? 'is-selected' : ''}
-              tabIndex={0} aria-selected={selectedId === person.military_number}
-              onClick={() => openPerson(person.military_number)}
-              onKeyDown={event => {
-                if (event.target !== event.currentTarget) return
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  openPerson(person.military_number)
-                }
-              }}>
-              <td><input type="checkbox" aria-label={`${person.name} 선택`} checked={checked.has(person.military_number)}
-                onClick={event => event.stopPropagation()}
-                onChange={event => toggleChecked(person.military_number, event.target.checked)} /></td>
-              <td>{personNumbers.get(person.military_number)}</td><td className="rm-table-name">{person.name}</td>
-              <td className="rm-num">{person.military_number}</td>
-              <td>{person.branch}</td><td>{person.rank ?? '—'}</td>
-              <td title={person.position ?? undefined}>{person.position ?? '—'}</td>
-              <td title={squadLabel(person)}>{squadLabel(person)}</td>
-              <td><span className={`rm-status ${person.status === 'active' ? 'active' : 'other'}`}>
-                {person.status === 'active' ? '복무 중' : person.status === 'on_leave' ? '휴가 중' : person.status}
-              </span></td>
-              <td>{person.mobilization_status ?? '—'}</td><td>{person.service_year === null ? '—' : `${person.service_year}년차`}</td>
-            </tr>)}</tbody>
+            <tbody>{pageRows.map(renderPersonRow)}</tbody>
           </table>{filtered.length === 0 && <p className="rm-list-message">검색 결과가 없습니다.</p>}</div>}
         <footer className="rm-person-footer"><span>총 {filtered.length.toLocaleString('ko-KR')}명 중 {filtered.length ? (actualPage - 1) * pageSize + 1 : 0}–{Math.min(actualPage * pageSize, filtered.length)}명 표시</span>
           <nav aria-label="인원 목록 페이지">
@@ -529,12 +614,14 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
         }} />
         <nav className="rm-detail-tabs" aria-label="훈련 상세 메뉴">
           <button type="button" className={detailTab === 'progress' ? 'is-active' : ''} onClick={() => setDetailTab('progress')}>훈련 현황</button>
+          <button type="button" className={detailTab === 'results' ? 'is-active' : ''} onClick={() => setDetailTab('results')}>훈련 결과</button>
           <button type="button" className={detailTab === 'records' ? 'is-active' : ''} onClick={() => setDetailTab('records')}>훈련 기록 ({records.length})</button>
         </nav>
         {actionError && <p className="rm-detail-note rm-error">{actionError}</p>}
         {detailLoading ? <p className="rm-detail-note">훈련 정보를 불러오는 중입니다.</p>
           : detailError ? <p className="rm-detail-note rm-error">{detailError}</p>
           : detailTab === 'progress' ? <TrainingProgressPanel currentYear={selected.service_year} progress={trainingProgress} />
+          : detailTab === 'results' ? <TrainingResultsPanel currentYear={selected.service_year} records={records} />
           : <TrainingRecordsPanel records={records} form={recordForm} editingId={editingRecord}
               onAdd={startAddRecord} onEdit={startEditRecord} onChange={setRecordForm} onCancel={() => { setRecordForm(null); setEditingRecord(null) }}
               onSave={saveRecord} onDelete={deleteRecord} />}
@@ -582,7 +669,7 @@ function TrainingProgressPanel({ currentYear, progress }: { currentYear: number 
       <b>잔여 {current.remaining_hours}시간</b>
     </section>}
     <div className="rm-training-progress-list">
-      {progress.filter(item => item.service_year > 0).map(item => {
+      {progress.filter(item => item.service_year > 0 && (currentYear === null || item.service_year <= currentYear)).map(item => {
         const isPreviousIncomplete = currentYear !== null && item.service_year < currentYear && item.remaining_hours > 0
         return <div className={`rm-training-progress-row ${item.prosecution_risk ? 'is-risk' : isPreviousIncomplete ? 'is-incomplete' : ''}`} key={item.service_year}>
         <div><strong>{item.service_year}년차</strong><small>{item.training_plan.map(plan => `${plan.name} ${plan.hours}시간`).join(', ') || '훈련 대상 아님'}</small></div>
@@ -591,6 +678,105 @@ function TrainingProgressPanel({ currentYear, progress }: { currentYear: number 
       </div>
       })}
     </div>
+  </div>
+}
+
+type RoundStatusKind = 'attended' | 'completed' | 'absent' | 'postponed' | 'hold' | 'pending'
+const roundStatusLabel: Record<RoundStatusKind, string> = {
+  attended: '참석', completed: '이수', absent: '무단불참', postponed: '연기', hold: '보류', pending: '미처리',
+}
+const attendanceKind = (status: string | undefined): RoundStatusKind => {
+  if (!status) return 'pending'
+  if (['이수', 'completed'].includes(status)) return 'completed'
+  if (['참석', 'attended'].includes(status)) return 'attended'
+  if (['무단불참', '무단_불참', 'unexcused_absence'].includes(status)) return 'absent'
+  if (['연기', 'postponed'].includes(status)) return 'postponed'
+  if (['보류', 'round_hold'].includes(status)) return 'hold'
+  return 'pending'
+}
+type RoundCell = { round: number; kind: RoundStatusKind; label: string }
+// 1차/2차/3차 진행 규칙은 동원훈련Ⅱ형에만 적용됩니다.
+function buildYearRounds(records: TrainingRecord[], year: number): RoundCell[] {
+  // Keep only the latest entry per round; earlier attempts are superseded.
+  const byRound = new Map<number, TrainingRecord>()
+  for (const record of records) {
+    if (record.education_year !== year) continue
+    const existing = byRound.get(record.training_round)
+    if (!existing || record.id > existing.id) byRound.set(record.training_round, record)
+  }
+  const cells: RoundCell[] = []
+  let carriedFromRound: number | null = null
+  for (let round = 1; round <= 3; round++) {
+    const record = byRound.get(round)
+    const kind = attendanceKind(record?.attendance_status)
+    if (kind === 'hold') {
+      // 보류: exempt this round's training hour, do not carry it forward.
+      cells.push({ round, kind, label: '보류 (면제)' })
+      carriedFromRound = null
+      continue
+    }
+    if (kind === 'postponed') {
+      // 연기: push this round's obligation onto the next round.
+      cells.push({ round, kind, label: round < 3 ? `연기 (${round + 1}차로 이월)` : '연기' })
+      carriedFromRound = round < 3 ? round : null
+      continue
+    }
+    if (kind === 'pending' && carriedFromRound !== null) {
+      cells.push({ round, kind: 'pending', label: `${carriedFromRound}차 이월분 대기` })
+      carriedFromRound = null
+      continue
+    }
+    // 참석/이수/무단불참은 그 차수에서 종결되며, 무단불참은 다음 차수로 계속 이어집니다.
+    cells.push({ round, kind, label: roundStatusLabel[kind] })
+    carriedFromRound = null
+  }
+  return cells
+}
+// 동원훈련Ⅱ형이 아닌 훈련종류는 차수 구분 없이 하나의 결과만 표시합니다.
+function buildSingleStatus(records: TrainingRecord[]): RoundCell {
+  const latest = records.reduce<TrainingRecord | null>((best, record) => (!best || record.id > best.id ? record : best), null)
+  const kind = attendanceKind(latest?.attendance_status)
+  return { round: 0, kind, label: roundStatusLabel[kind] }
+}
+function TrainingResultsPanel({ currentYear, records }: { currentYear: number | null; records: TrainingRecord[] }) {
+  const years = currentYear === null ? [] : Array.from({ length: currentYear }, (_, index) => index + 1)
+  return <div className="rm-training-panel">
+    <div className="rm-training-panel-heading"><h4>차수별 훈련 결과</h4><span>현재 및 과거 연차 · 동원훈련Ⅱ형만 1차~3차</span></div>
+    {years.length === 0 ? <p className="rm-detail-note">해당 연차의 훈련 결과가 없습니다.</p> : <div className="rm-round-grid">
+      {years.map(year => {
+        const yearRecords = records.filter(record => record.education_year === year)
+        const typeII = yearRecords.filter(record => record.training_type === '동원훈련Ⅱ형')
+        const otherTypes = [...new Set(yearRecords.filter(record => record.training_type !== '동원훈련Ⅱ형').map(record => record.training_type))]
+        const hasAnyRecord = typeII.length > 0 || otherTypes.length > 0
+        return <div className="rm-round-grid-row" key={year}>
+          <span className="rm-round-grid-year">{year}년차</span>
+          <div className="rm-round-grid-groups">
+            {typeII.length > 0 && <div className="rm-round-grid-type">
+              <span className="rm-round-grid-type-label">동원훈련Ⅱ형</span>
+              <div className="rm-round-grid-cells">
+                {buildYearRounds(typeII, year).map(cell => <div key={cell.round} className={`rm-round-cell rm-round-cell--${cell.kind}`}>
+                  <b>{cell.round}차</b><span>{cell.label}</span>
+                </div>)}
+              </div>
+            </div>}
+            {otherTypes.map(type => {
+              const cell = buildSingleStatus(yearRecords.filter(record => record.training_type === type))
+              return <div className="rm-round-grid-type" key={type}>
+                <span className="rm-round-grid-type-label">{type}</span>
+                <div className="rm-round-grid-cells rm-round-grid-cells--single">
+                  <div className={`rm-round-cell rm-round-cell--${cell.kind}`}><b>결과</b><span>{cell.label}</span></div>
+                </div>
+              </div>
+            })}
+            {!hasAnyRecord && <div className="rm-round-grid-type">
+              <div className="rm-round-grid-cells rm-round-grid-cells--single">
+                <div className="rm-round-cell rm-round-cell--pending"><b>결과</b><span>미처리</span></div>
+              </div>
+            </div>}
+          </div>
+        </div>
+      })}
+    </div>}
   </div>
 }
 
@@ -617,7 +803,7 @@ function TrainingRecordsPanel({
       <label>훈련연도<input type="number" value={form.training_year} onChange={event => update('training_year', Number(event.target.value))} /></label>
       <label>훈련종류<select value={form.training_type} onChange={event => update('training_type', event.target.value)}>{trainingTypes.map(type => <option key={type}>{type}</option>)}</select></label>
       <label>차수<select value={form.training_round} onChange={event => update('training_round', Number(event.target.value))}><option value={1}>1차</option><option value={2}>2차</option><option value={3}>3차</option></select></label>
-      <label>출결<select value={form.attendance_status} onChange={event => update('attendance_status', event.target.value)}><option value="completed">이수</option><option value="무단불참">무단불참</option><option value="postponed">연기</option></select></label>
+      <label>출결<select value={form.attendance_status} onChange={event => update('attendance_status', event.target.value)}><option value="completed">이수</option><option value="참석">참석</option><option value="무단불참">무단불참</option><option value="postponed">연기</option><option value="보류">보류</option></select></label>
       <label>훈련시간<input type="number" min="0" value={form.training_hours} onChange={event => update('training_hours', Number(event.target.value))} /></label>
       <label className="wide">메모<input value={form.notes} onChange={event => update('notes', event.target.value)} /></label>
       <div className="rm-record-actions wide"><button type="button" className="rm-btn" onClick={onCancel}>취소</button><button type="button" className="rm-btn rm-btn-primary" onClick={onSave}>{editingId === null ? '추가' : '저장'}</button></div>

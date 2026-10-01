@@ -40,7 +40,8 @@ from user.app.schemas.education import (
 )
 from user.app.services.training import (
 	all_training_progress,
-    COMPLETED,
+    ATTENDANCE_HOURS_REQUIRED,
+    ATTENDANCE_ZERO_HOURS,
     mobilization_status_for_year,
     training_record_required_hours,
 )
@@ -137,20 +138,14 @@ def add_training_record(
 		detail="This service year has no scheduled or carried-over training requirement",
 	)
 	completed = int(year_progress["completed_hours"])
-	if payload.attendance_status not in COMPLETED and payload.attendance_status not in {
-		"연기",
-		"postponed",
-		"무단불참",
-		"무단_불참",
-		"unexcused_absence",
-	}:
+	if payload.attendance_status not in ATTENDANCE_HOURS_REQUIRED and payload.attendance_status not in ATTENDANCE_ZERO_HOURS:
 		raise HTTPException(status_code=422, detail="Invalid attendance status")
-	if payload.attendance_status in COMPLETED and payload.training_hours == 0:
+	if payload.attendance_status in ATTENDANCE_HOURS_REQUIRED and payload.training_hours == 0:
 		raise HTTPException(status_code=422, detail="Completed training must include positive hours")
-	if payload.attendance_status not in COMPLETED and payload.training_hours != 0:
+	if payload.attendance_status not in ATTENDANCE_HOURS_REQUIRED and payload.training_hours != 0:
 		raise HTTPException(status_code=422, detail="Non-completed training must have zero hours")
 	remaining = max(required - completed, 0)
-	if payload.attendance_status in COMPLETED and payload.training_hours > remaining:
+	if payload.attendance_status in ATTENDANCE_HOURS_REQUIRED and payload.training_hours > remaining:
 		raise HTTPException(
 		status_code=400,
 		detail=f"Training hours exceed the remaining allowance ({remaining} hours)",
@@ -197,17 +192,11 @@ def update_training_record(
 			detail="Cannot record training for a future service year",
 		)
 
-	if new_attendance_status not in COMPLETED and new_attendance_status not in {
-		"연기",
-		"postponed",
-		"무단불참",
-		"무단_불참",
-		"unexcused_absence",
-	}:
+	if new_attendance_status not in ATTENDANCE_HOURS_REQUIRED and new_attendance_status not in ATTENDANCE_ZERO_HOURS:
 		raise HTTPException(status_code=422, detail="Invalid attendance status")
-	if new_attendance_status in COMPLETED and new_training_hours == 0:
+	if new_attendance_status in ATTENDANCE_HOURS_REQUIRED and new_training_hours == 0:
 		raise HTTPException(status_code=422, detail="Completed training must include positive hours")
-	if new_attendance_status not in COMPLETED and new_training_hours != 0:
+	if new_attendance_status not in ATTENDANCE_HOURS_REQUIRED and new_training_hours != 0:
 		raise HTTPException(status_code=422, detail="Non-completed training must have zero hours")
 
 	other_completed = int(
@@ -216,7 +205,7 @@ def update_training_record(
 				Education.person_id == military_number,
 				Education.education_year == new_service_year,
 				Education.id != record_id,
-				Education.attendance_status.in_(COMPLETED),
+				Education.attendance_status.in_(ATTENDANCE_HOURS_REQUIRED),
 			)
 		)
 		or 0
@@ -232,7 +221,7 @@ def update_training_record(
 		)
 
 	remaining = max(required - other_completed, 0)
-	if new_attendance_status in COMPLETED and new_training_hours > remaining:
+	if new_attendance_status in ATTENDANCE_HOURS_REQUIRED and new_training_hours > remaining:
 		raise HTTPException(
 			status_code=400,
 			detail=f"Training hours exceed the remaining allowance ({remaining} hours)",
