@@ -8,6 +8,7 @@ import { resourceTabs } from './features/resource/resourceTabs'
 import type { ResourceTabId } from './features/resource/resourceTabs'
 import WorkLogManagement from './features/worklog/WorkLogManagement'
 import { countReviewDocuments, fetchBootstrap } from './features/review/api'
+import LegalChatbot from './features/chatbot/LegalChatbot'
 
 const featurePages = [
   { id: 'reserve', label: '부대관리', Component: EmptyReservePage },
@@ -135,6 +136,7 @@ function App() {
   const [activePage, setActivePage] = useState<PageId>('home')
   const [resourceLanding, setResourceLanding] = useState<ResourceTabId>('organization')
   const [expandedMenus, setExpandedMenus] = useState<Set<FeaturePageId>>(() => new Set())
+  const [chatOpen, setChatOpen] = useState(false)
   const navigate = (destination: HomeDestination) => {
     if (destination === 'home') setHomeRevision(value => value + 1)
     if (destination === 'resource:hold' || destination === 'resource:prosecution' || destination === 'resource:travel') {
@@ -148,10 +150,12 @@ function App() {
   const activeFeature = featurePages.find(page => page.id === activePage)
   const ActiveComponent = activeFeature?.Component
 
-  return <div className="app">
+  return <div className={`app ${chatOpen ? 'chat-open' : ''}`}>
     <header className="system-topbar">
       <div className="system-brand"><img className="system-brand-logo" src={ministryLogo} alt="대한민국 국방부" /><span>예비군 업무체계</span><HeaderClock /></div>
-      <div className="account-area" />
+      <div className="account-area">
+        <button type="button" className="legal-chat-toggle" aria-pressed={chatOpen} onClick={() => setChatOpen(value => !value)}>법령 챗봇</button>
+      </div>
     </header>
     <div className="system-body">
       <aside className="sidebar" aria-label="주 메뉴">
@@ -185,6 +189,7 @@ function App() {
             : ActiveComponent ? <ActiveComponent key={activePage} /> : null}
         </div>
       </main>
+      <LegalChatbot open={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
   </div>
 }

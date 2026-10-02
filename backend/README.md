@@ -159,3 +159,17 @@ uv pip install --python .\.venv\Scripts\python.exe -r .\requirements.txt
 ```
 
 서버가 실행된 동안 <http://127.0.0.1:8002/docs>에서 API 문서를 확인할 수 있습니다. 종료하려면 서버 터미널에서 `Ctrl + C`를 누릅니다.
+
+## Run Law Chatbot (RAG, Windows PowerShell)
+
+화면 오른쪽 위 **법령 챗봇** 버튼이 사용하는 서버입니다. 메인 백엔드(8002)와 별도로 **새 PowerShell 터미널**에서 실행합니다.
+
+```powershell
+cd .\backend\RAG
+.\.venv\Scripts\python.exe main.py --port 8004 --no-browser
+```
+
+- 시작 후 임베딩 모델(bge-m3)을 불러오는 데 1~2분이 걸리며, 그동안 챗봇에는 "모델을 불러오는 중"이 표시됩니다.
+- 답변 생성에는 Ollama가 실행 중이어야 합니다. 모델은 `backend\RAG\.env`의 `OPENAI_MODEL`에서 정합니다 (예: `ollama pull qwen2.5:7b`). Ollama가 없으면 관련 조문 검색만 동작합니다.
+- 가상환경 준비, 법령 추가, 인덱스 재생성은 [`RAG/README.md`](RAG/README.md)를 참고하세요.
+- `frontend/vite.config.ts`가 `/rag-api` 요청을 `http://127.0.0.1:8004`로 전달합니다.
