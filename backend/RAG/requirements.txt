@@ -1,0 +1,15 @@
+# CPU build of PyTorch (smaller). With an NVIDIA GPU, install torch from https://pytorch.org instead.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+
+sentence-transformers>=3.0   # embedding model (bge-m3) + optional reranker
+rank-bm25>=0.2.2             # keyword search
+numpy
+
+openai>=1.40                 # client for OpenAI / Ollama / any OpenAI-compatible LLM API
+
+fastapi>=0.110               # web server
+uvicorn>=0.27
+pydantic>=2
+
+pytest
