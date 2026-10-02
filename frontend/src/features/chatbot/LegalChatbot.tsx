@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent, ReactNode } from 'react'
+import Mascot from './Mascot'
 import './LegalChatbot.css'
 
 // 예비군 법령 RAG 서버 (backend/RAG, 기본 포트 8004). vite.config.ts의 /rag-api 프록시를 거칩니다.
@@ -184,10 +185,11 @@ export default function LegalChatbot({ open, onClose }: { open: boolean; onClose
     : !status.ready ? '모델을 불러오는 중… (처음 실행 시 1~2분)'
     : `${status.articles}개 조문 · 기준일 ${status.reference_date} · ${status.llm ? `LLM ${status.llm}` : 'LLM 없음 (조문 검색만)'}`
 
-  return <aside className="legal-chat" aria-label="예비군 법령 챗봇" hidden={!open}>
+  return <aside id="legal-chat-panel" className="legal-chat" aria-label="예비군 법령 도우미" hidden={!open}>
     <header className="legal-chat-header">
-      <div>
-        <h2>예비군 법령 챗봇</h2>
+      <Mascot size={42} mood={busy ? 'thinking' : 'idle'} />
+      <div className="legal-chat-title">
+        <h2>예비군 법령 도우미</h2>
         <p className={statusError || status?.error ? 'is-error' : undefined}>{statusText}</p>
       </div>
       <div className="legal-chat-header-actions">
@@ -198,23 +200,33 @@ export default function LegalChatbot({ open, onClose }: { open: boolean; onClose
 
     <div className="legal-chat-log" ref={logRef} aria-live="polite">
       {messages.length === 0 && <div className="legal-chat-empty">
-        <p>예비군법·시행령·시행규칙 등 법령 조문을 근거로 답변합니다. 질문마다 독립적으로 답변하므로 필요한 내용을 한 번에 적어 주세요.</p>
-        {EXAMPLES.map(example => <button key={example} type="button" disabled={!ready || busy} onClick={() => ask(example)}>{example}</button>)}
+        <Mascot size={88} mood="wave" />
+        <h3>안녕하세요! 예비군 법령 도우미예요</h3>
+        <p>예비군법·시행령·시행규칙 조문을 찾아서 알려드려요.<br />질문마다 따로 답하니 필요한 내용을 한 번에 적어 주세요.</p>
+        <div className="legal-chat-chips">
+          {EXAMPLES.map(example => <button key={example} type="button" disabled={!ready || busy} onClick={() => ask(example)}>{example}</button>)}
+        </div>
       </div>}
       {messages.map(message => message.role === 'user'
         ? <div key={message.id} className="legal-chat-bubble is-user">{message.text}</div>
-        : <div key={message.id} className="legal-chat-bubble is-assistant">
-          {message.text && renderAnswer(message.text)}
-          {message.error && <p className="is-error">{message.error}</p>}
-          {message.phase !== 'done' && !message.text && <p className="legal-chat-pending">{message.phase === 'searching' ? '조문 검색 중…' : '답변 작성 중…'}</p>}
-          {message.hits.length > 0 && <HitList hits={message.hits} />}
+        : <div key={message.id} className="legal-chat-row">
+          <span className="legal-chat-avatar"><Mascot size={30} mood={message.phase === 'done' ? 'idle' : 'thinking'} /></span>
+          <div className="legal-chat-bubble is-assistant">
+            {message.text && renderAnswer(message.text)}
+            {message.error && <p className="is-error">{message.error}</p>}
+            {message.phase !== 'done' && !message.text && <p className="legal-chat-pending">
+              <span className="legal-chat-dots" aria-hidden="true"><i /><i /><i /></span>
+              {message.phase === 'searching' ? '조문 찾는 중' : '답변 쓰는 중'}
+            </p>}
+            {message.hits.length > 0 && <HitList hits={message.hits} />}
+          </div>
         </div>)}
     </div>
 
     <form className="legal-chat-form" onSubmit={submit}>
-      <textarea value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={onKeyDown} rows={3} maxLength={2000}
-        placeholder={ready ? '질문을 입력하세요 (Shift+Enter 줄바꿈)' : '챗봇 준비 중…'} disabled={!ready} aria-label="질문" />
-      <button type="submit" disabled={!ready || busy || !draft.trim()}>{busy ? '답변 중' : '질문'}</button>
+      <textarea value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={onKeyDown} rows={2} maxLength={2000}
+        placeholder={ready ? '궁금한 걸 물어보세요 (Shift+Enter 줄바꿈)' : '도우미 준비 중…'} disabled={!ready} aria-label="질문" />
+      <button type="submit" disabled={!ready || busy || !draft.trim()} aria-label="질문 보내기">{busy ? '…' : '➤'}</button>
     </form>
   </aside>
 }

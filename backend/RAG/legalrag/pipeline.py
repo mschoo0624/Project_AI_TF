@@ -23,7 +23,6 @@ NO_LLM_MESSAGE = (
     "답변 생성을 사용하려면 OPENAI_API_KEY (또는 Ollama용 OPENAI_BASE_URL)을 설정하세요."
 )
 
-
 class RagPipeline:
     def __init__(self, cfg: Optional[Config] = None):
         self.cfg = cfg or Config()
@@ -39,7 +38,8 @@ class RagPipeline:
 
     def search(self, question: str, top_k: Optional[int] = None):
         return self.retriever.search(question, top_k)
-
+    
+    # 검색 후 완성된 답변을 반환
     def ask(self, question: str, top_k: Optional[int] = None) -> Dict:
         hits = self.search(question, top_k)
         if self.llm is None:
@@ -51,8 +51,9 @@ class RagPipeline:
             except Exception as e:  # quota, network, wrong model name, ...
                 logger.error("LLM call failed: %s", e)
                 answer = _llm_error_message(e)
-        return {"question": question, "answer": answer, "hits": [h.to_dict() for h in hits]}
+        return {"question": question, "answer": answer, "hits": [h.to_dict() for h in hits]} # 결과를 딕셔너리로 반환
 
+    # 답변 과정 보여주는 function
     def ask_stream(self, question: str, top_k: Optional[int] = None) -> Iterator[Dict]:
         """Yields {"type": "hits", ...} first, then {"type": "token", "text": ...} pieces."""
         hits = self.search(question, top_k)

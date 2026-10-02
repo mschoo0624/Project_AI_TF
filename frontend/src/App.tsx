@@ -8,6 +8,7 @@ import { resourceTabs } from './features/resource/resourceTabs'
 import type { ResourceTabId } from './features/resource/resourceTabs'
 import WorkLogManagement from './features/worklog/WorkLogManagement'
 import { countReviewDocuments, fetchBootstrap } from './features/review/api'
+import ChatLauncher from './features/chatbot/ChatLauncher'
 import LegalChatbot from './features/chatbot/LegalChatbot'
 
 const featurePages = [
@@ -153,9 +154,7 @@ function App() {
   return <div className={`app ${chatOpen ? 'chat-open' : ''}`}>
     <header className="system-topbar">
       <div className="system-brand"><img className="system-brand-logo" src={ministryLogo} alt="대한민국 국방부" /><span>예비군 업무체계</span><HeaderClock /></div>
-      <div className="account-area">
-        <button type="button" className="legal-chat-toggle" aria-pressed={chatOpen} onClick={() => setChatOpen(value => !value)}>법령 챗봇</button>
-      </div>
+      <div className="account-area" />
     </header>
     <div className="system-body">
       <aside className="sidebar" aria-label="주 메뉴">
@@ -180,6 +179,7 @@ function App() {
             </div>}
           </div>
         })}
+        <ChatLauncher open={chatOpen} onToggle={() => setChatOpen(value => !value)} />
       </aside>
       <main className="workspace">
         <div className="workspace-content">

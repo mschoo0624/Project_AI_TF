@@ -27,7 +27,7 @@ python -m scripts.build_index
 $env:OPENAI_API_KEY = "sk-..."                       # (A) OpenAI
 $env:OPENAI_MODEL   = "gpt-4o-mini"
 # $env:OPENAI_BASE_URL = "http://localhost:11434/v1"  # (B) Ollama (무료, 로컬)
-# $env:OPENAI_MODEL    = "qwen2.5:7b"
+# $env:OPENAI_MODEL    = "qwen2.5:7b" # 현재 우리 메인 모델
 
 # 4-a) 웹 UI
 python -m uvicorn legalrag.server:app --port 8000
