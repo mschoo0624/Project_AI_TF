@@ -6,6 +6,8 @@ html, body { min-width:0; min-height:100vh; background:#fff; }
 .system-body { display:block; min-height:calc(100vh - var(--topbar-height)); }
 .sidebar { position:fixed; left:0; top:var(--topbar-height); bottom:0; min-height:0; overflow-y:auto; z-index:40; }
 .workspace { margin-left:var(--sidebar-width); min-width:calc(1920px - var(--sidebar-width)); }
+/* Push mode: the law chatbot panel takes the right edge, so the workspace gives up that space instead of being covered. */
+.app.chat-open .workspace { margin-right:var(--chat-width); }
 .workspace-content { flex:none; width:calc(1920px - var(--sidebar-width)); margin:0 auto; position:relative; transform:translateZ(0); }
 .home-dashboard { height:852px; min-height:852px; grid-template-rows:300px 500px; gap:16px 24px; padding-top:20px; padding-bottom:16px; }
 .home-left-column { grid-template-rows:72px 212px 1fr; gap:16px; }

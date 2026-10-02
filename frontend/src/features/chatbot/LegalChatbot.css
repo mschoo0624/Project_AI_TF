@@ -1,0 +1,48 @@
+:root { --chat-width:380px; }
+
+.account-area { display:flex; align-items:center; justify-content:flex-end; }
+.legal-chat-toggle { height:32px; padding:0 14px; border:1px solid #c9d3df; border-radius:6px; background:#fff; color:#1e293b; font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+.legal-chat-toggle:hover { background:#f1f5f9; }
+.legal-chat-toggle[aria-pressed="true"] { border-color:#1e293b; background:#1e293b; color:#fff; }
+
+/* Fixed to the right edge like the sidebar on the left; layout.css reserves the space on .workspace. */
+.legal-chat { position:fixed; right:0; top:var(--topbar-height); bottom:0; z-index:40; width:var(--chat-width); display:flex; flex-direction:column; border-left:1px solid #c9c9c9; background:#fff; color:#151a21; font-size:13px; }
+.legal-chat[hidden] { display:none; }
+
+.legal-chat-header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; padding:12px 14px; background:#1e293b; color:#fff; }
+.legal-chat-header h2 { margin:0; font-size:15px; font-weight:600; }
+.legal-chat-header p { margin:4px 0 0; color:#b8c4d3; font-size:11px; line-height:1.4; }
+.legal-chat-header p.is-error { color:#ffb4ae; }
+.legal-chat-header-actions { display:flex; gap:6px; flex:none; }
+.legal-chat-header-actions button { height:26px; padding:0 8px; border:1px solid #475569; border-radius:4px; background:transparent; color:#e2e8f0; font:inherit; font-size:12px; cursor:pointer; }
+.legal-chat-header-actions button:hover { background:#273449; }
+
+.legal-chat-log { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:14px; background:#f9fbff; }
+.legal-chat-empty p { margin:0 0 10px; color:#566476; line-height:1.55; }
+.legal-chat-empty button { display:block; width:100%; margin-bottom:6px; padding:8px 10px; border:1px solid #d6dee8; border-radius:6px; background:#fff; color:#1e293b; font:inherit; text-align:left; cursor:pointer; }
+.legal-chat-empty button:hover:not(:disabled) { border-color:#6288a1; }
+.legal-chat-empty button:disabled { color:#94a3b8; cursor:default; }
+
+.legal-chat-bubble { max-width:92%; padding:9px 11px; border-radius:8px; line-height:1.6; overflow-wrap:anywhere; }
+.legal-chat-bubble.is-user { align-self:flex-end; background:#1e293b; color:#fff; white-space:pre-wrap; }
+.legal-chat-bubble.is-assistant { align-self:flex-start; border:1px solid #dde4ec; background:#fff; }
+.legal-chat-bubble p { margin:0 0 6px; }
+.legal-chat-bubble ul { margin:0 0 6px; padding-left:18px; list-style:disc; }
+.legal-chat-bubble .is-error { color:#a32323; }
+.legal-chat-pending { color:#728095; }
+.legal-chat-disclaimer { color:#728095; font-size:11px; }
+
+.legal-chat-hits { margin-top:6px; border-top:1px solid #e5eaf0; padding-top:6px; }
+.legal-chat-hits > summary { color:#54778e; font-size:12px; font-weight:600; cursor:pointer; }
+.legal-chat-hit { margin-top:6px; border:1px solid #e5eaf0; border-radius:6px; padding:6px 8px; }
+.legal-chat-hit summary { cursor:pointer; font-size:12px; font-weight:600; }
+.legal-chat-hit em { margin-left:6px; padding:1px 5px; border-radius:3px; background:#eef2f6; color:#566476; font-size:10px; font-style:normal; font-weight:500; }
+.legal-chat-hit em.is-upcoming { background:#fff4e0; color:#9a5b00; }
+.legal-chat-hit-meta { margin-top:4px; color:#728095; font-size:11px; }
+.legal-chat-hit-body { margin-top:4px; max-height:220px; overflow-y:auto; white-space:pre-wrap; font-size:12px; line-height:1.55; }
+
+.legal-chat-form { display:flex; gap:8px; padding:10px 12px; border-top:1px solid #dde4ec; background:#fff; }
+.legal-chat-form textarea { flex:1; resize:none; padding:7px 9px; border:1px solid #c9d3df; border-radius:6px; font:inherit; line-height:1.45; }
+.legal-chat-form textarea:focus { outline:2px solid #6288a1; outline-offset:-1px; }
+.legal-chat-form button { flex:none; width:60px; border:0; border-radius:6px; background:#1e293b; color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+.legal-chat-form button:disabled { background:#94a3b8; cursor:default; }

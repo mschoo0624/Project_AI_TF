@@ -25,6 +25,8 @@ cd .\backend
 
 `frontend/vite.config.ts`는 개발 중 `/api`로 시작하는 요청을 `http://localhost:8002`로 전달하고, 전달 전에 `/api` 접두사를 제거합니다. 백엔드 설치 및 가상환경 준비는 [`backend/README.md`](../backend/README.md)를 참고하세요.
 
+법령 챗봇(화면 오른쪽 위 **법령 챗봇** 버튼)은 RAG 서버가 따로 필요합니다. `/rag-api` 요청은 `http://127.0.0.1:8004`로 전달되며, 실행 방법은 [`backend/README.md`](../backend/README.md#run-law-chatbot-rag-windows-powershell)를 참고하세요. 챗봇을 열면 오른쪽에 패널이 생기고 작업 화면이 그만큼 왼쪽으로 밀립니다.
+
 ## 개발 명령
 
 다음 명령은 모두 `frontend` 폴더에서 실행합니다.

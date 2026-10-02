@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>예비군 법령 RAG</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #667085; --line: #e3e6eb;
+    --accent: #2f5d50; --accent-soft: #e6efe9; --warn: #9a5b00; --warn-soft: #fff4e0; --ref: #3b5b9a; --ref-soft: #e8eefa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c; --card: #1c2027; --text: #e6e8ec; --muted: #9aa3b2; --line: #2c323c;
+      --accent: #7fbfa8; --accent-soft: #1f3029; --warn: #f0b95a; --warn-soft: #3a2e17; --ref: #9db7ec; --ref-soft: #1f2a40;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.65 "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 28px 16px 60px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  form { display: flex; gap: 8px; }
+  textarea { flex: 1; resize: vertical; min-height: 52px; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
+             background: var(--card); color: var(--text); font: inherit; }
+  button { padding: 0 20px; border: 0; border-radius: 10px; background: var(--accent); color: var(--card); font: inherit; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .opts { display: flex; gap: 14px; align-items: center; color: var(--muted); font-size: 13px; margin: 8px 2px 0; flex-wrap: wrap; }
+  .examples button { background: var(--accent-soft); color: var(--accent); font-weight: 500; padding: 4px 10px; border-radius: 99px; font-size: 13px; margin: 0 4px 6px 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-top: 18px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+  #answer p { margin: 0 0 10px; } #answer ul { margin: 0 0 10px; padding-left: 20px; }
+  #answer .disclaimer { color: var(--muted); font-size: 12.5px; }
+  .hit { border-top: 1px solid var(--line); padding: 10px 0; }
+  .hit:first-of-type { border-top: 0; }
+  .hit summary { cursor: pointer; list-style: none; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .hit summary::-webkit-details-marker { display: none; }
+  .num { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 22px; }
+  .title { font-weight: 600; }
+  .tag { font-size: 11.5px; padding: 1px 7px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+  .tag.upcoming { background: var(--warn-soft); color: var(--warn); }
+  .tag.ref { background: var(--ref-soft); color: var(--ref); }
+  .score { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .body { white-space: pre-wrap; margin: 8px 0 0 30px; font-size: 14px; }
+  .meta { margin-left: 30px; color: var(--muted); font-size: 12px; }
+  .status { color: var(--muted); font-size: 13px; }
+  .error { color: #c0392b; }
+</style>
+</head>
+<body>
+<main>
+  <h1>예비군 법령 RAG</h1>
+  <div class="sub" id="status">서버 상태 확인 중…</div>
+
+  <form id="form">
+    <textarea id="q" placeholder="예) 예비군 훈련은 1년에 최대 며칠까지 받을 수 있나요?" required></textarea>
+    <button id="go" type="submit" disabled>질문</button>
+  </form>
+  <div class="opts">
+    <label>조문 수 <select id="topk"><option>4</option><option selected>6</option><option>8</option><option>10</option></select></label>
+    <label><input type="checkbox" id="searchOnly"> 조문 검색만 (LLM 없이)</label>
+  </div>
+  <div class="opts examples" id="examples"></div>
+
+  <div class="card" id="answerCard" hidden><h2>답변</h2><div id="answer"></div></div>
+  <div class="card" id="hitsCard" hidden><h2>검색된 조문</h2><div id="hits"></div></div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const EXAMPLES = [
+  "예비군 훈련은 1년에 최대 며칠까지 받을 수 있나요?",
+  "예비군 훈련 때문에 회사에서 불이익을 받으면 어떻게 하나요?",
+  "훈련 소집에 응하지 않으면 처벌이 있나요?",
+  "예비군 시행령 제14조 내용 알려줘",
+  "상비예비군은 어떻게 선발하나요?",
+];
+for (const ex of EXAMPLES) {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = ex;
+  b.onclick = () => { $("q").value = ex; $("form").requestSubmit(); };
+  $("examples").appendChild(b);
+}
+
+function esc(s) { return s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+// tiny markdown: **bold**, "- " lists, paragraphs
+function md(text) {
+  const out = []; let list = [];
+  const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  const flush = () => { if (list.length) { out.push("<ul>" + list.map(li => `<li>${inline(li)}</li>`).join("") + "</ul>"); list = []; } };
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (/^[-*•]\s+/.test(line)) { list.push(line.replace(/^[-*•]\s+/, "")); continue; }
+    flush();
+    if (!line) continue;
+    if (line.startsWith("※")) out.push(`<p class="disclaimer">${inline(line)}</p>`);
+    else out.push(`<p>${inline(line.replace(/^#+\s*/, ""))}</p>`);
+  }
+  flush();
+  return out.join("");
+}
+
+function renderHits(hits) {
+  $("hitsCard").hidden = false;
+  $("hits").innerHTML = hits.map((h, i) => {
+    const tags = [
+      `<span class="tag ${h.status === "시행 예정" ? "upcoming" : ""}">${esc(h.status)}${h.status === "시행 예정" ? " " + h.effective_date : ""}</span>`,
+      h.via !== "검색" ? `<span class="tag ref">${esc(h.via)}</span>` : "",
+    ].join("");
+    return `<details class="hit" ${i < 2 ? "open" : ""}>
+      <summary><span class="num">${i + 1}</span><span class="title">${esc(h.title)}</span>${tags}
+        <span class="score">${h.score.toFixed(3)}</span></summary>
+      <div class="meta">${esc(h.law_type)} ${esc(h.promulgation_no)} · 시행 ${esc(h.effective_date)}${h.chapter ? " · " + esc(h.chapter) : ""}</div>
+      <div class="body">${esc(h.text)}</div>
+    </details>`;
+  }).join("");
+}
+
+let ready = false;  // the submit button stays disabled until the models are loaded
+
+async function checkStatus() {
+  try {
+    const s = await (await fetch("/api/status")).json();
+    if (s.error) { $("status").innerHTML = `<span class="error">로드 실패: ${esc(s.error)}</span>`; return; }
+    if (!s.ready) { $("status").textContent = "모델을 불러오는 중… (처음 실행 시 1~2분)"; setTimeout(checkStatus, 2000); return; }
+    $("status").textContent = `${s.laws.length}개 법령 · ${s.articles}개 조문 · 기준일 ${s.reference_date} · LLM: ${s.llm || "없음 (조문 검색만 가능)"}`;
+    if (!s.llm) $("searchOnly").checked = true;
+    ready = true; $("go").disabled = false;
+  } catch { $("status").textContent = "서버에 연결할 수 없습니다."; setTimeout(checkStatus, 3000); }
+}
+
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const question = $("q").value.trim();
+  if (!question || !ready) return;
+  const body = JSON.stringify({ question, top_k: +$("topk").value });
+  $("go").disabled = true;
+  $("hitsCard").hidden = true;
+  $("answerCard").hidden = $("searchOnly").checked;
+  $("answer").innerHTML = '<span class="status">조문 검색 중…</span>';
+  try {
+    if ($("searchOnly").checked) {
+      const r = await fetch("/api/search", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+      renderHits((await r.json()).hits);
+      return;
+    }
+    const r = await fetch("/api/ask/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    const reader = r.body.getReader(); const dec = new TextDecoder();
+    let buf = "", answer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+        if (!line.trim()) continue;
+        const ev = JSON.parse(line);
+        if (ev.type === "hits") { renderHits(ev.hits); $("answer").innerHTML = '<span class="status">답변 작성 중…</span>'; }
+        else if (ev.type === "token") { answer += ev.text; $("answer").innerHTML = md(answer); }
+        else if (ev.type === "error") { $("answer").innerHTML = `<p class="error">${esc(ev.text)}</p>`; }
+      }
+    }
+  } catch (err) {
+    $("answerCard").hidden = false;
+    $("answer").innerHTML = `<p class="error">오류: ${esc(String(err.message || err))}</p>`;
+  } finally { $("go").disabled = !ready; }
+});
+$("q").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("form").requestSubmit(); } });
+checkStatus();
+</script>
+</body>
+</html>
