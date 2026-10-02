@@ -42,6 +42,7 @@ from user.app.services.training import (
 	all_training_progress,
     ATTENDANCE_HOURS_REQUIRED,
     ATTENDANCE_ZERO_HOURS,
+	ROUND_SCHEDULED,
     mobilization_status_for_year,
     training_record_required_hours,
 )
@@ -72,16 +73,18 @@ def get_training_hours(
 	db: Session = Depends(get_db),
 ) -> dict[str, object]:
 	person = _get_person_or_404(military_number, db)
+	progress = all_training_progress(db, person)
 
 	return {
 		"military_number": military_number,
 		"current_service_year": person.service_year,
-		"progress": all_training_progress(db, person),
+		"progress": progress,
 		"records": [
 			{
 				"id": record.id,
 				"education_year": record.education_year,
 				"training_year": record.training_year,
+				"scheduled_date": record.scheduled_date,
 				"training_type": record.training_type,
 				"training_round": record.training_round,
 				"mobilization_status": next(
@@ -97,7 +100,8 @@ def get_training_hours(
 				"required_hours": training_record_required_hours(
 					record.training_type, record.education_year,
 					mobilization_status_for_year(db, person, record.education_year),
-					person.branch, person.rank,
+					person.branch, person.rank, person.position,
+					bool(progress[record.education_year]["officer_type_ii_makeup"]),
 				),
 				"notes": record.notes,
 			}
@@ -140,6 +144,8 @@ def add_training_record(
 	completed = int(year_progress["completed_hours"])
 	if payload.attendance_status not in ATTENDANCE_HOURS_REQUIRED and payload.attendance_status not in ATTENDANCE_ZERO_HOURS:
 		raise HTTPException(status_code=422, detail="Invalid attendance status")
+	if payload.attendance_status in ROUND_SCHEDULED and payload.scheduled_date is None:
+		raise HTTPException(status_code=422, detail="Scheduled training requires a scheduled date")
 	if payload.attendance_status in ATTENDANCE_HOURS_REQUIRED and payload.training_hours == 0:
 		raise HTTPException(status_code=422, detail="Completed training must include positive hours")
 	if payload.attendance_status not in ATTENDANCE_HOURS_REQUIRED and payload.training_hours != 0:
@@ -155,6 +161,7 @@ def add_training_record(
 		person_id=military_number,
 		education_year=payload.service_year,
 		training_year=payload.training_year or person.service_year or payload.service_year,
+		scheduled_date=payload.scheduled_date,
 		training_type=payload.training_type,
 		training_round=payload.training_round,
 		attendance_status=payload.attendance_status,
@@ -185,6 +192,7 @@ def update_training_record(
 	new_service_year = payload.service_year if payload.service_year is not None else record.education_year
 	new_attendance_status = payload.attendance_status if payload.attendance_status is not None else record.attendance_status
 	new_training_hours = payload.training_hours if payload.training_hours is not None else record.training_hours
+	new_scheduled_date = payload.scheduled_date if payload.scheduled_date is not None else record.scheduled_date
 
 	if person.service_year is not None and new_service_year > person.service_year:
 		raise HTTPException(
@@ -194,6 +202,8 @@ def update_training_record(
 
 	if new_attendance_status not in ATTENDANCE_HOURS_REQUIRED and new_attendance_status not in ATTENDANCE_ZERO_HOURS:
 		raise HTTPException(status_code=422, detail="Invalid attendance status")
+	if new_attendance_status in ROUND_SCHEDULED and new_scheduled_date is None:
+		raise HTTPException(status_code=422, detail="Scheduled training requires a scheduled date")
 	if new_attendance_status in ATTENDANCE_HOURS_REQUIRED and new_training_hours == 0:
 		raise HTTPException(status_code=422, detail="Completed training must include positive hours")
 	if new_attendance_status not in ATTENDANCE_HOURS_REQUIRED and new_training_hours != 0:

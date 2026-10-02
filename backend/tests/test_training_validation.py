@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -6,7 +8,8 @@ from sqlalchemy.pool import StaticPool
 from user.app.models.person import Person
 from user.app.models.education import Education
 from user.app.schemas.education import TrainingRecordCreate, TrainingRecordUpdate
-from user.app.api.training import add_training_record, update_training_record
+from user.app.api.training import add_training_record, get_training_hours, update_training_record
+from user.app.services.training import all_training_progress
 
 
 def test_training_year_accepts_calendar_year_for_create_and_update() -> None:
@@ -32,6 +35,102 @@ def make_session() -> Session:
 
     models.Person.metadata.create_all(engine)
     return Session(engine)
+
+
+def test_scheduled_record_requires_and_returns_session_date() -> None:
+    db = make_session()
+    person = Person(
+        military_number="26-70100301",
+        name="예정 훈련",
+        branch="육군",
+        rank="병장",
+        service_year=1,
+        position="소총수",
+        mobilization_status="동원미지정",
+        status="active",
+    )
+    db.add(person)
+    db.commit()
+
+    try:
+        add_training_record(
+            person.military_number,
+            TrainingRecordCreate(
+                service_year=1,
+                training_type="기본훈련",
+                attendance_status="scheduled",
+                training_hours=0,
+            ),
+            db,
+        )
+        assert False, "Scheduled training must have a date"
+    except HTTPException as error:
+        assert error.status_code == 422
+
+    scheduled_date = date.today() + timedelta(days=2)
+    record = add_training_record(
+        person.military_number,
+        TrainingRecordCreate(
+            service_year=1,
+            training_year=scheduled_date.year,
+            scheduled_date=scheduled_date,
+            training_type="기본훈련",
+            attendance_status="scheduled",
+            training_hours=0,
+        ),
+        db,
+    )
+
+    data = get_training_hours(person.military_number, db)
+    assert record.scheduled_date == scheduled_date
+    assert data["records"][0]["scheduled_date"] == scheduled_date
+    assert data["records"][0]["attendance_status"] == "scheduled"
+    db.close()
+
+
+def test_officer_can_record_32_hour_type_two_makeup_after_postponement() -> None:
+    db = make_session()
+    person = Person(
+        military_number="26-70100300",
+        name="간부 보충훈련",
+        branch="육군",
+        rank="하사",
+        service_year=1,
+        position="분대장",
+        mobilization_status="동원미지정",
+        status="active",
+    )
+    db.add(person)
+    db.add(Education(
+        person_id=person.military_number,
+        education_year=1,
+        training_year=2026,
+        training_type="동원훈련Ⅱ형",
+        training_round=1,
+        attendance_status="연기",
+        training_hours=0,
+    ))
+    db.commit()
+
+    record = add_training_record(
+        person.military_number,
+        TrainingRecordCreate(
+            service_year=1,
+            training_year=2026,
+            training_type="동원훈련Ⅱ형",
+            training_round=2,
+            attendance_status="completed",
+            training_hours=32,
+        ),
+        db,
+    )
+
+    progress = all_training_progress(db, person)[1]
+    assert record.training_hours == 32
+    assert progress["target_hours"] == 32
+    assert progress["completed_hours"] == 32
+    assert progress["remaining_hours"] == 0
+    db.close()
 
 
 def test_cannot_exceed_training_hours_on_add_and_update() -> None:

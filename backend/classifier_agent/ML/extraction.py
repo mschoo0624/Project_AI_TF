@@ -249,7 +249,7 @@ def _standalone_dates(doc_text: str) -> list[tuple[int, int, int]]:
 
 
 def detect_anomalies(doc_text: str) -> list[str]:
-    """문서 내용만으로 위조 의심 신호를 규칙 기반으로 탐지 (파일명에 의존하지 않음)."""
+    """문서 내용만으로 위조 의심 신호를 규칙 기반으로 탐지""" 
     flags = []
 
     if "미기재" in doc_text:

@@ -141,6 +141,8 @@ def init_db() -> None:
             )
         if "training_year" not in education_columns:
             connection.execute(text("ALTER TABLE education ADD COLUMN training_year INTEGER"))
+        if "scheduled_date" not in education_columns:
+            connection.execute(text("ALTER TABLE education ADD COLUMN scheduled_date DATE"))
         if "training_type" not in education_columns:
             connection.execute(
                 text(

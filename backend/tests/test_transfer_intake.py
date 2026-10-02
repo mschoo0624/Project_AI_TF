@@ -96,3 +96,64 @@ def test_transfer_confirmation_requires_compatible_squad() -> None:
 	assert stored_transfer.status == "pending"
 	assert db.get(Person, "26-70000030") is None
 	db.close()
+
+
+def test_officer_type_two_makeup_round_accepts_32_hours() -> None:
+	payload = TransferIntakeCreate(
+		person=TransferPersonDetails(
+			military_number="26-70000031",
+			name="간부 전입예비군",
+			branch="육군",
+			rank="하사",
+			service_year=2,
+			position="분대장",
+			mobilization_status="동원미지정",
+		),
+		training_records=[
+			TransferTrainingRecord(
+				service_year=2,
+				training_year=2026,
+				training_type="동원훈련Ⅱ형",
+				training_round=2,
+				training_hours=32,
+			),
+		],
+	)
+	db = make_session()
+
+	transfer = submit_transfer_intake(payload, db)
+	assert transfer.status == "pending"
+	db.close()
+
+
+def test_officer_type_two_carryover_uses_32_hour_target() -> None:
+	payload = TransferIntakeCreate(
+		person=TransferPersonDetails(
+			military_number="26-70000032",
+			name="간부 이월 전입예비군",
+			branch="육군",
+			rank="하사",
+			service_year=2,
+			position="분대장",
+			mobilization_status="동원미지정",
+		),
+		training_records=[
+			TransferTrainingRecord(
+				service_year=1,
+				training_year=2025,
+				training_type="동원훈련Ⅱ형",
+				training_hours=20,
+			),
+			TransferTrainingRecord(
+				service_year=2,
+				training_year=2026,
+				training_type="동원훈련Ⅱ형",
+				training_hours=32,
+			),
+		],
+	)
+	db = make_session()
+
+	transfer = submit_transfer_intake(payload, db)
+	assert transfer.status == "pending"
+	db.close()

@@ -20,7 +20,13 @@ from user.app.services.assignment import (
 	confirm_assignment_selections,
 	recommend_squads_for_person,
 )
-from user.app.services.training import target_training_hours
+from user.app.services.training import (
+	NON_DESIGNATED_OR_UNSET,
+	TYPE_II_TRAINING_NAMES,
+	is_local_reserve_command_position,
+	is_officer_reservist,
+	target_training_hours,
+)
 
 router = APIRouter(prefix="/transfers", tags=["transfers"])
 
@@ -36,6 +42,12 @@ def _read_transfer(
 
 def _validate_training_hours(payload: TransferIntakeCreate) -> None:
 	totals: dict[int, int] = {}
+	makeup_years = {
+		record.service_year
+		for record in payload.training_records
+		if record.training_type.replace(" ", "") in TYPE_II_TRAINING_NAMES
+		and record.training_round >= 2
+	}
 	for record in payload.training_records:
 		totals[record.service_year] = totals.get(record.service_year, 0) + record.training_hours
 
@@ -46,7 +58,16 @@ def _validate_training_hours(payload: TransferIntakeCreate) -> None:
 			payload.person.mobilization_status,
 			payload.person.branch,
 			payload.person.rank,
+			payload.person.position,
 		)
+		if (
+			(carryover > 0 or service_year in makeup_years)
+			and service_year <= 6
+			and payload.person.mobilization_status in NON_DESIGNATED_OR_UNSET
+			and is_officer_reservist(payload.person.rank)
+			and not is_local_reserve_command_position(payload.person.position)
+		):
+			target = 32
 		required = target + carryover
 		hours = totals.get(service_year, 0)
 		if hours > required:

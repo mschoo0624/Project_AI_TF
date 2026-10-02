@@ -29,10 +29,12 @@ type TrainingRecord = {
   id: number
   education_year: number
   training_year: number | null
+  scheduled_date: string | null
   training_type: string
   training_round: number
   attendance_status: string
   training_hours: number
+  required_hours?: number | null
   notes: string | null
 }
 
@@ -46,11 +48,15 @@ type TrainingProgress = {
   remaining_hours: number
   training_status: string
   prosecution_risk: boolean
+  absence_recorded: boolean
+  round_escalated: boolean
+  review_hints: string[]
 }
 
 type TrainingRecordForm = {
   service_year: number
   training_year: number
+  scheduled_date: string
   training_type: string
   training_round: number
   attendance_status: string
@@ -399,13 +405,14 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
     const serviceYear = selected?.service_year && selected.service_year <= 8 ? selected.service_year : 1
     setActionError(''); setEditingRecord(null); setRecordForm({
       service_year: serviceYear, training_year: new Date().getFullYear(), training_type: '기본훈련',
-      training_round: 1, attendance_status: 'postponed', training_hours: 0, notes: '',
+      scheduled_date: '', training_round: 1, attendance_status: 'scheduled', training_hours: 0, notes: '',
     })
     setDetailTab('records')
   }
   const startEditRecord = (record: TrainingRecord) => {
     setActionError(''); setEditingRecord(record.id); setRecordForm({
       service_year: record.education_year, training_year: record.training_year ?? new Date().getFullYear(),
+      scheduled_date: record.scheduled_date ?? '',
       training_type: record.training_type, training_round: record.training_round,
       attendance_status: record.attendance_status, training_hours: record.training_hours, notes: record.notes ?? '',
     })
@@ -419,7 +426,10 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
     try {
       const response = await fetch(url, {
         method: editingRecord === null ? 'POST' : 'PATCH',
-        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(recordForm),
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+          ...recordForm,
+          scheduled_date: recordForm.scheduled_date || null,
+        }),
       })
       if (!response.ok) throw new Error(await responseError(response, '훈련 기록 저장에 실패했습니다.'))
       setRecordForm(null); setEditingRecord(null); refreshDetails()
@@ -621,11 +631,10 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
         {detailLoading ? <p className="rm-detail-note">훈련 정보를 불러오는 중입니다.</p>
           : detailError ? <p className="rm-detail-note rm-error">{detailError}</p>
           : detailTab === 'progress' ? <TrainingProgressPanel currentYear={selected.service_year} progress={trainingProgress} />
-          : detailTab === 'results' ? <TrainingResultsPanel currentYear={selected.service_year} records={records} />
+          : detailTab === 'results' ? <TrainingResultsPanel currentYear={selected.service_year} records={records} progress={trainingProgress} />
           : <TrainingRecordsPanel records={records} form={recordForm} editingId={editingRecord}
               onAdd={startAddRecord} onEdit={startEditRecord} onChange={setRecordForm} onCancel={() => { setRecordForm(null); setEditingRecord(null) }}
               onSave={saveRecord} onDelete={deleteRecord} />}
-        <p className="rm-detail-note">전화번호·주소·이메일은 현재 인원 API에서 제공하지 않습니다.</p>
       </div>
       </section>
     </div>}
@@ -681,9 +690,9 @@ function TrainingProgressPanel({ currentYear, progress }: { currentYear: number 
   </div>
 }
 
-type RoundStatusKind = 'attended' | 'completed' | 'absent' | 'postponed' | 'hold' | 'pending'
+type RoundStatusKind = 'attended' | 'completed' | 'absent' | 'postponed' | 'hold' | 'pending' | 'scheduled'
 const roundStatusLabel: Record<RoundStatusKind, string> = {
-  attended: '참석', completed: '이수', absent: '무단불참', postponed: '연기', hold: '보류', pending: '미처리',
+  attended: '참석', completed: '이수', absent: '무단불참', postponed: '연기', hold: '보류', pending: '미처리', scheduled: '훈련 예정',
 }
 const attendanceKind = (status: string | undefined): RoundStatusKind => {
   if (!status) return 'pending'
@@ -692,10 +701,20 @@ const attendanceKind = (status: string | undefined): RoundStatusKind => {
   if (['무단불참', '무단_불참', 'unexcused_absence'].includes(status)) return 'absent'
   if (['연기', 'postponed'].includes(status)) return 'postponed'
   if (['보류', 'round_hold'].includes(status)) return 'hold'
+  if (['훈련 예정', 'scheduled'].includes(status)) return 'scheduled'
   return 'pending'
 }
-type RoundCell = { round: number; kind: RoundStatusKind; label: string }
-// 1차/2차/3차 진행 규칙은 동원훈련Ⅱ형에만 적용됩니다.
+type RoundCell = {
+  round: number
+  kind: RoundStatusKind
+  label: string
+  trainingHours?: number
+  requiredHours?: number | null
+}
+const countedAttendance = new Set(['이수', 'completed', '참석', 'attended'])
+const isTypeITraining = (trainingType: string) =>
+  ['동원훈련Ⅰ형', '동원훈련I형', '동원훈련1형'].includes(trainingType.replace(/\s/g, ''))
+
 function buildYearRounds(records: TrainingRecord[], year: number): RoundCell[] {
   // Keep only the latest entry per round; earlier attempts are superseded.
   const byRound = new Map<number, TrainingRecord>()
@@ -708,63 +727,85 @@ function buildYearRounds(records: TrainingRecord[], year: number): RoundCell[] {
   let carriedFromRound: number | null = null
   for (let round = 1; round <= 3; round++) {
     const record = byRound.get(round)
-    const kind = attendanceKind(record?.attendance_status)
+    const roundRecords = records.filter(item => item.training_round === round)
+    const countedHours = roundRecords.reduce(
+      (total, item) => total + (countedAttendance.has(item.attendance_status) ? item.training_hours : 0), 0,
+    )
+    const roundDetails = {
+      trainingHours: countedHours,
+      requiredHours: record?.required_hours,
+    }
+    const kind = record?.required_hours && countedHours >= record.required_hours
+      ? 'completed' : attendanceKind(record?.attendance_status)
     if (kind === 'hold') {
       // 보류: exempt this round's training hour, do not carry it forward.
-      cells.push({ round, kind, label: '보류 (면제)' })
+      cells.push({ round, kind, label: '보류 (면제)', ...roundDetails })
       carriedFromRound = null
       continue
     }
     if (kind === 'postponed') {
       // 연기: push this round's obligation onto the next round.
-      cells.push({ round, kind, label: round < 3 ? `연기 (${round + 1}차로 이월)` : '연기' })
+      cells.push({ round, kind, label: round < 3 ? `연기 (${round + 1}차로 이월)` : '연기', ...roundDetails })
       carriedFromRound = round < 3 ? round : null
       continue
     }
     if (kind === 'pending' && carriedFromRound !== null) {
-      cells.push({ round, kind: 'pending', label: `${carriedFromRound}차 이월분 대기` })
+      cells.push({ round, kind: 'pending', label: `${carriedFromRound}차 이월분 대기`, ...roundDetails })
       carriedFromRound = null
       continue
     }
-    // 참석/이수/무단불참은 그 차수에서 종결되며, 무단불참은 다음 차수로 계속 이어집니다.
-    cells.push({ round, kind, label: roundStatusLabel[kind] })
-    carriedFromRound = null
+    if (kind === 'absent' && round < 3) {
+      cells.push({ round, kind, label: '무단불참 (차수 증가)', ...roundDetails })
+      carriedFromRound = round
+    } else if (kind === 'absent' && round === 3) {
+      cells.push({ round, kind, label: '3차 무단불참 · 고발 대상', ...roundDetails })
+      carriedFromRound = null
+    } else {
+      cells.push({ round, kind, label: roundStatusLabel[kind], ...roundDetails })
+      carriedFromRound = null
+    }
   }
   return cells
 }
-// 동원훈련Ⅱ형이 아닌 훈련종류는 차수 구분 없이 하나의 결과만 표시합니다.
 function buildSingleStatus(records: TrainingRecord[]): RoundCell {
   const latest = records.reduce<TrainingRecord | null>((best, record) => (!best || record.id > best.id ? record : best), null)
   const kind = attendanceKind(latest?.attendance_status)
-  return { round: 0, kind, label: roundStatusLabel[kind] }
+  const label = kind === 'absent' ? '무단불참 · 즉시 고발 대상' : roundStatusLabel[kind]
+  const trainingHours = records.reduce(
+    (total, record) => total + (countedAttendance.has(record.attendance_status) ? record.training_hours : 0), 0,
+  )
+  return { round: 0, kind, label, trainingHours, requiredHours: latest?.required_hours }
 }
-function TrainingResultsPanel({ currentYear, records }: { currentYear: number | null; records: TrainingRecord[] }) {
+function TrainingResultsPanel({ currentYear, records, progress }: {
+  currentYear: number | null
+  records: TrainingRecord[]
+  progress: TrainingProgress[]
+}) {
   const years = currentYear === null ? [] : Array.from({ length: currentYear }, (_, index) => index + 1)
   return <div className="rm-training-panel">
-    <div className="rm-training-panel-heading"><h4>차수별 훈련 결과</h4><span>현재 및 과거 연차 · 동원훈련Ⅱ형만 1차~3차</span></div>
+    <div className="rm-training-panel-heading"><h4>차수별 훈련 결과</h4><span>현재 및 과거 연차 · 훈련 종류별 결과와 이수시간</span></div>
     {years.length === 0 ? <p className="rm-detail-note">해당 연차의 훈련 결과가 없습니다.</p> : <div className="rm-round-grid">
       {years.map(year => {
         const yearRecords = records.filter(record => record.education_year === year)
-        const typeII = yearRecords.filter(record => record.training_type === '동원훈련Ⅱ형')
-        const otherTypes = [...new Set(yearRecords.filter(record => record.training_type !== '동원훈련Ⅱ형').map(record => record.training_type))]
-        const hasAnyRecord = typeII.length > 0 || otherTypes.length > 0
+        const trainingTypes = [...new Set(yearRecords.map(record => record.training_type))]
+        const hasAnyRecord = trainingTypes.length > 0
+        const annualProgress = progress.find(item => item.service_year === year)
         return <div className="rm-round-grid-row" key={year}>
-          <span className="rm-round-grid-year">{year}년차</span>
+          <span className="rm-round-grid-year">{year}년차{annualProgress && <small>{annualProgress.completed_hours}/{annualProgress.required_hours}시간</small>}</span>
           <div className="rm-round-grid-groups">
-            {typeII.length > 0 && <div className="rm-round-grid-type">
-              <span className="rm-round-grid-type-label">동원훈련Ⅱ형</span>
-              <div className="rm-round-grid-cells">
-                {buildYearRounds(typeII, year).map(cell => <div key={cell.round} className={`rm-round-cell rm-round-cell--${cell.kind}`}>
-                  <b>{cell.round}차</b><span>{cell.label}</span>
-                </div>)}
-              </div>
-            </div>}
-            {otherTypes.map(type => {
-              const cell = buildSingleStatus(yearRecords.filter(record => record.training_type === type))
+            {trainingTypes.map(type => {
+              const typeRecords = yearRecords.filter(record => record.training_type === type)
+              const immediateTypeI = isTypeITraining(type)
+              const cells = immediateTypeI
+                ? [buildSingleStatus(typeRecords)]
+                : buildYearRounds(typeRecords, year)
               return <div className="rm-round-grid-type" key={type}>
                 <span className="rm-round-grid-type-label">{type}</span>
-                <div className="rm-round-grid-cells rm-round-grid-cells--single">
-                  <div className={`rm-round-cell rm-round-cell--${cell.kind}`}><b>결과</b><span>{cell.label}</span></div>
+                <div className={`rm-round-grid-cells${immediateTypeI ? ' rm-round-grid-cells--single' : ''}`}>
+                  {cells.map(cell => <div key={cell.round} className={`rm-round-cell rm-round-cell--${cell.kind}`}>
+                    <b>{immediateTypeI ? '결과' : `${cell.round}차`}</b><span>{cell.label}</span>
+                    {cell.requiredHours != null && <small>{cell.trainingHours ?? 0}/{cell.requiredHours}시간</small>}
+                  </div>)}
                 </div>
               </div>
             })}
@@ -801,14 +842,15 @@ function TrainingRecordsPanel({
     {form && <div className="rm-record-editor">
       <label>복무연차<input type="number" min="1" max="8" value={form.service_year} onChange={event => update('service_year', Number(event.target.value))} /></label>
       <label>훈련연도<input type="number" value={form.training_year} onChange={event => update('training_year', Number(event.target.value))} /></label>
+      <label>훈련일<input type="date" value={form.scheduled_date} onChange={event => update('scheduled_date', event.target.value)} /></label>
       <label>훈련종류<select value={form.training_type} onChange={event => update('training_type', event.target.value)}>{trainingTypes.map(type => <option key={type}>{type}</option>)}</select></label>
       <label>차수<select value={form.training_round} onChange={event => update('training_round', Number(event.target.value))}><option value={1}>1차</option><option value={2}>2차</option><option value={3}>3차</option></select></label>
-      <label>출결<select value={form.attendance_status} onChange={event => update('attendance_status', event.target.value)}><option value="completed">이수</option><option value="참석">참석</option><option value="무단불참">무단불참</option><option value="postponed">연기</option><option value="보류">보류</option></select></label>
+      <label>출결<select value={form.attendance_status} onChange={event => update('attendance_status', event.target.value)}><option value="scheduled">훈련 예정</option><option value="completed">이수</option><option value="참석">참석</option><option value="무단불참">무단불참</option><option value="postponed">연기</option><option value="보류">보류</option></select></label>
       <label>훈련시간<input type="number" min="0" value={form.training_hours} onChange={event => update('training_hours', Number(event.target.value))} /></label>
       <label className="wide">메모<input value={form.notes} onChange={event => update('notes', event.target.value)} /></label>
       <div className="rm-record-actions wide"><button type="button" className="rm-btn" onClick={onCancel}>취소</button><button type="button" className="rm-btn rm-btn-primary" onClick={onSave}>{editingId === null ? '추가' : '저장'}</button></div>
     </div>}
-    {records.length === 0 ? <p className="rm-detail-note">등록된 훈련 기록이 없습니다.</p> : <div className="rm-record-table-wrap"><table className="rm-record-table"><thead><tr><th>연차</th><th>훈련연도</th><th>종류</th><th>차수</th><th>출결</th><th>시간</th><th>관리</th></tr></thead><tbody>{records.map(record => <tr key={record.id}><td>{record.education_year}년차</td><td>{record.training_year ?? '-'}</td><td>{record.training_type}</td><td>{record.training_round}차</td><td>{record.attendance_status}</td><td>{record.training_hours}시간</td><td><button type="button" className="rm-record-action" onClick={() => onEdit(record)}>수정</button><button type="button" className="rm-record-action danger" onClick={() => onDelete(record.id)}>삭제</button></td></tr>)}</tbody></table></div>}
+    {records.length === 0 ? <p className="rm-detail-note">등록된 훈련 기록이 없습니다.</p> : <div className="rm-record-table-wrap"><table className="rm-record-table"><thead><tr><th>연차</th><th>훈련연도</th><th>훈련일</th><th>종류</th><th>차수</th><th>출결</th><th>시간</th><th>관리</th></tr></thead><tbody>{records.map(record => <tr key={record.id}><td>{record.education_year}년차</td><td>{record.training_year ?? '-'}</td><td>{record.scheduled_date ?? '-'}</td><td>{record.training_type}</td><td>{record.training_round}차</td><td>{record.attendance_status}</td><td>{record.training_hours}시간</td><td><button type="button" className="rm-record-action" onClick={() => onEdit(record)}>수정</button><button type="button" className="rm-record-action danger" onClick={() => onDelete(record.id)}>삭제</button></td></tr>)}</tbody></table></div>}
     <p className="rm-detail-note">훈련시간은 해당 연차의 목표시간을 초과할 수 없습니다.</p>
   </div>
 }

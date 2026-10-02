@@ -46,19 +46,10 @@ class Branch(str, enum.Enum):
     AIR_FORCE = "공군"
     MARINE = "해병"
 
-    @property
-    def is_army_style(self) -> bool:
-        """동미참훈련 형태. 육군은 출퇴근 4일, 해·공군은 2박3일 입영.
-
-        VERIFY: 해병은 해군에 준하는 것으로 두었습니다. 확인 필요.
-        """
-        return self == Branch.ARMY
-
-
 class TrainingType(str, enum.Enum):
     NONE = "훈련없음"
     MOBILIZATION = "동원훈련"          # 2박3일 입영
-    NON_DESIGNATED = "동미참훈련"       # 육군 출퇴근 4일 / 해공군 2박3일
+    NON_DESIGNATED = "동원훈련Ⅱ형"     # 일반 병 32시간, 공군 병 28시간
     BASIC_OPS = "기본훈련+작계훈련"      # 기본 8h + 작계 12h
     MAKEUP = "보충훈련"
     CARRYOVER = "미이수 이월훈련"

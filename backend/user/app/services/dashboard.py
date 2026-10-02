@@ -11,11 +11,9 @@ from user.app.models.person import Person
 from user.app.models.postpoment import Postponement
 from user.app.services.assignment import personnel_category
 from user.app.services.training import (
-    COMPLETED,
     PARTIAL_HOLD,
     UNEXCUSED_ABSENCE,
     all_training_progress,
-    target_training_hours,
 )
 
 
@@ -42,31 +40,18 @@ def dashboard_counts(db: Session) -> dict[str, int]:
         if current is None or not 0 <= current <= 8:
             continue
 
-        completed = defaultdict(int)
-        risk = False
-        absent = False
-        for row in records[person.military_number]:
-            if row.attendance_status in COMPLETED:
-                completed[row.education_year] += row.training_hours
-            if row.attendance_status in UNEXCUSED_ABSENCE:
-                absent |= row.education_year == current
-            current_progress = all_training_progress(db, person)[current]
-            risk = bool(current_progress["prosecution_risk"])
-        counts["prosecution_people"] += int(risk)
+        current_progress = all_training_progress(db, person)[current]
+        absent = any(
+            row.education_year == current and row.attendance_status in UNEXCUSED_ABSENCE
+            for row in records[person.military_number]
+        )
+        counts["prosecution_people"] += int(bool(current_progress["prosecution_risk"]))
         counts["absent_people"] += int(absent)
 
-        carryover = 0
-        required = 0
-        remaining = 0
-        for year in range(current + 1):
-            year_status = annual.get((person.military_number, year), person.mobilization_status)
-            target = target_training_hours(year, year_status, person.branch, person.rank)
-            required = target + (carryover if 1 <= year <= 8 else 0)
-            remaining = max(required - completed[year], 0)
-            carryover = remaining if year < 8 else 0
+        required = int(current_progress["required_hours"])
         if required > 0:
             counts["training_targets"] += 1
-            counts["training_completed"] += int(remaining == 0)
+            counts["training_completed"] += int(bool(current_progress["completed"]))
     return counts
 
 

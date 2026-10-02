@@ -11,6 +11,8 @@
 군종, 계급, 상태로 필터링
 """
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
@@ -21,11 +23,17 @@ from user.app.models.annual_status import AnnualStatus
 from user.app.models.assignment import Assignment
 from user.app.models.education import Education
 from user.app.models.person import Person
+from user.app.models.postpoment import Postponement
 from user.app.schemas.person import PersonCreate, PersonRead, PersonUpdate, PersonProfileUpdate
 from user.app.services.person_profile import ProfileError, profile_options, save_profile
 from user.app.services.assignment import grouped_candidates
 from user.app.services.person import create_person
-from user.app.services.training import all_training_progress, apply_mobilization_status_change
+from user.app.services.training import (
+	ROUND_SCHEDULED,
+	ROUND_POSTPONED,
+	all_training_progress,
+	apply_mobilization_status_change,
+)
 
 router = APIRouter(prefix="/reservists", tags=["reservists"])
 persons_router = APIRouter(prefix="/persons", tags=["persons"])
@@ -56,6 +64,71 @@ def list_prosecution_targets(db: Session = Depends(get_db)) -> list[dict[str, ob
 			),
 			"target_years": [int(item["service_year"]) for item in targets],
 		})
+	return result
+
+
+@router.get("/training-review-targets")
+def list_training_review_targets(db: Session = Depends(get_db)) -> list[dict[str, object]]:
+	"""List incomplete training obligations for review, not as legal prosecution findings."""
+	people = db.scalars(select(Person).order_by(Person.military_number)).all()
+	approved_rows = db.scalars(
+		select(Postponement).where(Postponement.status == "approved")
+	).all()
+	approved_years: dict[str, set[int]] = {}
+	approved_undated: set[str] = set()
+	for postponement in approved_rows:
+		if postponement.training_year is None:
+			approved_undated.add(postponement.person_id)
+		else:
+			approved_years.setdefault(postponement.person_id, set()).add(postponement.training_year)
+
+	education_rows = db.scalars(select(Education)).all()
+	by_person: dict[str, list[Education]] = {}
+	for record in education_rows:
+		by_person.setdefault(record.person_id, []).append(record)
+
+	today_year = date.today().year
+	result: list[dict[str, object]] = []
+	for person in people:
+		if person.service_year is None or not 1 <= person.service_year <= 8:
+			continue
+		person_records = by_person.get(person.military_number, [])
+		progress = all_training_progress(db, person)
+		review_years: list[int] = []
+		for item in progress:
+			year = int(item["service_year"])
+			year_remaining = int(item["remaining_hours"])
+			if year < 1 or year > person.service_year or year_remaining <= 0:
+				continue
+			year_records = [record for record in person_records if record.education_year == year]
+			if any(
+				record.attendance_status in ROUND_POSTPONED | ROUND_SCHEDULED
+				for record in year_records
+			):
+				continue
+			training_years = {
+				record.training_year for record in year_records if record.training_year is not None
+			}
+			if not training_years:
+				training_years.add(today_year - (person.service_year - year))
+			if (
+				person.military_number in approved_undated
+				and year == person.service_year
+			) or training_years.intersection(approved_years.get(person.military_number, set())):
+				continue
+			review_years.append(year)
+		if review_years:
+			remaining_hours = int(progress[person.service_year]["remaining_hours"])
+			result.append({
+				"military_number": person.military_number,
+				"name": person.name,
+				"branch": person.branch,
+				"rank": person.rank,
+				"service_year": person.service_year,
+				"squad_id": person.squad_id,
+				"review_years": review_years,
+				"remaining_hours": remaining_hours,
+			})
 	return result
 
 @persons_router.get("/assignment-candidates")

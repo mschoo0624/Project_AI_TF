@@ -19,13 +19,13 @@ from models import (
 # ---------------------------------------------------------------------
 # 0년차      전역 당해. 편성만 되고 훈련 없음
 # 1~4년차    동원지정 → 동원훈련 2박3일 28시간
-#            동원미지정 → 동미참훈련 (육군 출퇴근 4일 32h / 해·공군 2박3일 28h)
+#            동원미지정 → 동원훈련Ⅱ형 (일반 병 32h / 공군 병 28h)
 # 5~6년차    기본훈련 8h + 작계훈련 12h = 20h
 # 7~8년차    신규 훈련 없음. 1~6년차 미이수분만 이수
 
 MOBILIZATION_HOURS = 28.0
-NON_DESIGNATED_ARMY_HOURS = 32.0
-NON_DESIGNATED_NAVY_HOURS = 28.0   # VERIFY: 해·공군 2박3일 입영
+NON_DESIGNATED_HOURS = 32.0
+AIR_FORCE_NON_DESIGNATED_HOURS = 28.0
 BASIC_HOURS = 8.0
 OPS_HOURS = 12.0                   # 전·후반기 각 6시간
 BASIC_OPS_HOURS = BASIC_HOURS + OPS_HOURS   # 20.0
@@ -40,8 +40,8 @@ def base_training(resource_year: int, designated: bool, branch: Branch):
     if 1 <= resource_year <= 4:
         if designated:
             return TrainingType.MOBILIZATION, MOBILIZATION_HOURS
-        hours = (NON_DESIGNATED_ARMY_HOURS if branch.is_army_style
-                 else NON_DESIGNATED_NAVY_HOURS)
+        hours = (AIR_FORCE_NON_DESIGNATED_HOURS if branch == Branch.AIR_FORCE
+             else NON_DESIGNATED_HOURS)
         return TrainingType.NON_DESIGNATED, hours
     if 5 <= resource_year <= 6:
         return TrainingType.BASIC_OPS, BASIC_OPS_HOURS

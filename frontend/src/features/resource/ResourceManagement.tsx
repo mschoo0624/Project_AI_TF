@@ -22,6 +22,17 @@ type ProsecutionTarget = {
   target_years: number[]
 }
 
+type TrainingReviewTarget = {
+  military_number: string
+  name: string
+  branch: string
+  rank: string | null
+  service_year: number
+  squad_id: number | null
+  review_years: number[]
+  remaining_hours: number
+}
+
 type ProsecutionTrainingProgress = {
   service_year: number
   training_plan: { name: string; hours: number }[]
@@ -30,6 +41,9 @@ type ProsecutionTrainingProgress = {
   remaining_hours: number
   training_status: string
   prosecution_risk: boolean
+  absence_recorded: boolean
+  round_escalated: boolean
+  review_hints: string[]
 }
 
 type ProsecutionTrainingRecord = {
@@ -117,8 +131,11 @@ export default function ResourceManagement(
 
 function ProsecutionTargets({ revision }: { revision: number }) {
   const [targets, setTargets] = useState<ProsecutionTarget[]>([])
+  const [reviewTargets, setReviewTargets] = useState<TrainingReviewTarget[]>([])
   const [loading, setLoading] = useState(true)
+  const [reviewLoading, setReviewLoading] = useState(true)
   const [error, setError] = useState('')
+  const [reviewError, setReviewError] = useState('')
   const [selectedTarget, setSelectedTarget] = useState<ProsecutionTarget | null>(null)
 
   useEffect(() => {
@@ -135,12 +152,32 @@ function ProsecutionTargets({ revision }: { revision: number }) {
     return () => controller.abort()
   }, [revision])
 
+  useEffect(() => {
+    const controller = new AbortController()
+    setReviewLoading(true)
+    fetch(`${API_BASE}/reservists/training-review-targets`, { signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error('훈련 미이수 검토 목록을 불러오지 못했습니다.')
+        return response.json() as Promise<TrainingReviewTarget[]>
+      })
+      .then(data => { if (!controller.signal.aborted) { setReviewTargets(data); setReviewError('') } })
+      .catch(cause => { if (!controller.signal.aborted) setReviewError(cause instanceof Error ? cause.message : '훈련 미이수 검토 목록을 불러오지 못했습니다.') })
+      .finally(() => { if (!controller.signal.aborted) setReviewLoading(false) })
+    return () => controller.abort()
+  }, [revision])
+
   return <main className="rm-prosecution-page" aria-busy={loading}>
-    <header className="rm-prosecution-heading"><div><p className="rm-prosecution-eyebrow">TRAINING COMPLIANCE</p><h1>고발대상자</h1><p>훈련 미이수 및 연속 무단불참 기준에 해당하는 예비군입니다.</p></div><strong>{loading ? '확인 중...' : `${targets.length}명`}</strong></header>
+    <header className="rm-prosecution-heading"><div><p className="rm-prosecution-eyebrow">TRAINING COMPLIANCE</p><h1>고발대상자</h1><p>훈련 종류와 차수에 따른 고발 요건이 확인된 예비군입니다.</p></div><strong>{loading ? '확인 중...' : `${targets.length}명`}</strong></header>
     {loading && <p className="rm-list-message">고발대상자 목록을 불러오는 중입니다...</p>}
     {error && <p className="rm-org-error">{error}</p>}
     {!loading && !error && targets.length === 0 && <p className="rm-list-message">현재 고발대상자가 없습니다.</p>}
-    {!loading && !error && targets.length > 0 && <div className="rm-prosecution-table-wrap"><table className="rm-prosecution-table"><thead><tr><th>군번</th><th>성명</th><th>복무연차</th><th>분대</th><th>고발 사유</th><th>무단불참</th></tr></thead><tbody>{targets.map(target => <tr key={target.military_number} className="rm-prosecution-row" tabIndex={0} onClick={() => setSelectedTarget(target)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedTarget(target) } }}><td className="mono">{target.military_number}</td><td><strong>{target.name}</strong><small>{target.branch} · {target.rank ?? '-'}</small></td><td>{target.service_year ? `${target.service_year}년차` : '-'}</td><td>{target.squad_id ? `${target.squad_id}분대` : '미편성'}</td><td><span className="rm-prosecution-badge">{target.prosecution_reason ?? '훈련 미이수'}</span><small>{target.target_years.map(year => `${year}년차`).join(', ')}</small></td><td>{target.consecutive_unexcused_absences}회</td></tr>)}</tbody></table></div>}
+    {!loading && !error && targets.length > 0 && <div className="rm-prosecution-table-wrap"><table className="rm-prosecution-table"><thead><tr><th>군번</th><th>성명</th><th>복무연차</th><th>분대</th><th>고발 사유</th><th>연속 무단불참 (참고)</th></tr></thead><tbody>{targets.map(target => <tr key={target.military_number} className="rm-prosecution-row" tabIndex={0} onClick={() => setSelectedTarget(target)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedTarget(target) } }}><td className="mono">{target.military_number}</td><td><strong>{target.name}</strong><small>{target.branch} · {target.rank ?? '-'}</small></td><td>{target.service_year ? `${target.service_year}년차` : '-'}</td><td>{target.squad_id ? `${target.squad_id}분대` : '미편성'}</td><td><span className="rm-prosecution-badge">{target.prosecution_reason ?? '훈련 요건 충족'}</span><small>{target.target_years.map(year => `${year}년차`).join(', ')}</small></td><td>{target.consecutive_unexcused_absences}회</td></tr>)}</tbody></table></div>}
+    <section className="rm-training-review-section" aria-busy={reviewLoading}>
+      <header><div><h2>훈련 미이수 검토</h2><p>잔여시간 확인 목록이며 고발대상자 판정과 별도입니다.</p></div><strong>{reviewLoading ? '확인 중...' : `${reviewTargets.length}명`}</strong></header>
+      {reviewError && <p className="rm-org-error">{reviewError}</p>}
+      {!reviewLoading && !reviewError && reviewTargets.length === 0 && <p className="rm-list-message">검토할 미이수 훈련이 없습니다.</p>}
+      {!reviewLoading && !reviewError && reviewTargets.length > 0 && <div className="rm-training-review-table-wrap"><table><thead><tr><th>군번</th><th>성명</th><th>복무연차</th><th>미이수 연차</th><th>잔여시간</th></tr></thead><tbody>{reviewTargets.map(target => <tr key={target.military_number}><td className="mono">{target.military_number}</td><td><strong>{target.name}</strong><small>{target.branch} · {target.rank ?? '-'}</small></td><td>{target.service_year}년차</td><td>{target.review_years.map(year => `${year}년차`).join(', ')}</td><td>{target.remaining_hours}시간</td></tr>)}</tbody></table></div>}
+    </section>
     {selectedTarget && <ProsecutionTargetProfile target={selectedTarget} onClose={() => setSelectedTarget(null)} />}
   </main>
 }
