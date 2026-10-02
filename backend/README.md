@@ -1,3 +1,11 @@
+## Model packages
+
+- `prediction_agent/`: dashboard population and attendance prediction, including datasets and caches.
+- `classifier_agent/`: PDF information extraction and postponement/exemption classification.
+
+These packages do not import each other. The dashboard API uses `prediction_agent.cache`.
+See [prediction setup](prediction_agent/README.md) and [classifier setup](classifier_agent/README.md).
+
 ## Installation Steps
 1. sudo apt update
 2. sudo apt install python3 python3-pip python3-venv -y
