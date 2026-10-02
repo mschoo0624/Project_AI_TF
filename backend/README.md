@@ -1,10 +1,11 @@
 ## Model packages
 
 - `prediction_agent/`: dashboard population and attendance prediction, including datasets and caches.
-- `classifier_agent/`: PDF information extraction and postponement/exemption classification.
+- `classifier_agent_old/`: existing PDF extraction and classification server, currently serving port 8001.
+- `classifier_agent/`: new electronic-PDF processing implementation workspace; not connected to the UI yet.
 
 These packages do not import each other. The dashboard API uses `prediction_agent.cache`.
-See [prediction setup](prediction_agent/README.md) and [classifier setup](classifier_agent/README.md).
+See [prediction setup](prediction_agent/README.md), [existing classifier setup](classifier_agent_old/README.md), and [new classifier workspace](classifier_agent/README.md).
 
 ## Installation Steps
 1. sudo apt update
