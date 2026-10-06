@@ -19,20 +19,25 @@ from user.app.schemas.training_results import (
     TrainingScheduleCreate,
     TrainingScheduleMove,
     TrainingScheduleRead,
+    TrainingScheduleUpdate,
     TrainingScheduleVersion,
 )
-from user.app.services.auth import require_scheduler, require_viewer
+from user.app.services.auth import require_approver, require_scheduler, require_viewer
 from user.app.services.training_results import (
     ResultBatchValidationError,
     assign_schedule_roster,
     cancel_schedule,
     confirm_result_batch,
     create_schedule,
+    delete_schedule,
     export_results_csv,
+    enable_demo_early_save,
     person_result_history,
     result_worklists,
+    schedule_assignment_candidates,
     schedule_roster,
     move_schedule,
+    update_schedule,
 )
 
 router = APIRouter(prefix="/reservists", tags=["training results"])
@@ -79,6 +84,39 @@ def move_training_schedule(
         raise
 
 
+@router.put("/training-schedules/{schedule_id}", response_model=TrainingScheduleRead)
+def edit_training_schedule(
+    schedule_id: int,
+    payload: TrainingScheduleUpdate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_scheduler),
+) -> TrainingSchedule:
+    try:
+        schedule = update_schedule(db, schedule_id, payload, actor)
+        db.commit()
+        db.refresh(schedule)
+        return schedule
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.delete("/training-schedules/{schedule_id}", status_code=204)
+def remove_training_schedule(
+    schedule_id: int,
+    payload: TrainingScheduleVersion,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_scheduler),
+) -> Response:
+    try:
+        delete_schedule(db, schedule_id, payload.expected_version, actor)
+        db.commit()
+        return Response(status_code=204)
+    except Exception:
+        db.rollback()
+        raise
+
+
 @router.post("/training-schedules/{schedule_id}/cancel", response_model=TrainingScheduleRead)
 def cancel_training_schedule(
     schedule_id: int,
@@ -88,6 +126,22 @@ def cancel_training_schedule(
 ) -> TrainingSchedule:
     try:
         schedule = cancel_schedule(db, schedule_id, payload.expected_version, actor)
+        db.commit()
+        db.refresh(schedule)
+        return schedule
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.post("/training-schedules/{schedule_id}/enable-demo-early-save", response_model=TrainingScheduleRead)
+def enable_demo_training_early_save(
+    schedule_id: int,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_approver),
+) -> TrainingSchedule:
+    try:
+        schedule = enable_demo_early_save(db, schedule_id, actor)
         db.commit()
         db.refresh(schedule)
         return schedule
@@ -126,6 +180,15 @@ def get_training_roster(
     _viewer: User = Depends(require_viewer),
 ) -> dict[str, object]:
     return schedule_roster(db, schedule_id, session_id)
+
+
+@router.get("/training-schedules/{schedule_id}/assignment-candidates")
+def get_training_assignment_candidates(
+    schedule_id: int,
+    db: Session = Depends(get_db),
+    _viewer: User = Depends(require_viewer),
+) -> dict[str, list[str]]:
+    return {"military_numbers": schedule_assignment_candidates(db, schedule_id)}
 
 
 @router.post("/training-results/bulk-confirm")

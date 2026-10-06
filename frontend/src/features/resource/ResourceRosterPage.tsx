@@ -27,6 +27,7 @@ type ResourcePerson = {
 
 type TrainingRecord = {
   id: number
+  version: number
   education_year: number
   training_year: number | null
   scheduled_date: string | null
@@ -433,6 +434,13 @@ export default function ResourceRosterPage({ revision, onDataChanged, copilotFil
   }
   const saveRecord = async () => {
     if (!selectedId || !recordForm) return
+    const expectedVersion = editingRecord === null
+      ? undefined
+      : records.find(record => record.id === editingRecord)?.version
+    if (editingRecord !== null && expectedVersion === undefined) {
+      setActionError('훈련 기록을 새로고침한 뒤 다시 수정해 주세요.')
+      return
+    }
     const url = editingRecord === null
       ? `${API_BASE}/reservists/${encodeURIComponent(selectedId)}/training-hours`
       : `${API_BASE}/reservists/${encodeURIComponent(selectedId)}/training-hours/${editingRecord}`
@@ -441,6 +449,7 @@ export default function ResourceRosterPage({ revision, onDataChanged, copilotFil
         method: editingRecord === null ? 'POST' : 'PATCH',
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
           ...recordForm,
+          ...(expectedVersion === undefined ? {} : { expected_version: expectedVersion }),
           scheduled_date: recordForm.scheduled_date || null,
         }),
       })

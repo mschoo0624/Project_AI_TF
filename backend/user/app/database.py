@@ -49,6 +49,14 @@ def init_db() -> None:
             connection.execute(text("ALTER TABLE app_user ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1"))
         if "version" not in training_schedule_columns:
             connection.execute(text("ALTER TABLE training_schedule ADD COLUMN version INTEGER NOT NULL DEFAULT 1"))
+        if "demo_early_save_enabled" not in training_schedule_columns:
+            connection.execute(text(
+                "ALTER TABLE training_schedule ADD COLUMN demo_early_save_enabled BOOLEAN NOT NULL DEFAULT 0"
+            ))
+        if "demo_early_save_used" not in training_schedule_columns:
+            connection.execute(text(
+                "ALTER TABLE training_schedule ADD COLUMN demo_early_save_used BOOLEAN NOT NULL DEFAULT 0"
+            ))
         if training_batch_columns and not training_batch_columns["user_id"]["nullable"]:
             connection.execute(text("""
                 CREATE TABLE training_result_batch_rebuild (

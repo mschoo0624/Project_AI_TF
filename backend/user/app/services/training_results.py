@@ -27,6 +27,7 @@ from user.app.models.user import User
 from user.app.schemas.training_results import (
     TrainingResultBatchConfirm,
     TrainingScheduleCreate,
+    TrainingScheduleUpdate,
     TrainingRosterAssignment,
 )
 from user.app.services.training import (
@@ -41,6 +42,7 @@ from user.app.services.training import (
     training_record_required_hours,
     training_round_satisfied,
     training_round_sequence_error,
+    training_plan_has_type,
 )
 from user.app.services.training_recalculation import recalculate_person
 
@@ -114,6 +116,8 @@ def _schedule_snapshot(schedule: TrainingSchedule) -> dict[str, Any]:
         "training_round": schedule.training_round,
         "service_year": schedule.service_year,
         "status": schedule.status,
+        "demo_early_save_enabled": schedule.demo_early_save_enabled,
+        "demo_early_save_used": schedule.demo_early_save_used,
         "version": schedule.version,
         "sessions": [
             {"day_number": item.day_number, "session_date": item.session_date.isoformat(),
@@ -193,6 +197,43 @@ def create_schedule(
     return schedule
 
 
+def enable_demo_early_save(
+    db: Session, schedule_id: int, actor: User
+) -> TrainingSchedule:
+    schedule = db.get(TrainingSchedule, schedule_id)
+    if schedule is None:
+        raise HTTPException(status_code=404, detail="Training schedule not found")
+    if schedule.status != "scheduled":
+        raise HTTPException(status_code=409, detail="Only scheduled demo events can use early result entry")
+    if schedule.demo_early_save_enabled or schedule.demo_early_save_used:
+        raise HTTPException(status_code=409, detail="The demo early-save allowance is already enabled or used")
+    if not any(marker in schedule.title.casefold() for marker in ("demo", "test", "데모", "샘플")):
+        raise HTTPException(status_code=422, detail="Only a clearly labeled demo schedule can use early result entry")
+
+    records = db.scalars(select(Education).where(Education.schedule_id == schedule_id)).all()
+    if not records or any(not record.person_id.startswith("26-TEST-") for record in records):
+        raise HTTPException(status_code=422, detail="Early result entry requires a roster made only of 26-TEST people")
+    last_session = max((item.session_date for item in schedule.sessions), default=None)
+    if last_session is None or last_session < date.today():
+        raise HTTPException(status_code=409, detail="Early result entry is only for an upcoming demo event")
+
+    before = _schedule_snapshot(schedule)
+    schedule.demo_early_save_enabled = True
+    schedule.version += 1
+    db.flush()
+    db.add(AuditLog(
+        action="training_schedule.demo_early_save.enable",
+        table_name="training_schedule",
+        record_id=schedule.id,
+        user_id=actor.id,
+        actor_label=actor.username,
+        before_data=json.dumps(before, ensure_ascii=False),
+        after_data=json.dumps(_schedule_snapshot(schedule), ensure_ascii=False),
+        created_at=_now(),
+    ))
+    return schedule
+
+
 def move_schedule(
     db: Session, schedule_id: int, payload: TrainingScheduleMove, actor: User
 ) -> TrainingSchedule:
@@ -222,6 +263,65 @@ def move_schedule(
     db.flush()
     db.add(AuditLog(
         action="training_schedule.move",
+        table_name="training_schedule",
+        record_id=schedule.id,
+        user_id=actor.id,
+        actor_label=actor.username,
+        before_data=json.dumps(before, ensure_ascii=False),
+        after_data=json.dumps(_schedule_snapshot(schedule), ensure_ascii=False),
+        created_at=_now(),
+    ))
+    return schedule
+
+
+def update_schedule(
+    db: Session, schedule_id: int, payload: TrainingScheduleUpdate, actor: User
+) -> TrainingSchedule:
+    schedule = db.get(TrainingSchedule, schedule_id)
+    if schedule is None:
+        raise HTTPException(status_code=404, detail="Training schedule not found")
+    _advance_schedule_version(db, schedule, payload.expected_version)
+    if schedule.status != "scheduled":
+        raise HTTPException(status_code=409, detail="Only scheduled events can be edited")
+    if schedule.demo_early_save_enabled or schedule.demo_early_save_used:
+        raise HTTPException(status_code=409, detail="Demo early-save schedules cannot be edited")
+    if not payload.title.strip():
+        raise HTTPException(status_code=422, detail="Schedule title cannot be empty")
+
+    records = db.scalars(select(Education).where(Education.schedule_id == schedule_id)).all()
+    if any(record.attendance_status not in ROUND_SCHEDULED or record.confirmed_by for record in records):
+        raise HTTPException(status_code=409, detail="Events with confirmed results cannot be edited")
+    identity_changed = (
+        schedule.training_type != payload.training_type.strip()
+        or schedule.training_round != payload.training_round
+        or schedule.service_year != payload.service_year
+    )
+    if records and identity_changed:
+        raise HTTPException(
+            status_code=409,
+            detail="Training type, year, and round cannot change after people are assigned",
+        )
+
+    sessions = _validated_sessions(payload.sessions)
+    before = _schedule_snapshot(schedule)
+    schedule.title = payload.title.strip()
+    schedule.training_type = payload.training_type.strip()
+    schedule.training_round = payload.training_round
+    schedule.service_year = payload.service_year
+    schedule.sessions.clear()
+    db.flush()
+    schedule.sessions.extend(TrainingSession(
+        day_number=item.day_number,
+        session_date=item.session_date,
+        credited_hours=item.credited_hours,
+    ) for item in sessions)
+    first_session_date = sessions[0].session_date
+    for record in records:
+        record.scheduled_date = first_session_date
+        record.training_year = first_session_date.year
+    db.flush()
+    db.add(AuditLog(
+        action="training_schedule.update",
         table_name="training_schedule",
         record_id=schedule.id,
         user_id=actor.id,
@@ -266,6 +366,35 @@ def cancel_schedule(
     return schedule
 
 
+def delete_schedule(
+    db: Session, schedule_id: int, expected_version: int, actor: User
+) -> None:
+    schedule = db.get(TrainingSchedule, schedule_id)
+    if schedule is None:
+        raise HTTPException(status_code=404, detail="Training schedule not found")
+    _advance_schedule_version(db, schedule, expected_version)
+    if schedule.demo_early_save_enabled or schedule.demo_early_save_used:
+        raise HTTPException(status_code=409, detail="Demo early-save schedules cannot be deleted")
+    if db.scalar(select(Education.id).where(Education.schedule_id == schedule_id).limit(1)) is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Schedules with assigned people cannot be deleted; cancel the schedule instead",
+        )
+
+    before = _schedule_snapshot(schedule)
+    db.add(AuditLog(
+        action="training_schedule.delete",
+        table_name="training_schedule",
+        record_id=schedule.id,
+        user_id=actor.id,
+        actor_label=actor.username,
+        before_data=json.dumps(before, ensure_ascii=False),
+        created_at=_now(),
+    ))
+    db.delete(schedule)
+    db.flush()
+
+
 def _advance_schedule_version(
     db: Session, schedule: TrainingSchedule, expected_version: int
 ) -> None:
@@ -290,6 +419,8 @@ def assign_schedule_roster(
         raise HTTPException(status_code=404, detail="Training schedule not found")
     if schedule.status != "scheduled":
         raise HTTPException(status_code=409, detail="Roster can only be changed for scheduled events")
+    if schedule.demo_early_save_enabled or schedule.demo_early_save_used:
+        raise HTTPException(status_code=409, detail="The roster is locked for this demo result entry")
     if len(payload.person_ids) != len(set(payload.person_ids)):
         raise HTTPException(status_code=422, detail="Roster contains duplicate military numbers")
 
@@ -388,6 +519,41 @@ def assign_schedule_roster(
             created_at=_now(),
         ))
     return records
+
+
+def schedule_assignment_candidates(db: Session, schedule_id: int) -> list[str]:
+    schedule = db.get(TrainingSchedule, schedule_id)
+    if schedule is None:
+        raise HTTPException(status_code=404, detail="Training schedule not found")
+    if (
+        schedule.status != "scheduled"
+        or schedule.demo_early_save_enabled
+        or schedule.demo_early_save_used
+        or not schedule.sessions
+    ):
+        return []
+
+    assigned_ids = set(db.scalars(
+        select(Education.person_id).where(Education.schedule_id == schedule_id)
+    ).all())
+    people = db.scalars(
+        select(Person)
+        .where(Person.service_year == schedule.service_year)
+        .order_by(Person.name, Person.military_number)
+    ).all()
+    return [
+        person.military_number
+        for person in people
+        if person.military_number not in assigned_ids
+        and training_plan_has_type(
+            schedule.training_type,
+            schedule.service_year,
+            mobilization_status_for_year(db, person, schedule.service_year),
+            person.branch,
+            person.rank,
+            person.position,
+        )
+    ]
 
 
 def schedule_roster(
@@ -619,6 +785,7 @@ def _entry_errors(
     today: date,
 ) -> list[str]:
     errors: list[str] = []
+    early_demo_save_enabled = False
     canonical = STATUS_ALIASES.get(entry.attendance_status)
     if canonical not in VALID_RESULT_STATES:
         return ["지원하지 않는 결과 상태입니다."]
@@ -643,6 +810,7 @@ def _entry_errors(
         elif schedule.status != "scheduled":
             errors.append("취소되거나 종료된 일정에는 결과를 저장할 수 없습니다.")
         else:
+            early_demo_save_enabled = schedule.demo_early_save_enabled
             sessions = schedule.sessions
             if not sessions:
                 errors.append("일정에 세션 날짜가 없습니다.")
@@ -651,7 +819,7 @@ def _entry_errors(
                 event_capacity = sum(item.credited_hours for item in sessions)
     if last_session is None:
         errors.append("결과에 연결된 훈련일이 없습니다.")
-    elif last_session >= today:
+    elif last_session >= today and not early_demo_save_enabled:
         errors.append("훈련 종료일 이후에만 결과를 저장할 수 있습니다.")
     if event_capacity is not None and entry.training_hours > event_capacity:
         errors.append(f"입력 시간이 일정 인정시간({event_capacity})을 초과합니다.")
@@ -737,6 +905,7 @@ def confirm_result_batch(
     }
     errors: list[dict[str, Any]] = []
     stale = False
+    early_demo_schedules_to_consume: set[int] = set()
     for entry in payload.entries:
         record = records.get(entry.education_id)
         row_errors: list[str] = []
@@ -751,6 +920,12 @@ def confirm_result_batch(
                 row_errors.append("기록이 변경되었습니다. 새로고침 후 다시 편집하세요.")
             if person is not None:
                 row_errors.extend(_entry_errors(db, record, person, entry, actor, today))
+            if record.schedule_id is not None:
+                schedule = db.get(TrainingSchedule, record.schedule_id)
+                last_session = max((item.session_date for item in schedule.sessions), default=None) if schedule else None
+                if (schedule is not None and schedule.demo_early_save_enabled
+                        and last_session is not None and last_session >= today):
+                    early_demo_schedules_to_consume.add(schedule.id)
         if row_errors:
             errors.append({"education_id": entry.education_id, "errors": row_errors})
     if errors:
@@ -759,6 +934,26 @@ def confirm_result_batch(
             for row in errors for message in row["errors"]
         )
         raise ResultBatchValidationError(errors, 409 if stale else 403 if permission_error else 422)
+
+    for schedule_id in early_demo_schedules_to_consume:
+        schedule = db.get(TrainingSchedule, schedule_id)
+        if schedule is None or not schedule.demo_early_save_enabled:
+            raise HTTPException(status_code=409, detail="The demo early-save allowance changed; reload and try again")
+        before = _schedule_snapshot(schedule)
+        schedule.demo_early_save_enabled = False
+        schedule.demo_early_save_used = True
+        schedule.version += 1
+        db.flush()
+        db.add(AuditLog(
+            action="training_schedule.demo_early_save.consume",
+            table_name="training_schedule",
+            record_id=schedule.id,
+            user_id=actor.id,
+            actor_label=actor.username,
+            before_data=json.dumps(before, ensure_ascii=False),
+            after_data=json.dumps(_schedule_snapshot(schedule), ensure_ascii=False),
+            created_at=_now(),
+        ))
 
     updated: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []

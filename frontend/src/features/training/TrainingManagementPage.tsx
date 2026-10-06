@@ -12,9 +12,11 @@ type Schedule = {
   service_year: number
   status: string
   version: number
+  demo_early_save_enabled?: boolean
+  demo_early_save_used?: boolean
   sessions: Session[]
 }
-type Person = { military_number: string; name: string; branch: string; rank: string | null; service_year: number | null }
+type Person = { military_number: string; name: string; branch: string; rank: string | null; specialty: string | null; service_year: number | null }
 type RosterRow = {
   education_id: number
   version: number
@@ -52,6 +54,21 @@ type PersonHistory = {
 
 type TrainingTab = 'schedule' | 'assignment' | 'results'
 type DayInput = { session_date: string; credited_hours: number }
+type AssignmentGroup = 'all' | 'rank' | 'branch' | 'rankYear' | 'specialty'
+const assignmentGroupOptions: { key: AssignmentGroup; label: string }[] = [
+  { key: 'all', label: '전체' },
+  { key: 'rank', label: '계급별' },
+  { key: 'branch', label: '군별' },
+  { key: 'rankYear', label: '계급/연차별' },
+  { key: 'specialty', label: '주특기별' },
+]
+const TRAINING_SESSION_HOURS: Record<string, number[]> = {
+  '동원훈련Ⅱ형': [8, 8, 8, 8],
+  '동원훈련Ⅰ형': [12, 8, 8],
+  '기본훈련': [8],
+  '작계훈련(전·후반기)': [6, 6],
+  '학생예비군': [8],
+}
 const API = apiBase()
 const states = ['이수', '참석', '무단불참', '연기', '보류', '조기퇴소']
 
@@ -59,6 +76,39 @@ function localDateAfter(days: number): string {
   const date = new Date()
   date.setDate(date.getDate() + days)
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function defaultSessions(trainingType: string, firstDate = localDateAfter(7)): DayInput[] {
+  const date = new Date(`${firstDate}T12:00:00`)
+  const hours = TRAINING_SESSION_HOURS[trainingType] ?? [8]
+  return hours.map((credited_hours, index) => {
+    const sessionDate = new Date(date)
+    sessionDate.setDate(sessionDate.getDate() + index)
+    return {
+      session_date: `${sessionDate.getFullYear()}-${String(sessionDate.getMonth() + 1).padStart(2, '0')}-${String(sessionDate.getDate()).padStart(2, '0')}`,
+      credited_hours,
+    }
+  })
+}
+
+function sessionLabel(trainingType: string, index: number): string {
+  if (trainingType === '작계훈련(전·후반기)') {
+    return ['전반기', '후반기'][index] ?? `${index + 1}회차`
+  }
+  return `${index + 1}일차`
+}
+
+function isTypeIISchedule(trainingType: string | undefined): boolean {
+  const normalized = trainingType?.replace(/\s/g, '')
+  return ['동원훈련Ⅱ형', '동원훈련II형', '동원훈련2형'].includes(normalized ?? '')
+}
+
+function assignmentGroupKey(person: Person, group: AssignmentGroup): string {
+  if (group === 'rank') return person.rank ?? '미등록'
+  if (group === 'branch') return person.branch || '미등록'
+  if (group === 'rankYear') return `${person.rank ?? '미등록'} · ${person.service_year ?? '미등록'}년차`
+  if (group === 'specialty') return person.specialty ?? '미등록'
+  return '전체'
 }
 
 async function apiError(response: Response, fallback: string): Promise<string> {
@@ -131,8 +181,8 @@ function ScheduleWorkspace({ schedules, canWrite, onCreated }: { schedules: Sche
   const [title, setTitle] = useState('')
   const [trainingType, setTrainingType] = useState('동원훈련Ⅱ형')
   const [serviceYear, setServiceYear] = useState(1)
-  const [round, setRound] = useState(1)
-  const [days, setDays] = useState<DayInput[]>(() => Array.from({ length: 4 }, (_, index) => ({ session_date: localDateAfter(7 + index), credited_hours: 8 })))
+  const round = 1
+  const [days, setDays] = useState<DayInput[]>(() => defaultSessions('동원훈련Ⅱ형'))
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null)
@@ -140,6 +190,10 @@ function ScheduleWorkspace({ schedules, canWrite, onCreated }: { schedules: Sche
   const [lifecycleError, setLifecycleError] = useState('')
   const [lifecycleMessage, setLifecycleMessage] = useState('')
   const [lifecycleBusy, setLifecycleBusy] = useState(false)
+  const [editingTitle, setEditingTitle] = useState('')
+  const [editingTrainingType, setEditingTrainingType] = useState('')
+  const [editingServiceYear, setEditingServiceYear] = useState(1)
+  const [editingRound, setEditingRound] = useState(1)
 
   const updateDay = (index: number, key: keyof DayInput, value: string | number) => {
     setDays(current => current.map((day, dayIndex) => dayIndex === index ? { ...day, [key]: value } : day))
@@ -149,10 +203,15 @@ function ScheduleWorkspace({ schedules, canWrite, onCreated }: { schedules: Sche
     const nextDate = last ? new Date(`${last.session_date}T12:00:00`) : new Date()
     nextDate.setDate(nextDate.getDate() + 1)
     const session_date = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`
-    return [...current, { session_date, credited_hours: 8 }]
+    const hours = TRAINING_SESSION_HOURS[trainingType] ?? [8]
+    return [...current, { session_date, credited_hours: hours[Math.min(current.length, hours.length - 1)] }]
   })
   const editSchedule = (schedule: Schedule) => {
     setEditingScheduleId(schedule.id)
+    setEditingTitle(schedule.title)
+    setEditingTrainingType(schedule.training_type)
+    setEditingServiceYear(schedule.service_year)
+    setEditingRound(schedule.training_round)
     setEditingDays(schedule.sessions.map(({ session_date, credited_hours }) => ({ session_date, credited_hours })))
     setLifecycleError('')
     setLifecycleMessage('')
@@ -162,26 +221,31 @@ function ScheduleWorkspace({ schedules, canWrite, onCreated }: { schedules: Sche
     const nextDate = last ? new Date(`${last.session_date}T12:00:00`) : new Date()
     nextDate.setDate(nextDate.getDate() + 1)
     const session_date = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`
-    return [...current, { session_date, credited_hours: 8 }]
+    const hours = TRAINING_SESSION_HOURS[editingTrainingType] ?? [8]
+    return [...current, { session_date, credited_hours: hours[Math.min(current.length, hours.length - 1)] }]
   })
-  const moveSchedule = async (event: FormEvent<HTMLFormElement>) => {
+  const saveScheduleEdits = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (editingScheduleId === null) return
     setLifecycleBusy(true)
     setLifecycleError('')
     try {
-      const response = await authenticatedFetch(`${API}/reservists/training-schedules/${editingScheduleId}/move`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const response = await authenticatedFetch(`${API}/reservists/training-schedules/${editingScheduleId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           expected_version: schedules.find(schedule => schedule.id === editingScheduleId)?.version,
+          title: editingTitle,
+          training_type: editingTrainingType,
+          service_year: editingServiceYear,
+          training_round: editingRound,
           sessions: editingDays.map((day, index) => ({ ...day, day_number: index + 1 })),
         }),
       })
-      if (!response.ok) throw new Error(await apiError(response, '훈련일정을 변경하지 못했습니다.'))
-      setLifecycleMessage('훈련일정과 미확정 roster 날짜를 변경했습니다.')
+      if (!response.ok) throw new Error(await apiError(response, '훈련일정을 수정하지 못했습니다.'))
+      setLifecycleMessage('훈련일정을 수정했습니다.')
       setEditingScheduleId(null)
       onCreated()
-    } catch (cause) { setLifecycleError(cause instanceof Error ? cause.message : '훈련일정을 변경하지 못했습니다.') }
+    } catch (cause) { setLifecycleError(cause instanceof Error ? cause.message : '훈련일정을 수정하지 못했습니다.') }
     finally { setLifecycleBusy(false) }
   }
   const cancelSchedule = async (schedule: Schedule) => {
@@ -198,6 +262,22 @@ function ScheduleWorkspace({ schedules, canWrite, onCreated }: { schedules: Sche
       if (editingScheduleId === schedule.id) setEditingScheduleId(null)
       onCreated()
     } catch (cause) { setLifecycleError(cause instanceof Error ? cause.message : '훈련일정을 취소하지 못했습니다.') }
+    finally { setLifecycleBusy(false) }
+  }
+  const deleteSchedule = async (schedule: Schedule) => {
+    if (!window.confirm(`'${schedule.title}' 일정을 삭제할까요? 연결된 훈련기록이 있으면 삭제할 수 없습니다.`)) return
+    setLifecycleBusy(true)
+    setLifecycleError('')
+    try {
+      const response = await authenticatedFetch(`${API}/reservists/training-schedules/${schedule.id}`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expected_version: schedule.version }),
+      })
+      if (!response.ok) throw new Error(await apiError(response, '훈련일정을 삭제하지 못했습니다.'))
+      setLifecycleMessage('훈련일정을 삭제했습니다.')
+      if (editingScheduleId === schedule.id) setEditingScheduleId(null)
+      onCreated()
+    } catch (cause) { setLifecycleError(cause instanceof Error ? cause.message : '훈련일정을 삭제하지 못했습니다.') }
     finally { setLifecycleBusy(false) }
   }
 
@@ -228,11 +308,10 @@ function ScheduleWorkspace({ schedules, canWrite, onCreated }: { schedules: Sche
       {!canWrite && <p className="training-note">일정 등록은 scheduler 권한이 필요합니다.</p>}
       <form className="training-form" onSubmit={event => void saveSchedule(event)}>
         <label className="training-field training-field-wide">행사명<input value={title} onChange={event => setTitle(event.target.value)} required maxLength={160} disabled={!canWrite || saving} /></label>
-        <label className="training-field">훈련종류<select value={trainingType} onChange={event => setTrainingType(event.target.value)} disabled={!canWrite || saving}><option>동원훈련Ⅱ형</option><option>동원훈련Ⅰ형</option><option>기본훈련</option><option>작계훈련(전·후반기)</option><option>학생예비군</option></select></label>
+        <label className="training-field">훈련종류<select value={trainingType} onChange={event => { const value = event.target.value; setTrainingType(value); setDays(current => defaultSessions(value, current[0]?.session_date)) }} disabled={!canWrite || saving}><option>동원훈련Ⅱ형</option><option>동원훈련Ⅰ형</option><option>기본훈련</option><option>작계훈련(전·후반기)</option><option>학생예비군</option></select></label>
         <label className="training-field">복무연차<input type="number" min="1" max="99" value={serviceYear} onChange={event => setServiceYear(Number(event.target.value))} disabled={!canWrite || saving} /></label>
-        <label className="training-field">차수<select value={round} onChange={event => setRound(Number(event.target.value))} disabled={!canWrite || saving}><option value={1}>1차</option><option value={2}>2차</option><option value={3}>3차</option></select></label>
         <div className="training-days training-field-wide"><div className="training-inline-heading"><strong>세션 날짜와 인정 상한</strong><button type="button" onClick={addDay} disabled={!canWrite || days.length >= 30}>날짜 추가</button></div>
-          {days.map((day, index) => <div className="training-day-row" key={index}><span>{index + 1}일차</span><input aria-label={`${index + 1}일차 날짜`} type="date" value={day.session_date} onChange={event => updateDay(index, 'session_date', event.target.value)} disabled={!canWrite || saving} /><input aria-label={`${index + 1}일차 시간 상한`} type="number" min="0" max="24" value={day.credited_hours} onChange={event => updateDay(index, 'credited_hours', Number(event.target.value))} disabled={!canWrite || saving} /><span>시간</span><button type="button" aria-label={`${index + 1}일차 제거`} onClick={() => setDays(current => current.filter((_, dayIndex) => dayIndex !== index))} disabled={!canWrite || days.length <= 1}>제거</button></div>)}
+          {days.map((day, index) => { const label = sessionLabel(trainingType, index); return <div className="training-day-row" key={index}><span>{label}</span><input aria-label={`${label} 날짜`} type="date" value={day.session_date} onChange={event => updateDay(index, 'session_date', event.target.value)} disabled={!canWrite || saving} /><input aria-label={`${label} 시간 상한`} type="number" min="0" max="24" value={day.credited_hours} onChange={event => updateDay(index, 'credited_hours', Number(event.target.value))} disabled={!canWrite || saving} /><span>시간</span><button type="button" aria-label={`${label} 제거`} onClick={() => setDays(current => current.filter((_, dayIndex) => dayIndex !== index))} disabled={!canWrite || days.length <= 1}>제거</button></div> })}
         </div>
         {formError && <p className="training-message is-error training-field-wide" role="alert">{formError}</p>}
         <button className="training-primary training-field-wide" type="submit" disabled={!canWrite || saving}>{saving ? '저장 중…' : '일정 저장'}</button>
@@ -242,11 +321,18 @@ function ScheduleWorkspace({ schedules, canWrite, onCreated }: { schedules: Sche
       <header><h2>등록된 일정</h2><strong>{schedules.length}건</strong></header>
       {lifecycleError && <p className="training-message is-error" role="alert">{lifecycleError}</p>}
       {lifecycleMessage && <p className="training-message" role="status">{lifecycleMessage}</p>}
-      {schedules.length === 0 ? <p className="training-note">등록된 일정이 없습니다.</p> : <div className="training-table-wrap"><table><thead><tr><th>행사</th><th>훈련</th><th>연차·차수</th><th>기간</th><th>세션</th><th>상태</th><th>관리</th></tr></thead><tbody>{schedules.map(schedule => <tr key={schedule.id}><td>{schedule.title}</td><td>{schedule.training_type}</td><td>{schedule.service_year}년차 · {schedule.training_round}차</td><td>{schedule.sessions[0]?.session_date} - {schedule.sessions.at(-1)?.session_date}</td><td>{schedule.sessions.length}일</td><td>{schedule.status === 'scheduled' ? '예정' : '취소'}</td><td className="training-schedule-actions">{schedule.status === 'scheduled' && <><button type="button" disabled={!canWrite || lifecycleBusy} onClick={() => editSchedule(schedule)}>일정 변경</button><button type="button" disabled={!canWrite || lifecycleBusy} onClick={() => void cancelSchedule(schedule)}>취소</button></>}</td></tr>)}</tbody></table></div>}
-      {editingScheduleId !== null && <form className="training-schedule-editor" onSubmit={event => void moveSchedule(event)}>
-        <header><h3>일정 변경</h3><button type="button" onClick={addEditingDay} disabled={!canWrite || lifecycleBusy || editingDays.length >= 30}>날짜 추가</button></header>
-        {editingDays.map((day, index) => <div className="training-day-row" key={index}><span>{index + 1}일차</span><input aria-label={`변경 ${index + 1}일차 날짜`} type="date" value={day.session_date} onChange={event => setEditingDays(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, session_date: event.target.value } : item))} disabled={!canWrite || lifecycleBusy} /><input aria-label={`변경 ${index + 1}일차 시간 상한`} type="number" min="0" max="24" value={day.credited_hours} onChange={event => setEditingDays(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, credited_hours: Number(event.target.value) } : item))} disabled={!canWrite || lifecycleBusy} /><span>시간</span><button type="button" onClick={() => setEditingDays(current => current.filter((_, itemIndex) => itemIndex !== index))} disabled={!canWrite || lifecycleBusy || editingDays.length <= 1}>제거</button></div>)}
-        <footer className="training-actions"><button type="button" onClick={() => setEditingScheduleId(null)} disabled={lifecycleBusy}>닫기</button><button className="training-primary" type="submit" disabled={!canWrite || lifecycleBusy}>{lifecycleBusy ? '저장 중…' : '변경 저장'}</button></footer>
+      {schedules.length === 0 ? <p className="training-note">등록된 일정이 없습니다.</p> : <div className="training-table-wrap"><table><thead><tr><th>행사</th><th>훈련</th><th>연차·차수</th><th>기간</th><th>세션</th><th>상태</th><th>관리</th></tr></thead><tbody>{schedules.map(schedule => <tr key={schedule.id}><td>{schedule.title}</td><td>{schedule.training_type}</td><td>{schedule.service_year}년차 · {schedule.training_round}차</td><td>{schedule.sessions[0]?.session_date} - {schedule.sessions.at(-1)?.session_date}</td><td>{schedule.sessions.length}일</td><td>{schedule.status === 'scheduled' ? '예정' : '취소'}</td><td className="training-schedule-actions">{schedule.status === 'scheduled' && <><button type="button" disabled={!canWrite || lifecycleBusy} onClick={() => editSchedule(schedule)}>일정 편집</button><button type="button" disabled={!canWrite || lifecycleBusy} onClick={() => void cancelSchedule(schedule)}>취소</button></>}<button type="button" disabled={!canWrite || lifecycleBusy} onClick={() => void deleteSchedule(schedule)}>삭제</button></td></tr>)}</tbody></table></div>}
+      {editingScheduleId !== null && <form className="training-form training-schedule-editor" onSubmit={event => void saveScheduleEdits(event)}>
+        <header className="training-field-wide"><h3>일정 편집</h3><button type="button" onClick={addEditingDay} disabled={!canWrite || lifecycleBusy || editingDays.length >= 30}>날짜 추가</button></header>
+        <label className="training-field training-field-wide">행사명<input value={editingTitle} onChange={event => setEditingTitle(event.target.value)} required maxLength={160} disabled={lifecycleBusy} /></label>
+        <label className="training-field">훈련종류<select value={editingTrainingType} onChange={event => { const value = event.target.value; setEditingTrainingType(value); setEditingDays(current => defaultSessions(value, current[0]?.session_date)) }} disabled={lifecycleBusy}><option>동원훈련Ⅱ형</option><option>동원훈련Ⅰ형</option><option>기본훈련</option><option>작계훈련(전·후반기)</option><option>학생예비군</option></select></label>
+        <label className="training-field">복무연차<input type="number" min="1" max="99" value={editingServiceYear} onChange={event => setEditingServiceYear(Number(event.target.value))} disabled={lifecycleBusy} /></label>
+        <label className="training-field">차수<select value={editingRound} onChange={event => setEditingRound(Number(event.target.value))} disabled={lifecycleBusy}><option value={1}>1차</option><option value={2}>2차</option><option value={3}>3차</option></select></label>
+        <div className="training-days training-field-wide"><strong>세션 날짜와 인정 상한</strong>
+        {editingDays.map((day, index) => { const label = sessionLabel(editingTrainingType, index); return <div className="training-day-row" key={index}><span>{label}</span><input aria-label={`변경 ${label} 날짜`} type="date" value={day.session_date} onChange={event => setEditingDays(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, session_date: event.target.value } : item))} disabled={!canWrite || lifecycleBusy} /><input aria-label={`변경 ${label} 시간 상한`} type="number" min="0" max="24" value={day.credited_hours} onChange={event => setEditingDays(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, credited_hours: Number(event.target.value) } : item))} disabled={!canWrite || lifecycleBusy} /><span>시간</span><button type="button" aria-label={`변경 ${label} 제거`} onClick={() => setEditingDays(current => current.filter((_, itemIndex) => itemIndex !== index))} disabled={!canWrite || lifecycleBusy || editingDays.length <= 1}>제거</button></div> })}
+        </div>
+        {lifecycleError && <p className="training-message is-error training-field-wide" role="alert">{lifecycleError}</p>}
+        <footer className="training-actions training-field-wide"><button type="button" onClick={() => setEditingScheduleId(null)} disabled={lifecycleBusy}>닫기</button><button className="training-primary" type="submit" disabled={!canWrite || lifecycleBusy}>{lifecycleBusy ? '저장 중…' : '수정 저장'}</button></footer>
       </form>}
     </section>
   </div>
@@ -256,14 +342,59 @@ function AssignmentWorkspace({ schedules, people, canWrite, onAssigned }: { sche
   const [scheduleId, setScheduleId] = useState('')
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [assignedIds, setAssignedIds] = useState<Set<string>>(() => new Set())
+  const [candidateIds, setCandidateIds] = useState<Set<string>>(() => new Set())
+  const [group, setGroup] = useState<AssignmentGroup>('all')
+  const [groupValue, setGroupValue] = useState<string | null>(null)
+  const [rosterLoading, setRosterLoading] = useState(false)
   const [review, setReview] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const activeScheduleId = scheduleId || (schedules[0] ? String(schedules[0].id) : '')
-  const visiblePeople = people.filter(person => {
+  const activeSchedule = schedules.find(schedule => String(schedule.id) === activeScheduleId)
+
+  useEffect(() => {
+    if (!activeScheduleId) {
+      setAssignedIds(new Set())
+      setCandidateIds(new Set())
+      setRosterLoading(false)
+      return
+    }
+    const controller = new AbortController()
+    setRosterLoading(true)
+    Promise.all([
+      authenticatedFetch(`${API}/reservists/training-schedules/${activeScheduleId}/roster`, { signal: controller.signal }),
+      authenticatedFetch(`${API}/reservists/training-schedules/${activeScheduleId}/assignment-candidates`, { signal: controller.signal }),
+    ])
+      .then(async ([rosterResponse, candidateResponse]) => {
+        if (!rosterResponse.ok) throw new Error(await apiError(rosterResponse, '이미 부과된 인원을 불러오지 못했습니다.'))
+        if (!candidateResponse.ok) throw new Error(await apiError(candidateResponse, '훈련종류별 대상자를 불러오지 못했습니다.'))
+        return Promise.all([
+          rosterResponse.json() as Promise<{ roster: RosterRow[] }>,
+          candidateResponse.json() as Promise<{ military_numbers: string[] }>,
+        ])
+      })
+      .then(([roster, candidates]) => {
+        if (controller.signal.aborted) return
+        setAssignedIds(new Set(roster.roster.map(row => row.military_number)))
+        setCandidateIds(new Set(candidates.military_numbers))
+      })
+      .catch(cause => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : '이미 부과된 인원을 불러오지 못했습니다.') })
+      .finally(() => { if (!controller.signal.aborted) setRosterLoading(false) })
+    return () => controller.abort()
+  }, [activeScheduleId])
+
+  const cohort = people.filter(person => person.service_year === activeSchedule?.service_year
+    && candidateIds.has(person.military_number)
+    && !assignedIds.has(person.military_number))
+  const searchFiltered = cohort.filter(person => {
     const needle = query.trim().toLocaleLowerCase()
     return !needle || person.military_number.toLocaleLowerCase().includes(needle) || person.name.toLocaleLowerCase().includes(needle)
-  }).slice(0, 100)
+  })
+  const groupValues = group === 'all' ? [] : [...new Set(searchFiltered.map(person => assignmentGroupKey(person, group)))].sort((a, b) => a.localeCompare(b, 'ko'))
+  const visiblePeople = group === 'all' || groupValue === null
+    ? searchFiltered
+    : searchFiltered.filter(person => assignmentGroupKey(person, group) === groupValue)
 
   const togglePerson = (militaryNumber: string) => setSelected(current => {
     const next = new Set(current)
@@ -273,6 +404,11 @@ function AssignmentWorkspace({ schedules, people, canWrite, onAssigned }: { sche
     return next
   })
 
+
+  const addGroup = (nextGroup: AssignmentGroup) => {
+    setGroup(nextGroup)
+    setGroupValue(null)
+  }
   const confirmAssignments = async () => {
     setBusy(true)
     setError('')
@@ -282,6 +418,7 @@ function AssignmentWorkspace({ schedules, people, canWrite, onAssigned }: { sche
         body: JSON.stringify({ person_ids: [...selected] }),
       })
       if (!response.ok) throw new Error(await apiError(response, '훈련부과를 저장하지 못했습니다.'))
+      setAssignedIds(current => new Set([...current, ...selected]))
       setSelected(new Set())
       setReview(false)
       onAssigned()
@@ -292,15 +429,22 @@ function AssignmentWorkspace({ schedules, people, canWrite, onAssigned }: { sche
   return <section className="training-section">
     <header><h2>훈련부과 대상 편성</h2><span>대상자를 지정해 훈련일정에 배정합니다.</span></header>
     <div className="training-toolbar">
-      <label className="training-field">일정<select value={activeScheduleId} onChange={event => { setScheduleId(event.target.value); setSelected(new Set()); setReview(false) }}><option value="">일정 선택</option>{schedules.map(schedule => <option key={schedule.id} value={schedule.id}>{schedule.title} · {schedule.service_year}년차 {schedule.training_round}차</option>)}</select></label>
-      <label className="training-field training-search">군번 또는 이름 검색<input value={query} onChange={event => setQuery(event.target.value)} /></label>
+      <label className="training-field">일정<select value={activeScheduleId} onChange={event => { setScheduleId(event.target.value); setAssignedIds(new Set()); setCandidateIds(new Set()); setRosterLoading(Boolean(event.target.value)); setSelected(new Set()); setGroup('all'); setGroupValue(null); setReview(false); setError('') }}><option value="">일정 선택</option>{schedules.map(schedule => <option key={schedule.id} value={schedule.id}>{schedule.title} · {schedule.service_year}년차 {schedule.training_round}차</option>)}</select></label>
+      <label className="training-field training-search">군번 또는 이름 검색<input value={query} onChange={event => { setQuery(event.target.value); setGroupValue(null) }} /></label>
     </div>
-    {activeScheduleId && <p className="training-note">군번 기준으로 대상자를 선택합니다. 일정에 이미 배정된 군번은 서버에서 중복 거절됩니다.</p>}
+    {activeSchedule && <div className="training-assignment-summary"><strong>{activeSchedule.training_type} · {activeSchedule.service_year}년차</strong><span>대상 {cohort.length}명</span><span>이미 부과 {assignedIds.size}명 제외</span></div>}
+    {activeScheduleId && <nav className="training-assignment-groups" aria-label="대상자 분류">
+      {assignmentGroupOptions.map(option => <button key={option.key} type="button" className={group === option.key ? 'is-active' : ''} aria-pressed={group === option.key} onClick={() => addGroup(option.key)}>{option.label}</button>)}
+    </nav>}
+    {group !== 'all' && <nav className="training-assignment-values" aria-label="분류 값">
+      {groupValues.length === 0 ? <span>해당 분류의 인원이 없습니다.</span> : groupValues.map(value => <button key={value} type="button" className={groupValue === value ? 'is-active' : ''} aria-pressed={groupValue === value} onClick={() => setGroupValue(value)}>{value}<small>{searchFiltered.filter(person => assignmentGroupKey(person, group) === value).length}</small></button>)}
+    </nav>}
+    {rosterLoading && <p className="training-note" role="status">훈련종류별 대상자를 확인하는 중입니다.</p>}
     <div className="training-person-list">{visiblePeople.map(person => <label key={person.military_number}>
-      <input type="checkbox" checked={selected.has(person.military_number)} disabled={!canWrite || busy || !activeScheduleId} onChange={() => togglePerson(person.military_number)} />
+      <input type="checkbox" checked={selected.has(person.military_number)} disabled={!canWrite || busy || rosterLoading || !activeScheduleId} onChange={() => togglePerson(person.military_number)} />
       <span className="training-military">{person.military_number}</span><strong>{person.name}</strong><small>{person.branch} · {person.rank ?? '-'} · {person.service_year ?? '-'}년차</small>
     </label>)}</div>
-    {visiblePeople.length === 0 && <p className="training-note">검색 결과가 없습니다.</p>}
+    {visiblePeople.length === 0 && !rosterLoading && <p className="training-note">{cohort.length === 0 ? '선택한 일정의 훈련종류와 연차에 해당하는 대상자가 없습니다.' : '검색 또는 분류 결과가 없습니다.'}</p>}
     {error && <p className="training-message is-error" role="alert">{error}</p>}
     {review && <div className="training-review-box"><strong>{selected.size}명을 일정에 부과합니다.</strong><span>확정하면 각 사람의 기존 round-level Education 행을 새로 생성합니다.</span></div>}
     <footer className="training-actions">{review && <button type="button" onClick={() => setReview(false)} disabled={busy}>수정</button>}{review
@@ -387,8 +531,17 @@ function ResultsWorkspace({ schedules, people, canWrite, onSaved }: { schedules:
     setReviewing(false)
     setBatchKey(null)
   }
+  const hoursForResult = (row: DraftRow, result: string, fallbackHours: number) => {
+    if (['무단불참', '연기', '보류'].includes(result)) return 0
+    if (isTypeIISchedule(selectedSchedule?.training_type)
+      && ['이수', '참석'].includes(result)
+      && row.required_hours !== null) return row.required_hours
+    return fallbackHours
+  }
   const applyBulk = () => {
-    setRoster(current => current.map(row => row.selected ? { ...row, result: bulkState, hours: bulkHours } : row))
+    setRoster(current => current.map(row => row.selected
+      ? { ...row, result: bulkState, hours: hoursForResult(row, bulkState, bulkHours) }
+      : row))
     setReviewing(false)
     setBatchKey(null)
   }
@@ -478,18 +631,18 @@ function ResultsWorkspace({ schedules, people, canWrite, onSaved }: { schedules:
         <label className="training-field">훈련일정<select value={selectedScheduleId} onChange={event => { setScheduleId(event.target.value); setRoster([]); setMessage('') }}><option value="">일정 선택</option>{schedules.map(schedule => <option key={schedule.id} value={schedule.id}>{schedule.title} · {schedule.training_type}</option>)}</select></label>
       </div>
       {!canWrite && <p className="training-note">결과 입력과 확인에는 scheduler 권한이 필요합니다.</p>}
-      {selectedSchedule && <div className="training-session-summary"><strong>{selectedSchedule.title}</strong><span>{selectedSchedule.service_year}년차 · {selectedSchedule.training_round}차 · {roster.length}명</span><span>완료 {roster.filter(row => row.result_status !== '결과 미입력' && row.attendance_status !== 'scheduled').length} · 결과 미입력 {worklists.missing_results.filter(row => row.schedule_title === selectedSchedule.title).length}</span></div>}
+      {selectedSchedule && <div className="training-session-summary"><strong>{selectedSchedule.title}</strong><span>{selectedSchedule.service_year}년차 · {selectedSchedule.training_round}차 · {roster.length}명</span><span>완료 {roster.filter(row => row.result_status !== '결과 미입력' && row.attendance_status !== 'scheduled').length} · 결과 미입력 {worklists.missing_results.filter(row => row.schedule_title === selectedSchedule.title).length}</span>{selectedSchedule.demo_early_save_enabled && <span className="training-demo-save-state">DEMO 조기 저장 1회 가능</span>}{selectedSchedule.demo_early_save_used && <span className="training-demo-save-state is-used">DEMO 조기 저장 사용 완료</span>}</div>}
       {roster.length > 0 && <>
         <div className="training-toolbar training-bulk-toolbar">
           <label><input type="checkbox" checked={roster.every(row => row.selected)} onChange={event => toggleAll(event.target.checked)} /> 전체 선택</label>
           <label className="training-field">선택 결과<select value={bulkState} onChange={event => setBulkState(event.target.value)}>{states.map(state => <option key={state}>{state}</option>)}</select></label>
-          <label className="training-field">일괄 시간<input type="number" min="0" max="720" value={bulkHours} onChange={event => setBulkHours(Number(event.target.value))} /></label>
+          <label className="training-field">일괄 시간<input type="number" min="0" max="720" value={bulkHours} disabled={isTypeIISchedule(selectedSchedule?.training_type) && ['이수', '참석'].includes(bulkState)} onChange={event => setBulkHours(Number(event.target.value))} />{isTypeIISchedule(selectedSchedule?.training_type) && ['이수', '참석'].includes(bulkState) && <small className="training-hours-note">대상자별 필요시간 자동 적용</small>}</label>
           <button type="button" onClick={applyBulk} disabled={!canWrite || !roster.some(row => row.selected)}>선택 행에 적용</button>
         </div>
         <div className="training-table-wrap"><table className="training-result-table"><thead><tr><th></th><th>군번</th><th>성명</th><th>차수</th><th>현재 결과</th><th>결과 입력</th><th>인정시간</th><th>시간 초과 허용</th><th>메모</th><th>불참 정정 사유</th></tr></thead><tbody>{roster.map(row => <tr key={row.education_id}>
           <td><input aria-label={`${row.name} 선택`} type="checkbox" checked={row.selected} disabled={!canWrite || reviewing || busy} onChange={event => setRoster(current => current.map(item => item.education_id === row.education_id ? { ...item, selected: event.target.checked } : item))} /></td>
           <td className="training-military">{row.military_number}</td><td>{row.name}</td><td>{row.training_round}차</td><td>{row.result_status}</td>
-          <td><select aria-label={`${row.name} 결과`} value={row.result} disabled={!canWrite || reviewing || busy} onChange={event => updateRow(row.education_id, { result: event.target.value })}><option value="">결과 선택</option>{states.map(state => <option key={state}>{state}</option>)}</select></td>
+          <td><select aria-label={`${row.name} 결과`} value={row.result} disabled={!canWrite || reviewing || busy} onChange={event => { const result = event.target.value; updateRow(row.education_id, { result, hours: hoursForResult(row, result, row.hours) }) }}><option value="">결과 선택</option>{states.map(state => <option key={state}>{state}</option>)}</select></td>
           <td><input aria-label={`${row.name} 인정시간`} type="number" min="0" max="720" value={row.hours} disabled={!canWrite || reviewing || busy} onChange={event => updateRow(row.education_id, { hours: Number(event.target.value) })} /></td>
           <td><label className="training-override"><input type="checkbox" checked={row.override} disabled={!canWrite || reviewing || busy} onChange={event => updateRow(row.education_id, { override: event.target.checked })} />허용</label>{row.override && <input aria-label={`${row.name} 초과 사유`} value={row.override_reason} disabled={!canWrite || reviewing || busy} onChange={event => updateRow(row.education_id, { override_reason: event.target.value })} />}</td>
           <td><input aria-label={`${row.name} 결과 메모`} value={row.notes ?? ''} disabled={!canWrite || reviewing || busy} onChange={event => updateRow(row.education_id, { notes: event.target.value })} /></td>

@@ -392,6 +392,19 @@ def _normalized_training_type(training_type: str) -> str:
     return normalized
 
 
+def training_plan_has_type(
+    training_type: str,
+    service_year: int,
+    mobilization_status: str | None,
+    branch: str | None = None,
+    rank: str | None = None,
+    position: str | None = None,
+) -> bool:
+    target = _normalized_training_type(training_type)
+    plan = training_plan(service_year, mobilization_status, branch, rank, position)
+    return any(_normalized_training_type(str(item["name"])) == target for item in plan)
+
+
 def training_round_satisfied(
     attendance_status: str, training_hours: int, required_hours: int | None
 ) -> bool:

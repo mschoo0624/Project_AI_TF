@@ -31,6 +31,10 @@ class TrainingScheduleMove(BaseModel):
     sessions: list[TrainingSessionCreate] = Field(min_length=1, max_length=30)
 
 
+class TrainingScheduleUpdate(TrainingScheduleCreate):
+    expected_version: int = Field(ge=1)
+
+
 class TrainingScheduleVersion(BaseModel):
     expected_version: int = Field(ge=1)
 
@@ -44,6 +48,8 @@ class TrainingScheduleRead(BaseModel):
     training_round: int
     service_year: int
     status: str
+    demo_early_save_enabled: bool
+    demo_early_save_used: bool
     version: int
     sessions: list[TrainingSessionRead]
 

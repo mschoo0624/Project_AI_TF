@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from user.app.database import Base
@@ -23,6 +23,8 @@ class TrainingSchedule(Base):
     training_round: Mapped[int] = mapped_column(Integer, nullable=False)
     service_year: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="scheduled", nullable=False)
+    demo_early_save_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    demo_early_save_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("app_user.id"), nullable=True
