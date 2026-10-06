@@ -14,6 +14,7 @@ from user.app.api.training import (
     router as training_router,
 )
 from user.app.api.transfers import router as transfers_router
+from user.app.copilot.router import router as copilot_router
 
 app = FastAPI(title="Project AI TF API")
 app.add_middleware(
@@ -32,6 +33,7 @@ app.include_router(postponements_router)
 app.include_router(training_router)
 app.include_router(persons_training_router)
 app.include_router(transfers_router)
+app.include_router(copilot_router)
 
 @app.on_event("startup")
 def startup() -> None:

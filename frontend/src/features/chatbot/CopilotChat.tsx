@@ -7,10 +7,12 @@ import Mascot from './Mascot'
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
 const EXAMPLES = [
-  '1소대 육군 간부 보여줘',
-  '미편성 전입자 명단',
-  '방금 등록한 전입자 어디 편성하면 돼?',
+  '오늘 현황',
   '미편성 인원들 편성해줘',
+  '0년차 편성된 사람 빼줘',
+  '교육 미달자 보여줘',
+  '이상 데이터 점검해줘',
+  '최근 변경 기록',
 ]
 
 export type CopilotAction = {
@@ -24,19 +26,36 @@ export type CopilotAction = {
 type SquadOption = { squad_id: number; squad_name: string; current_count: number; reason: string }
 type PlannedAssignment = { person_id: string; name: string; squad_id: number; squad_name: string }
 type Proposal = {
-  kind: 'assign_squad' | 'assign_bulk'
+  kind: 'assign_squad' | 'assign_bulk' | 'release' | 'move'
   title: string
   person_id: string | null
   options: SquadOption[]
   assignments: PlannedAssignment[]
   notes: string[]
 }
-type ChatResponse = { message: string; ui_actions: CopilotAction[]; proposal: Proposal | null; trace_id: string }
-type ProposalState = { status: 'open' | 'saving' | 'approved' | 'cancelled'; selected: number; error?: string }
+type ChatResponse = {
+  message: string
+  ui_actions: CopilotAction[]
+  proposal: Proposal | null
+  conditions: string[]
+  unparsed: string[]
+  trace_id: string
+}
+type ApplyResponse = { message: string }
+type ProposalState = {
+  status: 'open' | 'saving' | 'approved' | 'cancelled'
+  selected: number
+  error?: string
+  done?: ApplyResponse
+}
 
 type Message =
   | { id: number; role: 'user'; text: string }
-  | { id: number; role: 'assistant'; text: string; pending: boolean; error?: string; proposal?: Proposal; proposalState?: ProposalState }
+  | {
+    id: number; role: 'assistant'; text: string; pending: boolean; error?: string
+    proposal?: Proposal; proposalState?: ProposalState; traceId?: string
+    conditions?: string[]; unparsed?: string[]
+  }
 
 async function errorDetail(response: Response) {
   try {
@@ -47,11 +66,27 @@ async function errorDetail(response: Response) {
   }
 }
 
-// 승인 시 보낼 편성 목록: 한 사람이면 고른 분대, 여러 명이면 안 전체
-function selectionsFor(proposal: Proposal, state: ProposalState) {
-  return proposal.kind === 'assign_bulk'
-    ? proposal.assignments.map(item => ({ person_id: item.person_id, squad_id: item.squad_id }))
-    : [{ person_id: proposal.person_id!, squad_id: state.selected }]
+// 분대를 하나 고르는 카드: 한 사람 편성, 재편성(이동)
+const picksOneSquad = (proposal: Proposal) => proposal.kind === 'assign_squad' || proposal.kind === 'move'
+
+// 승인 시 보낼 내용: 편성·재편성은 (인원, 분대) 목록, 해제는 인원 목록
+function applyBody(proposal: Proposal, state: ProposalState, traceId?: string) {
+  const assignments = picksOneSquad(proposal)
+    ? [{ person_id: proposal.person_id!, squad_id: state.selected }]
+    : proposal.kind === 'assign_bulk' ? proposal.assignments.map(item => ({ person_id: item.person_id, squad_id: item.squad_id })) : []
+  return {
+    kind: proposal.kind,
+    trace_id: traceId ?? null,
+    assignments,
+    person_ids: proposal.kind === 'release' ? proposal.assignments.map(item => item.person_id) : [],
+  }
+}
+
+function approveLabel(proposal: Proposal) {
+  if (proposal.kind === 'assign_bulk') return `${proposal.assignments.length}명 승인`
+  if (proposal.kind === 'release') return `${proposal.assignments.length}명 해제`
+  if (proposal.kind === 'move') return '옮기기 승인'
+  return '승인'
 }
 
 function BulkPlan({ proposal }: { proposal: Proposal }) {
@@ -59,7 +94,7 @@ function BulkPlan({ proposal }: { proposal: Proposal }) {
   proposal.assignments.forEach(item => bySquad.set(item.squad_name, [...(bySquad.get(item.squad_name) ?? []), item]))
   return <div className="copilot-bulk">
     {[...bySquad.entries()].map(([squad, items]) => <details key={squad}>
-      <summary>{squad} <small>+{items.length}명</small></summary>
+      <summary>{squad} <small>{proposal.kind === 'release' ? '-' : '+'}{items.length}명</small></summary>
       <p>{items.map(item => `${item.name}(${item.person_id})`).join(', ')}</p>
     </details>)}
     {proposal.notes.map(note => <p key={note} className="copilot-bulk-note">{note}</p>)}
@@ -74,10 +109,11 @@ function ProposalCard({ proposal, state, onSelect, onApprove, onCancel }: {
   onCancel: () => void
 }) {
   const chosen = proposal.options.find(option => option.squad_id === state.selected)
-  const doneText = proposal.kind === 'assign_bulk' ? `${proposal.assignments.length}명을 편성했습니다.` : `${chosen?.squad_name}에 편성했습니다.`
+  const doneText = proposal.kind === 'assign_squad' ? `${chosen?.squad_name}에 편성했습니다.`
+    : proposal.kind === 'move' ? `${chosen?.squad_name}(으)로 옮겼습니다.` : state.done?.message
   return <div className="copilot-proposal">
     <strong>{proposal.title}</strong>
-    {proposal.kind === 'assign_bulk' ? <BulkPlan proposal={proposal} /> : <fieldset disabled={state.status !== 'open'}>
+    {!picksOneSquad(proposal) ? <BulkPlan proposal={proposal} /> : <fieldset disabled={state.status !== 'open'}>
       <legend hidden>편성할 분대</legend>
       {proposal.options.map((option, index) => <label key={option.squad_id}>
         <input type="radio" name={`proposal-${proposal.person_id}`} checked={state.selected === option.squad_id}
@@ -91,7 +127,7 @@ function ProposalCard({ proposal, state, onSelect, onApprove, onCancel }: {
     {(state.status === 'open' || state.status === 'saving') && <div className="copilot-proposal-actions">
       <button type="button" onClick={onCancel} disabled={state.status === 'saving'}>취소</button>
       <button type="button" className="is-primary" onClick={onApprove} disabled={state.status === 'saving'}>
-        {state.status === 'saving' ? '저장 중…' : proposal.kind === 'assign_bulk' ? `${proposal.assignments.length}명 승인` : '승인'}
+        {state.status === 'saving' ? '저장 중…' : approveLabel(proposal)}
       </button>
     </div>}
   </div>
@@ -141,6 +177,9 @@ export default function CopilotChat({ onAction, onDataChanged }: {
         text: result.message,
         pending: false,
         proposal: result.proposal ?? undefined,
+        traceId: result.trace_id,
+        conditions: result.conditions,
+        unparsed: result.unparsed,
         proposalState: result.proposal ? { status: 'open', selected: result.proposal.options[0]?.squad_id ?? 0 } : undefined,
       })
       const listAction = [...result.ui_actions].reverse().find(action => action.type !== 'navigate' && action.ids.length > 0)
@@ -153,20 +192,20 @@ export default function CopilotChat({ onAction, onDataChanged }: {
     }
   }
 
-  // 승인: 사용자의 클릭으로만 기존 편성 확정 API를 호출합니다.
-  const approve = async (id: number, proposal: Proposal, state: ProposalState) => {
+  // 승인: 사용자의 클릭으로만 /copilot/apply를 호출합니다. 서버가 기존 서비스로 검증·저장하고 변경 기록을 남깁니다.
+  const approve = async (id: number, proposal: Proposal, state: ProposalState, traceId?: string) => {
     updateProposal(id, { status: 'saving', error: undefined })
     try {
-      const response = await fetch(`${API_BASE}/squads/assignments/confirm`, {
+      const response = await fetch(`${API_BASE}/copilot/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assignments: selectionsFor(proposal, state) }),
+        body: JSON.stringify(applyBody(proposal, state, traceId)),
       })
       if (!response.ok) throw new Error(await errorDetail(response))
-      updateProposal(id, { status: 'approved' })
+      updateProposal(id, { status: 'approved', done: await response.json() as ApplyResponse })
       onDataChanged()
     } catch (error) {
-      updateProposal(id, { status: 'open', error: `편성 실패: ${error instanceof Error ? error.message : String(error)}` })
+      updateProposal(id, { status: 'open', error: `실패: ${error instanceof Error ? error.message : String(error)}` })
     }
   }
 
@@ -180,8 +219,8 @@ export default function CopilotChat({ onAction, onDataChanged }: {
     <div className="legal-chat-log" ref={logRef} aria-live="polite">
       {messages.length === 0 && <div className="legal-chat-empty">
         <Mascot size={88} mood="wave" />
-        <h3>업무 Copilot이에요</h3>
-        <p>인원을 조건으로 찾거나, 전입자를 어느 분대에 편성할지 추천해 드려요.<br />데이터 변경은 [승인]을 눌렀을 때만 일어나요.</p>
+        <h3>업무 Chatbot이에요.</h3>
+        <p>인원 조회, 편성·해제 제안, 현황·교육 미달·이상 데이터 점검을 도와드려요.<br />데이터 변경은 [승인]을 눌렀을 때만 일어나고, 변경 기록에 남아요.</p>
         <div className="legal-chat-chips">
           {EXAMPLES.map(example => <button key={example} type="button" disabled={busy} onClick={() => ask(example)}>{example}</button>)}
         </div>
@@ -191,6 +230,11 @@ export default function CopilotChat({ onAction, onDataChanged }: {
         : <div key={message.id} className="legal-chat-row">
           <span className="legal-chat-avatar"><Mascot size={30} mood={message.pending ? 'thinking' : 'idle'} /></span>
           <div className="legal-chat-bubble is-assistant">
+            {(message.conditions?.length || message.unparsed?.length) ? <div className="copilot-conditions" aria-label="적용한 조건">
+              <span>조건</span>
+              {message.conditions?.map(condition => <b key={condition}>{condition}</b>)}
+              {message.unparsed?.map(word => <b key={word} className="is-unparsed" title="이해하지 못한 말">{word}?</b>)}
+            </div> : null}
             {message.text.split('\n').map((line, index) => <p key={index}>{line}</p>)}
             {message.error && <p className="is-error">{message.error}</p>}
             {message.pending && <p className="legal-chat-pending">
@@ -200,7 +244,7 @@ export default function CopilotChat({ onAction, onDataChanged }: {
               proposal={message.proposal}
               state={message.proposalState}
               onSelect={squadId => updateProposal(message.id, { selected: squadId })}
-              onApprove={() => approve(message.id, message.proposal!, message.proposalState!)}
+              onApprove={() => approve(message.id, message.proposal!, message.proposalState!, message.traceId)}
               onCancel={() => updateProposal(message.id, { status: 'cancelled' })}
             />}
           </div>

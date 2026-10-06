@@ -82,8 +82,10 @@
 .legal-chat-form button:hover:not(:disabled) { background:var(--chat-green-dark); transform:scale(1.06); }
 .legal-chat-form button:disabled { background:#a9c2b5; cursor:default; }
 
-.legal-chat-modes { display:inline-flex; gap:2px; margin-top:4px; padding:2px; border-radius:999px; background:var(--chat-mint-soft); }
-.legal-chat-modes button { padding:2px 12px; border:0; border-radius:999px; background:transparent; color:#5f7d6d; font:inherit; font-size:11px; font-weight:600; cursor:pointer; }
+/* 업무/법령 전환: 헤더의 주된 조작이라 크게, 가로 폭을 채운다. */
+.legal-chat-modes { display:flex; gap:4px; padding:3px; border-radius:999px; background:var(--chat-mint-soft); }
+.legal-chat-modes button { flex:1; min-height:36px; padding:6px 18px; border:0; border-radius:999px; background:transparent; color:#5f7d6d; font:inherit; font-size:14px; font-weight:700; cursor:pointer; transition:background .15s, color .15s; }
+.legal-chat-modes button:hover:not([aria-pressed="true"]) { background:#fff; color:var(--chat-green-dark); }
 .legal-chat-modes button[aria-pressed="true"] { background:var(--chat-green); color:#fff; }
 
 .copilot-proposal { margin-top:8px; padding:9px 10px; border:1px solid var(--chat-line); border-radius:12px; background:#fbfdfc; font-size:12px; }
@@ -101,6 +103,11 @@
 .copilot-bulk summary small { margin-left:4px; color:#6b8577; font-weight:500; }
 .copilot-bulk details p { margin:4px 0 2px; color:#4a6658; font-size:11px; line-height:1.5; }
 .copilot-bulk-note { margin:2px 0 0; color:#9a5b00; font-size:11px; }
+/* Copilot이 적용한 조건. 조건이 빠지면 여기서 바로 보인다. */
+.copilot-conditions { display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin-bottom:6px; }
+.copilot-conditions span { color:#6b7f74; font-size:11px; }
+.copilot-conditions b { padding:1px 8px; border-radius:999px; background:var(--chat-mint); color:#2f5a45; font-size:11px; font-weight:600; }
+.copilot-conditions b.is-unparsed { background:#fff4e0; color:#9a5b00; }
 .copilot-proposal-done { margin-top:6px; color:#2f5a45; font-weight:600; }
 
 @media (prefers-reduced-motion: reduce) {

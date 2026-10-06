@@ -32,6 +32,7 @@ def init_db() -> None:
     postponement_columns = {
         column["name"] for column in inspect(engine).get_columns("postponement")
     }
+    audit_columns = {column["name"] for column in inspect(engine).get_columns("audit_log")}
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -166,6 +167,10 @@ def init_db() -> None:
             connection.execute(text("ALTER TABLE postponement ADD COLUMN classifier_submission_id VARCHAR(64)"))
         if "approved_at" not in postponement_columns:
             connection.execute(text("ALTER TABLE postponement ADD COLUMN approved_at DATETIME"))
+        for column, column_type in (("created_at", "DATETIME"), ("source", "VARCHAR(50)"),
+                                    ("trace_id", "VARCHAR(32)"), ("summary", "TEXT"), ("detail", "TEXT")):
+            if column not in audit_columns:
+                connection.execute(text(f"ALTER TABLE audit_log ADD COLUMN {column} {column_type}"))
         connection.execute(
             text(
                 "UPDATE person SET service_year = 1 WHERE service_year IS NULL"

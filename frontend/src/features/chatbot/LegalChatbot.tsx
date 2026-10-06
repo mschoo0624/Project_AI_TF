@@ -197,12 +197,11 @@ export default function LegalChatbot({ open, onClose, onCopilotAction, onDataCha
     <header className="legal-chat-header">
       <Mascot size={42} mood={busy ? 'thinking' : 'idle'} />
       <div className="legal-chat-title">
-        <h2>{mode === 'copilot' ? '업무 Copilot' : '예비군 법령 도우미'}</h2>
-        {mode === 'legal' && <p className={statusError || status?.error ? 'is-error' : undefined}>{statusText}</p>}
         <nav className="legal-chat-modes" aria-label="도우미 종류">
           <button type="button" aria-pressed={mode === 'copilot'} onClick={() => setMode('copilot')}>업무</button>
           <button type="button" aria-pressed={mode === 'legal'} onClick={() => setMode('legal')}>법령</button>
         </nav>
+        {mode === 'legal' && <p className={statusError || status?.error ? 'is-error' : undefined}>{statusText}</p>}
       </div>
       <div className="legal-chat-header-actions">
         {mode === 'legal' && messages.length > 0 && <button type="button" onClick={() => { abortRef.current?.abort(); setMessages([]) }}>새 대화</button>}
