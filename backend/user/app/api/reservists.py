@@ -11,7 +11,8 @@
 군종, 계급, 상태로 필터링
 """
 
-from datetime import date
+import json
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
@@ -21,25 +22,34 @@ from sqlalchemy.orm import Session
 from user.app.database import get_db
 from user.app.models.annual_status import AnnualStatus
 from user.app.models.assignment import Assignment
+from user.app.models.audit_log import AuditLog
 from user.app.models.education import Education
 from user.app.models.person import Person
 from user.app.models.postpoment import Postponement
+from user.app.models.user import User
+from user.app.models.training_recalculation import TrainingCarryover, TrainingYearResult
 from user.app.schemas.person import PersonCreate, PersonRead, PersonUpdate, PersonProfileUpdate
 from user.app.services.person_profile import ProfileError, profile_options, save_profile
 from user.app.services.assignment import grouped_candidates
 from user.app.services.person import create_person
 from user.app.services.training import (
+	OVERDUE_GRACE_DAYS,
 	ROUND_SCHEDULED,
+	training_last_session_days,
 	ROUND_POSTPONED,
+	UNEXCUSED_ABSENCE,
+	_approved_excusal_record_ids,
 	all_training_progress,
 	apply_mobilization_status_change,
 )
+from user.app.services.auth import require_scheduler, require_viewer
+from user.app.services.training_recalculation import recalculate_person
 
 router = APIRouter(prefix="/reservists", tags=["reservists"])
 persons_router = APIRouter(prefix="/persons", tags=["persons"])
 
 
-@router.get("/prosecution-targets")
+@router.get("/prosecution-targets", dependencies=[Depends(require_viewer)])
 def list_prosecution_targets(db: Session = Depends(get_db)) -> list[dict[str, object]]:
 	"""List reservists currently marked as prosecution targets by training rules."""
 	people = db.scalars(select(Person).order_by(Person.military_number)).all()
@@ -67,71 +77,128 @@ def list_prosecution_targets(db: Session = Depends(get_db)) -> list[dict[str, ob
 	return result
 
 
-@router.get("/training-review-targets")
+@router.get("/training-review-targets", dependencies=[Depends(require_viewer)])
 def list_training_review_targets(db: Session = Depends(get_db)) -> list[dict[str, object]]:
 	"""List incomplete training obligations for review, not as legal prosecution findings."""
 	people = db.scalars(select(Person).order_by(Person.military_number)).all()
-	approved_rows = db.scalars(
-		select(Postponement).where(Postponement.status == "approved")
-	).all()
-	approved_years: dict[str, set[int]] = {}
-	approved_undated: set[str] = set()
-	for postponement in approved_rows:
-		if postponement.training_year is None:
-			approved_undated.add(postponement.person_id)
-		else:
-			approved_years.setdefault(postponement.person_id, set()).add(postponement.training_year)
-
-	education_rows = db.scalars(select(Education)).all()
-	by_person: dict[str, list[Education]] = {}
-	for record in education_rows:
-		by_person.setdefault(record.person_id, []).append(record)
-
-	today_year = date.today().year
+	today = date.today()
 	result: list[dict[str, object]] = []
+	backfilled = False
 	for person in people:
-		if person.service_year is None or not 1 <= person.service_year <= 8:
+		if person.service_year is None or person.service_year < 1:
 			continue
-		person_records = by_person.get(person.military_number, [])
-		progress = all_training_progress(db, person)
-		review_years: list[int] = []
-		for item in progress:
-			year = int(item["service_year"])
-			year_remaining = int(item["remaining_hours"])
-			if year < 1 or year > person.service_year or year_remaining <= 0:
-				continue
-			year_records = [record for record in person_records if record.education_year == year]
-			if any(
-				record.attendance_status in ROUND_POSTPONED | ROUND_SCHEDULED
-				for record in year_records
-			):
-				continue
-			training_years = {
-				record.training_year for record in year_records if record.training_year is not None
+		derived = db.scalar(select(TrainingYearResult.id).where(
+			TrainingYearResult.person_id == person.military_number
+		).limit(1))
+		if derived is None:
+			recalculate_person(db, person.military_number, 1, "initial_backfill", "system")
+			backfilled = True
+		carryovers = db.scalars(select(TrainingCarryover).where(
+			TrainingCarryover.person_id == person.military_number,
+			TrainingCarryover.remaining_hours > 0,
+		)).all()
+		year_results = db.scalars(select(TrainingYearResult).where(
+			TrainingYearResult.person_id == person.military_number
+		)).all()
+		records = db.scalars(select(Education).where(
+			Education.person_id == person.military_number,
+			Education.attendance_status.in_(ROUND_SCHEDULED),
+			Education.scheduled_date.is_not(None),
+		)).all()
+		last_session_days = training_last_session_days(db, records)
+		absence_records = db.scalars(select(Education).where(
+			Education.person_id == person.military_number,
+			Education.attendance_status.in_(UNEXCUSED_ABSENCE),
+		)).all()
+		excused_absence_ids = _approved_excusal_record_ids(
+			db, person.military_number, absence_records
+		)
+		unconfirmed_absences = [
+			record for record in absence_records
+			if not record.confirmed_by and record.id not in excused_absence_ids
+		]
+		overdue = [record for record in records if last_session_days.get(record.id)
+		           and today > last_session_days[record.id] + timedelta(days=OVERDUE_GRACE_DAYS)]
+		future_scheduled_years = {
+			record.education_year for record in records
+			if last_session_days.get(record.id) and last_session_days[record.id] >= today
+		}
+		review_years = {row.origin_year for row in carryovers}
+		review_years.update(row.service_year for row in year_results if row.needs_review_reason)
+		review_years.update(record.education_year for record in overdue)
+		review_years.update(record.education_year for record in unconfirmed_absences)
+		review_years.update(
+			row.service_year for row in year_results
+			if row.service_year == person.service_year and row.unmet_hours > 0
+			and row.service_year not in future_scheduled_years
+		)
+		if not review_years:
+			continue
+		current_unmet = sum(
+			row.unmet_hours for row in year_results
+			if row.service_year == person.service_year and not row.needs_review_reason
+		)
+		remaining_hours = sum(row.remaining_hours for row in carryovers) + current_unmet
+		review_rows = [
+			{
+				"origin_year": row.origin_year,
+				"training_type": row.training_type,
+				"round": row.current_round,
+				"remaining_hours": row.remaining_hours,
+				"status": row.status,
+				"reason": row.reason_code,
 			}
-			if not training_years:
-				training_years.add(today_year - (person.service_year - year))
-			if (
-				person.military_number in approved_undated
-				and year == person.service_year
-			) or training_years.intersection(approved_years.get(person.military_number, set())):
-				continue
-			review_years.append(year)
-		if review_years:
-			remaining_hours = int(progress[person.service_year]["remaining_hours"])
-			result.append({
+			for row in carryovers
+		]
+		review_rows.extend(
+			{
+				"origin_year": row.service_year,
+				"training_type": "NEEDS_REVIEW",
+				"round": None,
+				"remaining_hours": None,
+				"status": "needs_review",
+				"reason": row.needs_review_reason,
+			}
+			for row in year_results if row.needs_review_reason
+		)
+		review_rows.extend(
+			{
+				"origin_year": record.education_year,
+				"training_type": record.training_type,
+				"round": record.training_round,
+				"remaining_hours": None,
+				"status": "unconfirmed",
+				"reason": "overdue_result_not_entered",
+			}
+			for record in overdue
+		)
+		review_rows.extend(
+			{
+				"origin_year": record.education_year,
+				"training_type": record.training_type,
+				"round": record.training_round,
+				"remaining_hours": None,
+				"status": "recorded_absence_metadata_missing",
+				"reason": "confirming_user_metadata_missing",
+			}
+			for record in unconfirmed_absences
+		)
+		result.append({
 				"military_number": person.military_number,
 				"name": person.name,
 				"branch": person.branch,
 				"rank": person.rank,
 				"service_year": person.service_year,
 				"squad_id": person.squad_id,
-				"review_years": review_years,
+				"review_years": sorted(review_years),
 				"remaining_hours": remaining_hours,
+				"review_rows": review_rows,
 			})
+	if backfilled:
+		db.commit()
 	return result
 
-@persons_router.get("/assignment-candidates")
+@persons_router.get("/assignment-candidates", dependencies=[Depends(require_viewer)])
 def list_assignment_candidates(
 	position: str = Query(..., description="Wartime position, for example 행정병"),
 	branch: str | None = Query(default=None),
@@ -159,8 +226,8 @@ def list_assignment_candidates(
 		for branch_name, personnel_groups in groups.items()
 	}
 
-@router.get("", response_model=list[PersonRead])
-@persons_router.get("", response_model=list[PersonRead])
+@router.get("", response_model=list[PersonRead], dependencies=[Depends(require_viewer)])
+@persons_router.get("", response_model=list[PersonRead], dependencies=[Depends(require_viewer)])
 def list_reservists(
 	query_text: str | None = Query(default=None, alias="query"),
 	branch: str | None = Query(default=None),
@@ -188,16 +255,83 @@ def get_profile_options():
 	return profile_options()
 
 
-@persons_router.patch("/{military_number}/profile", response_model=PersonRead)
-def update_profile(military_number: str, payload: PersonProfileUpdate, db: Session = Depends(get_db)):
+@persons_router.patch("/{military_number}/profile", response_model=PersonRead,
+	dependencies=[Depends(require_scheduler)])
+def update_profile(
+	military_number: str,
+	payload: PersonProfileUpdate,
+	db: Session = Depends(get_db),
+	actor: User = Depends(require_scheduler),
+):
 	person = _profile_person(db, military_number)
 	try:
-		return save_profile(db, person, payload.model_dump())
+		return save_profile(
+			db, person, payload.model_dump(exclude_unset=True),
+			actor.username, actor.id,
+		)
 	except ProfileError as error:
 		raise HTTPException(status_code=422, detail={"fields": error.fields}) from error
 	except IntegrityError as error:
 		db.rollback()
 		raise HTTPException(status_code=409, detail="군번 중복 또는 연결 정보 충돌로 저장하지 못했습니다.") from error
+
+
+@persons_router.patch("/{military_number}/annual-status/{service_year}",
+	dependencies=[Depends(require_scheduler)])
+def update_annual_status(
+	military_number: str,
+	service_year: int,
+	payload: dict[str, object],
+	db: Session = Depends(get_db),
+	actor: User | None = Depends(require_scheduler),
+) -> dict[str, object]:
+	allowed = {"mobilization_status", "semester_completed"}
+	if not payload or set(payload) - allowed:
+		raise HTTPException(status_code=422, detail="Invalid annual-status fields")
+	if "mobilization_status" in payload and not isinstance(payload["mobilization_status"], str):
+		raise HTTPException(status_code=422, detail="mobilization_status must be a string")
+	if "semester_completed" in payload and payload["semester_completed"] is not None and not isinstance(payload["semester_completed"], bool):
+		raise HTTPException(status_code=422, detail="semester_completed must be a boolean or null")
+	person = _profile_person(db, military_number)
+	row = db.get(AnnualStatus, (military_number, service_year))
+	if row is None:
+		status_value = payload.get("mobilization_status", person.mobilization_status)
+		if not isinstance(status_value, str) or not status_value:
+			raise HTTPException(status_code=422, detail="Annual mobilization status is required")
+		row = AnnualStatus(
+			person_id=military_number,
+			service_year=service_year,
+			mobilization_status=status_value,
+			semester_completed=payload.get("semester_completed"),
+		)
+		db.add(row)
+		db.flush()
+	before = {
+		"mobilization_status": row.mobilization_status,
+		"semester_completed": row.semester_completed,
+	}
+	for key, value in payload.items():
+		setattr(row, key, value)
+	after = {
+		"mobilization_status": row.mobilization_status,
+		"semester_completed": row.semester_completed,
+	}
+	db.add(AuditLog(
+		user_id=actor.id if isinstance(actor, User) else None,
+		action="annual_status.update",
+		table_name="annual_status",
+		actor_label=actor.username if isinstance(actor, User) else "direct-call",
+		before_data=json.dumps(before, ensure_ascii=False, sort_keys=True),
+		after_data=json.dumps(after, ensure_ascii=False, sort_keys=True),
+		created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+	))
+	recalculate_person(
+		db, military_number, service_year, "status_change",
+		actor.username if isinstance(actor, User) else "direct-call",
+		actor_user_id=actor.id if isinstance(actor, User) else None,
+	)
+	db.commit()
+	return {"person_id": military_number, "service_year": service_year, **after}
 
 
 def _profile_person(db: Session, military_number: str):
@@ -207,29 +341,38 @@ def _profile_person(db: Session, military_number: str):
 	return person
 
 
-@router.get("/{military_number}", response_model=PersonRead)
-@persons_router.get("/{military_number}", response_model=PersonRead)
+@router.get("/{military_number}", response_model=PersonRead, dependencies=[Depends(require_viewer)])
+@persons_router.get("/{military_number}", response_model=PersonRead, dependencies=[Depends(require_viewer)])
 def get_reservist(military_number: str, db: Session = Depends(get_db)) -> Person:
 	person = db.get(Person, military_number)
 	if person is None:
 		raise HTTPException(status_code=404, detail="Reservist not found")
 	return person
 
-@router.post("", response_model=PersonRead, status_code=status.HTTP_201_CREATED)
-@persons_router.post("", response_model=PersonRead, status_code=status.HTTP_201_CREATED)
-def create_reservist(payload: PersonCreate, db: Session = Depends(get_db)) -> Person:
+@router.post("", response_model=PersonRead, status_code=status.HTTP_201_CREATED,
+	dependencies=[Depends(require_scheduler)])
+@persons_router.post("", response_model=PersonRead, status_code=status.HTTP_201_CREATED,
+	dependencies=[Depends(require_scheduler)])
+def create_reservist(
+	payload: PersonCreate,
+	db: Session = Depends(get_db),
+	actor: User = Depends(require_scheduler),
+) -> Person:
 	try:
-		return create_person(db, payload)
+		return create_person(db, payload, actor_user_id=actor.id)
 	except IntegrityError as error:
 		db.rollback()
 		raise HTTPException(status_code=409, detail="Military number already exists") from error
 
-@router.patch("/{military_number}", response_model=PersonRead)
-@persons_router.patch("/{military_number}", response_model=PersonRead)
+@router.patch("/{military_number}", response_model=PersonRead,
+	dependencies=[Depends(require_scheduler)])
+@persons_router.patch("/{military_number}", response_model=PersonRead,
+	dependencies=[Depends(require_scheduler)])
 def update_reservist(
 	military_number: str,
 	payload: PersonUpdate,
 	db: Session = Depends(get_db),
+	actor: User = Depends(require_scheduler),
 ) -> Person:
 	person = db.get(Person, military_number)
 	if person is None:
@@ -241,16 +384,40 @@ def update_reservist(
 		setattr(person, field, value)
 	if new_mobilization_status is not None and new_mobilization_status != person.mobilization_status:
 		apply_mobilization_status_change(db, person, new_mobilization_status)
+	from user.app.services.training_recalculation import recalculate_person
+	recalculate_person(
+		db, military_number, 1, "status_change", actor.username,
+		actor_user_id=actor.id,
+	)
 	db.commit()
 	db.refresh(person)
 	return person
 
-@router.delete("/{military_number}", status_code=status.HTTP_204_NO_CONTENT)
-@persons_router.delete("/{military_number}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_reservist(military_number: str, db: Session = Depends(get_db)) -> None:
+@router.delete("/{military_number}", status_code=status.HTTP_204_NO_CONTENT,
+	dependencies=[Depends(require_scheduler)])
+@persons_router.delete("/{military_number}", status_code=status.HTTP_204_NO_CONTENT,
+	dependencies=[Depends(require_scheduler)])
+def delete_reservist(
+	military_number: str,
+	db: Session = Depends(get_db),
+	actor: User = Depends(require_scheduler),
+) -> None:
 	person = db.get(Person, military_number)
 	if person is None:
 		raise HTTPException(status_code=404, detail="Reservist not found")
+	db.add(AuditLog(
+		user_id=actor.id,
+		action="reservist.delete",
+		table_name="person",
+		entity_key=person.military_number,
+		actor_label=actor.username,
+		before_data=json.dumps({
+			"military_number": person.military_number,
+			"name": person.name,
+			"status": person.status,
+		}, ensure_ascii=False, sort_keys=True),
+		created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+	))
 	for model in (AnnualStatus, Assignment, Education):
 		db.query(model).filter(model.person_id == military_number).delete(
 			synchronize_session=False

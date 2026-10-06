@@ -1,3 +1,6 @@
+## Security Notice
+Authentication and role enforcement are temporarily disabled across API workflows. Personnel and training data, exports, and write operations are accessible without a token. Do not expose this service to untrusted networks.
+
 ## Installation Steps
 1. sudo apt update
 2. sudo apt install python3 python3-pip python3-venv -y
@@ -159,6 +162,51 @@ uv pip install --python .\.venv\Scripts\python.exe -r .\requirements.txt
 ```
 
 서버가 실행된 동안 <http://127.0.0.1:8002/docs>에서 API 문서를 확인할 수 있습니다. 종료하려면 서버 터미널에서 `Ctrl + C`를 누릅니다.
+
+## Training Recalculation
+
+Annual training results are rebuilt from source records by the service layer. The rebuild keeps obligation year separate from calendar training year, stores per-type carryover and round state separately, and writes an audit diff. It does not infer an absence from an overdue session. An absence requires a confirmer; write routes derive the actor only from a verified bearer session. Overdue sessions remain unconfirmed and appear in the training-review list.
+
+The SQLite initializer applies additive migrations and creates the status-policy table. It does not delete or reseed the active database. Admin endpoints are `POST /reservists/training/recalculate/{military_number}`, `POST /reservists/training/recalculate-all`, `GET /reservists/training/status-policies`, and `PATCH /reservists/training/status-policies/{status_key}`. The Jan 1 rollover runs through the existing scheduled background loop and has a database year marker.
+
+### Training Schedule and Results
+
+The education-training workflow has separate schedule, roster assignment, and result-confirmation steps. A multi-day event has one education record per reservist; session dates are schedule details, not separate attendance results. Scheduled events can be moved or cancelled until any roster result is confirmed; moves update linked roster dates and are audited. Assignments do not create results, and overdue sessions are review work items rather than automatic absences. Result batches are atomic and idempotent, and stale edits require reloading before confirmation. Approved postponements can reverse a confirmed absence and advance the round state; the next round still requires an explicit roster assignment.
+
+Training writes require an authenticated account. Roles are `viewer` (read), `scheduler` (schedules, rosters, and ordinary results), and `approver` (approval-sensitive results and account creation). No default training username or password is created. For the first account, call `POST /auth/bootstrap` from localhost with a username/password you choose. Bootstrap is available only until the first supported-role account exists; legacy accounts with unsupported roles do not block it. The existing `admin` account with role `admin` is not accepted by training auth, and its password cannot be recovered from its stored hash. The approver can create subsequent accounts through `POST /auth/users`; users sign in at `POST /auth/login` and send the returned bearer token as `Authorization: Bearer <token>`. Passwords must be at least 12 characters.
+
+On the login page, choose **첫 approver 계정 만들기**, then enter the username and password for the first account. The backend only accepts this one-time setup request from a loopback address (`127.0.0.1` or `::1`); the route does not use a bootstrap token. Later accounts are created by a signed-in approver using the header's **계정 생성** action or `POST /auth/users`.
+
+```powershell
+cd .\backend
+.\.venv\Scripts\python.exe -m uvicorn user.app.main:app --host 127.0.0.1 --port 8002
+```
+
+| Setting | Default | Behavior |
+| --- | --- | --- |
+| `TRAINING_RESULT_GRACE_DAYS` | `7` | Keeps completed sessions on the result worklist for this many days. |
+| `EARLY_DISMISSAL_COUNTS_HOURS` | `true` | When true, `조기퇴소` requires positive hours and contributes them to recalculation; when false it requires zero hours. Confirm the applicable directive before operational use. |
+
+Spreadsheet import is intentionally not implemented until an anonymized unit export sample and its column semantics are available. There is no automatic-absence setting: staff confirmation is required to record an absence.
+
+Roster assignment currently records a pending notification state, but there is no delivery channel or reservist contact/account mapping configured. No notification is sent; define the approved delivery channel and recipient source before enabling delivery. The configured early-dismissal rule, Type I conversion, deferral-counter scope, and prosecution thresholds must be verified against current authoritative policy before operational use.
+
+| Setting | Default | Status |
+| --- | --- | --- |
+| `TRAINING_OBLIGATION_YEAR_END_MONTH` / `TRAINING_OBLIGATION_YEAR_END_DAY` | `12` / `31` | Configurable; Dec 31 is the specified default. |
+| `TRAINING_OVERDUE_GRACE_DAYS` | `0` | Configurable; verify the operational grace period. |
+| `TRAINING_ROLLOVER_ENABLED` | `true` | Configurable. The job runs on Jan 1 (Korea-local calendar date). |
+| `TRAINING_TYPE1_DEFERRAL_CONVERTS_TO_TYPE2` | `true` | **UNVERIFIED** legal/business rule; set `false` to retain Type I. |
+| `TRAINING_LEGACY_SERVICE_YEAR_FALLBACK` | `true` | **UNVERIFIED** compatibility rule for people without a discharge/s소집해제 date. Set `false` to emit `NEEDS_REVIEW`. |
+| `TRAINING_OVERSEAS_HOLD_MIN_DAYS` | `365` | Configurable minimum; shorter approved cases are treated as deferrals. |
+| `TRAINING_ILLNESS_HOLD_MIN_DAYS` | `180` | Configurable minimum; shorter approved cases are treated as deferrals. |
+| `TRAINING_HOLD_RESOLUTION_GRACE_DAYS` | `14` | Configurable reporting window after the hold end date. |
+| `TRAINING_MOBILIZATION_DEFERRAL_LIMIT` | `2` | Configurable warning threshold; never blocks saving. |
+| `TRAINING_GENERAL_DEFERRAL_LIMIT` | `6` | Configurable warning threshold; never blocks saving. |
+| `TRAINING_DEFERRAL_COUNTER_SCOPE` | `reserve_period` | **UNVERIFIED** scope; `calendar_year` is also supported. |
+| `TRAINING_MOBILIZATION_DEFERRAL_REASONS` | work, exam, planned overseas travel, vocational school, major event tokens | Configurable comma-separated reason/category match tokens. |
+
+Status behavior is configurable in `training_status_policy`; defaults are inserted with `INSERT OR IGNORE`, so administrator-edited rows are preserved. Unknown statuses and missing student semester data produce `NEEDS_REVIEW`. Semester completion is not currently sourced from school records; staff can enter verified annual status with `PATCH /persons/{military_number}/annual-status/{service_year}` (`mobilization_status` and `semester_completed`). The Type I conversion default and deferral-counter scope remain unverified and must be confirmed against applicable policy before production use.
 
 ## Run Law Chatbot (RAG, Windows PowerShell)
 

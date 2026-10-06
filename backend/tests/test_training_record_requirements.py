@@ -26,8 +26,8 @@ def test_officer_type_two_record_requires_28_hours():
     assert training_record_required_hours("동원훈련Ⅱ형", 2, "동원미지정", "육군", "하사") == 28
 
 
-def test_officer_type_two_makeup_record_requires_32_hours():
+def test_officer_type_two_record_remains_28_hours_with_makeup_flag():
     assert training_record_required_hours(
         "동원훈련Ⅱ형", 2, "동원미지정", "육군", "하사",
         officer_type_ii_makeup=True,
-    ) == 32
+    ) == 28

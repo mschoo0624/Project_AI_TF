@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from user.app.database import Base
@@ -17,5 +17,6 @@ class AnnualStatus(Base):
     )
     service_year: Mapped[int] = mapped_column(Integer, primary_key=True)
     mobilization_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    semester_completed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     person: Mapped["Person"] = relationship(back_populates="annual_statuses")

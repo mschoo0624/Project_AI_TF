@@ -7,6 +7,7 @@ from sqlalchemy import inspect, text
 # Importing the files from the other folders. 
 from user.app.database import SessionLocal, engine, init_db
 from user.app.api.dashboard import router as dashboard_router
+from user.app.api.auth import router as auth_router
 from user.app.api.postponements import router as postponements_router
 from user.app.api.reservists import persons_router, router as reservists_router
 from user.app.api.squads import router as squads_router
@@ -16,8 +17,10 @@ from user.app.api.training import (
     persons_training_router,
     router as training_router,
 )
+from user.app.api.training_results import router as training_results_router
 from user.app.api.transfers import router as transfers_router
 from user.app.services.training import reconcile_all_due_training_absences
+from user.app.services.training_recalculation import recalculate_ended_holds, run_jan1_rollover
 
 logger = logging.getLogger(__name__)
 _training_reconciliation_task: asyncio.Task[None] | None = None
@@ -30,6 +33,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth_router)
+app.include_router(training_results_router)
 app.include_router(reservists_router)
 app.include_router(persons_router)
 app.include_router(squads_router)
@@ -43,6 +48,9 @@ app.include_router(transfers_router)
 def _reconcile_due_training_records() -> None:
     with SessionLocal() as db:
         reconcile_all_due_training_absences(db)
+        run_jan1_rollover(db)
+        recalculate_ended_holds(db)
+        db.commit()
 
 
 async def _training_reconciliation_loop() -> None:

@@ -102,8 +102,10 @@ def test_add_transferred_person_multi_year_allocation() -> None:
     assert records[1].education_year == 2
     assert records[1].training_hours == 22
 
-    assert completed_training_hours(db, "24-70000004", 1) == 28
-    assert completed_training_hours(db, "24-70000004", 2) == 22
+    assert records[0].source_kind == "estimated"
+    assert records[1].source_kind == "estimated"
+    assert completed_training_hours(db, "24-70000004", 1) == 0
+    assert completed_training_hours(db, "24-70000004", 2) == 0
     assert completed_training_hours(db, "24-70000004", 3) == 0
     db.close()
 

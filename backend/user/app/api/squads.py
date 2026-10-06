@@ -12,7 +12,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from user.app.database import get_db
 from user.app.models.squad import Squad
+from user.app.models.user import User
 from user.app.schemas.assignment import AssignmentConfirmation, AssignmentPlan, AutomaticAssignmentPlan
+from user.app.services.auth import require_scheduler, require_viewer
 from user.app.services.assignment import (
 	auto_assign_people,
 	available_assignment_candidates,
@@ -26,11 +28,12 @@ from user.app.services.assignment import (
 router = APIRouter(prefix="/squads", tags=["squads"])
 
 
-@router.post("/{squad_id}/fill-positions")
+@router.post("/{squad_id}/fill-positions", dependencies=[Depends(require_scheduler)])
 def fill_positions(
 	squad_id: int,
 	plan: AssignmentPlan,
 	db: Session = Depends(get_db),
+	actor: User = Depends(require_scheduler),
 ) -> dict[str, object]:
 	try:
 		return fill_squad_positions(
@@ -39,12 +42,14 @@ def fill_positions(
 			plan.position_quotas,
 			tuple(plan.branch_order),
 			plan.allow_branch_merge,
+			actor.id,
+			actor.username,
 		)
 	except ValueError as error:
 		raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-@router.get("/assignment-candidates")
+@router.get("/assignment-candidates", dependencies=[Depends(require_viewer)])
 def assignment_candidates(
 	position: str | None = None,
 	db: Session = Depends(get_db),
@@ -52,45 +57,52 @@ def assignment_candidates(
 	return available_assignment_candidates(db, position)
 
 
-@router.post("/assignments/confirm")
+@router.post("/assignments/confirm", dependencies=[Depends(require_scheduler)])
 def confirm_assignments(
 	payload: AssignmentConfirmation,
 	db: Session = Depends(get_db),
+	actor: User = Depends(require_scheduler),
 ) -> dict[str, object]:
 	try:
 		return confirm_assignment_selections(
 			db,
 			((selection.person_id, selection.squad_id) for selection in payload.assignments),
+			actor_user_id=actor.id,
+			actor_label=actor.username,
 		)
 	except ValueError as error:
 		raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-@router.post("/assignments/reset")
-def reset_assignments(db: Session = Depends(get_db)) -> dict[str, int]:
-	return reset_assignment_pool(db)
+@router.post("/assignments/reset", dependencies=[Depends(require_scheduler)])
+def reset_assignments(
+	db: Session = Depends(get_db),
+	actor: User = Depends(require_scheduler),
+) -> dict[str, int]:
+	return reset_assignment_pool(db, actor.id, actor.username)
 
 
-@router.post("/assignments/auto")
+@router.post("/assignments/auto", dependencies=[Depends(require_scheduler)])
 def auto_assignments(
 	plan: AutomaticAssignmentPlan,
 	db: Session = Depends(get_db),
+	actor: User = Depends(require_scheduler),
 ) -> dict[str, object]:
 	try:
-		return auto_assign_people(db, plan.limit)
+		return auto_assign_people(db, plan.limit, actor.id, actor.username)
 	
 	except ValueError as error:
 		raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-@router.get("/assignments/recommendations/{person_id}")
+@router.get("/assignments/recommendations/{person_id}", dependencies=[Depends(require_viewer)])
 def assignment_recommendations(person_id: str, db: Session = Depends(get_db)) -> list[dict[str, object]]:
 	try:
 		return recommend_squads_for_person(db, person_id)
 	except ValueError as error:
 		raise HTTPException(status_code=400, detail=str(error)) from error
 
-@router.get("")
+@router.get("", dependencies=[Depends(require_viewer)])
 def list_squads(db: Session = Depends(get_db)) -> list[dict[str, object]]:
 	squads = db.scalars(
 		select(Squad).options(selectinload(Squad.persons)).order_by(Squad.id)
@@ -127,7 +139,7 @@ def list_squads(db: Session = Depends(get_db)) -> list[dict[str, object]]:
 		for squad in squads
 	]
 
-@router.get("/{squad_id}")
+@router.get("/{squad_id}", dependencies=[Depends(require_viewer)])
 def get_squad(squad_id: int, db: Session = Depends(get_db)) -> dict[str, object]:
 	squad = db.scalar(
 		select(Squad)

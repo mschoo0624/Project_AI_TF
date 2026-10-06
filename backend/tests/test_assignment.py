@@ -5,8 +5,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from user.app.models.assignment import Assignment
+from user.app.models.audit_log import AuditLog
 from user.app.models.person import Person
 from user.app.models.squad import Squad
+from user.app.models.user import User
 from user.app.services.assignment import (
     auto_assign_people,
     confirm_assignment_selections,
@@ -125,10 +127,15 @@ def test_suggest_position_for_specialty_accepts_readable_name_and_code() -> None
 def test_confirm_assignment_selections_persists_reviewed_squad_choice() -> None:
     db = make_session()
     db.add_all([Squad(id=1, name="1분대"), Squad(id=2, name="2분대")])
+    actor = User(username="scheduler", password_hash="test-hash", role="scheduler")
+    db.add(actor)
+    db.flush()
     add_person(db, "reviewed", "행정병", "3111 101")
     db.commit()
 
-    result = confirm_assignment_selections(db, [("reviewed", 2)])
+    result = confirm_assignment_selections(
+        db, [("reviewed", 2)], actor_user_id=actor.id, actor_label=actor.username,
+    )
 
     assert result["total_assigned"] == 1
     assert db.get(Person, "reviewed").squad_id == 2
@@ -137,6 +144,9 @@ def test_confirm_assignment_selections_persists_reviewed_squad_choice() -> None:
         {"name": "동원훈련Ⅰ형", "hours": 28}
     ]
     assert db.scalars(select(Assignment)).one().squad_id == 2
+    audit = db.scalars(select(AuditLog).where(AuditLog.action == "assignment.confirm")).one()
+    assert audit.user_id == actor.id
+    assert audit.actor_label == actor.username
     db.close()
 
 

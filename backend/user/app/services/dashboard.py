@@ -13,6 +13,7 @@ from user.app.services.assignment import personnel_category
 from user.app.services.training import (
     PARTIAL_HOLD,
     UNEXCUSED_ABSENCE,
+    _approved_excusal_record_ids,
     all_training_progress,
 )
 
@@ -37,14 +38,18 @@ def dashboard_counts(db: Session) -> dict[str, int]:
                 or person.status in {"hold", "on_hold", "delay", "delayed", "postponed", "보류", "연기"}
                 or (current is not None and current in approved[person.military_number])):
             counts["held_or_delayed"] += 1
-        if current is None or not 0 <= current <= 8:
+        if current is None or current < 0:
             continue
 
         current_progress = all_training_progress(db, person)[current]
-        absent = any(
-            row.education_year == current and row.attendance_status in UNEXCUSED_ABSENCE
-            for row in records[person.military_number]
+        current_absence_records = [
+            row for row in records[person.military_number]
+            if row.education_year == current and row.attendance_status in UNEXCUSED_ABSENCE
+        ]
+        excused_absence_ids = _approved_excusal_record_ids(
+            db, person.military_number, current_absence_records
         )
+        absent = any(row.id not in excused_absence_ids for row in current_absence_records)
         counts["prosecution_people"] += int(bool(current_progress["prosecution_risk"]))
         counts["absent_people"] += int(absent)
 

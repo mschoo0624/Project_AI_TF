@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import Date, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from user.app.database import Base
@@ -28,6 +29,8 @@ class Person(Base):
     # Populate from verified personnel records; this task does not infer origin.
     origin_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     service_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    discharge_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    callup_release_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     position: Mapped[str | None] = mapped_column(String(50), nullable=True)
     mobilization_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="active")
