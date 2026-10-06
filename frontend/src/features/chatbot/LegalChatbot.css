@@ -82,6 +82,27 @@
 .legal-chat-form button:hover:not(:disabled) { background:var(--chat-green-dark); transform:scale(1.06); }
 .legal-chat-form button:disabled { background:#a9c2b5; cursor:default; }
 
+.legal-chat-modes { display:inline-flex; gap:2px; margin-top:4px; padding:2px; border-radius:999px; background:var(--chat-mint-soft); }
+.legal-chat-modes button { padding:2px 12px; border:0; border-radius:999px; background:transparent; color:#5f7d6d; font:inherit; font-size:11px; font-weight:600; cursor:pointer; }
+.legal-chat-modes button[aria-pressed="true"] { background:var(--chat-green); color:#fff; }
+
+.copilot-proposal { margin-top:8px; padding:9px 10px; border:1px solid var(--chat-line); border-radius:12px; background:#fbfdfc; font-size:12px; }
+.copilot-proposal fieldset { margin:6px 0 0; padding:0; border:0; display:grid; gap:4px; }
+.copilot-proposal label { display:flex; align-items:flex-start; gap:6px; cursor:pointer; }
+.copilot-proposal label small { display:block; color:#6b8577; font-size:11px; }
+.copilot-proposal label em { margin-right:5px; padding:0 6px; border-radius:999px; background:var(--chat-mint); color:#2f5a45; font-size:10px; font-style:normal; }
+.copilot-proposal-actions { display:flex; justify-content:flex-end; gap:6px; margin-top:8px; }
+.copilot-proposal-actions button { padding:4px 14px; border:1px solid var(--chat-line); border-radius:999px; background:#fff; font:inherit; font-size:12px; cursor:pointer; }
+.copilot-proposal-actions button.is-primary { border-color:var(--chat-green); background:var(--chat-green); color:#fff; }
+.copilot-proposal-actions button:disabled { opacity:.6; cursor:default; }
+.copilot-bulk { margin-top:6px; max-height:240px; overflow-y:auto; display:grid; gap:3px; }
+.copilot-bulk details { border:1px solid #e3efe8; border-radius:8px; padding:4px 8px; background:#fff; }
+.copilot-bulk summary { cursor:pointer; font-weight:600; }
+.copilot-bulk summary small { margin-left:4px; color:#6b8577; font-weight:500; }
+.copilot-bulk details p { margin:4px 0 2px; color:#4a6658; font-size:11px; line-height:1.5; }
+.copilot-bulk-note { margin:2px 0 0; color:#9a5b00; font-size:11px; }
+.copilot-proposal-done { margin-top:6px; color:#2f5a45; font-weight:600; }
+
 @media (prefers-reduced-motion: reduce) {
   .mascot-eyes, .mascot.is-thinking, .mascot-hand, .chat-launcher-hint, .legal-chat, .legal-chat-bubble, .legal-chat-dots i { animation:none; }
   .chat-launcher:hover, .legal-chat-chips button:hover:not(:disabled), .legal-chat-form button:hover:not(:disabled) { transform:none; }

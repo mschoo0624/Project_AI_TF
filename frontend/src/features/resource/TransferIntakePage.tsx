@@ -133,10 +133,11 @@ async function responseError(response: Response, fallback: string) {
   }
 }
 
-export default function TransferIntakePage({ revision, onDataChanged, onPendingCountChange }: {
+export default function TransferIntakePage({ revision, onDataChanged, onPendingCountChange, highlightIds = [] }: {
   revision: number
   onDataChanged: () => void
   onPendingCountChange: (count: number) => void
+  highlightIds?: string[]
 }) {
   const [transfers, setTransfers] = useState<TransferItem[]>([])
   const [filter, setFilter] = useState<TransferStatus>('pending')
@@ -148,6 +149,13 @@ export default function TransferIntakePage({ revision, onDataChanged, onPendingC
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [addingSamples, setAddingSamples] = useState(false)
+  const highlightKey = highlightIds.join(',')
+
+  // Copilot이 가리킨 전입자로 스크롤합니다.
+  useEffect(() => {
+    if (!highlightKey || loading) return
+    document.querySelector('.rm-transfer-item.is-copilot-highlight')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [highlightKey, loading])
   const [sampleNotice, setSampleNotice] = useState('')
 
   useEffect(() => {
@@ -304,7 +312,8 @@ export default function TransferIntakePage({ revision, onDataChanged, onPendingC
       : <div className="rm-transfer-list">{visibleTransfers.map(transfer => {
         const person = transfer.person_details
         const totalHours = transfer.training_records.reduce((total, record) => total + record.training_hours, 0)
-        return <article className="rm-transfer-item" key={transfer.id}>
+        const highlighted = highlightIds.includes(transfer.military_number)
+        return <article className={`rm-transfer-item${highlighted ? ' is-copilot-highlight' : ''}`} key={transfer.id}>
           <header><div><h2>{person.name}</h2><span>{person.military_number}</span></div>
             <div className="rm-transfer-status-group">
               {transfer.status === 'confirmed' && transfer.assigned_squad_id !== null && <span className="rm-transfer-assigned-squad">자동편성 {transfer.assigned_squad_id}번 분대</span>}

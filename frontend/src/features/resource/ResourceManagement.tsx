@@ -44,15 +44,40 @@ type ProsecutionTrainingRecord = {
 }
 
 type RosterSubTabId = 'people' | 'transfers'
+
+// 업무 Copilot이 보낸 화면 명령 (필터·강조). key가 바뀔 때마다 하위 탭을 다시 맞춥니다.
+export type CopilotView = {
+  key: number
+  subtab: RosterSubTabId
+  filter: { label: string; ids: string[] } | null
+  highlight: string[]
+}
+
 export default function ResourceManagement(
-  { initialTab = 'organization', selectedTab, onTabChange }: { initialTab?: ResourceTabId; selectedTab?: ResourceTabId; onTabChange?: (tab: ResourceTabId) => void } = {},
+  { initialTab = 'organization', selectedTab, onTabChange, copilotView = null, dataRevision = 0, onClearCopilotFilter }: {
+    initialTab?: ResourceTabId
+    selectedTab?: ResourceTabId
+    onTabChange?: (tab: ResourceTabId) => void
+    copilotView?: CopilotView | null
+    dataRevision?: number
+    onClearCopilotFilter?: () => void
+  } = {},
 ) {
   const [localTab, setLocalTab] = useState<ResourceTabId>(initialTab)
   const activeTab = selectedTab ?? localTab
   const setActiveTab = (tab: ResourceTabId) => { setLocalTab(tab); onTabChange?.(tab) }
   const [rosterSubTab, setRosterSubTab] = useState<RosterSubTabId>('people')
-  const [revision, setRevision] = useState(0)
+  const [localRevision, setRevision] = useState(0)
   const [pendingTransfers, setPendingTransfers] = useState(0)
+  const revision = localRevision + dataRevision
+  const copilotKey = copilotView?.key
+  const copilotSubtab = copilotView?.subtab
+
+  const [seenCopilotKey, setSeenCopilotKey] = useState(copilotKey)
+  if (copilotKey !== seenCopilotKey) {
+    setSeenCopilotKey(copilotKey)
+    if (copilotSubtab) setRosterSubTab(copilotSubtab)
+  }
 
   const refreshResourceData = () => setRevision(value => value + 1)
 
@@ -95,10 +120,12 @@ export default function ResourceManagement(
           </button>
         </nav>
         <div className="rm-roster-subtab-pane" hidden={rosterSubTab !== 'people'}>
-          <ResourceRosterPage revision={revision} onDataChanged={refreshResourceData} />
+          <ResourceRosterPage revision={revision} onDataChanged={refreshResourceData}
+            copilotFilter={copilotView?.filter ?? null} onClearCopilotFilter={onClearCopilotFilter} />
         </div>
         <div className="rm-roster-subtab-pane" hidden={rosterSubTab !== 'transfers'}>
-          <TransferIntakePage revision={revision} onDataChanged={refreshResourceData} onPendingCountChange={setPendingTransfers} />
+          <TransferIntakePage revision={revision} onDataChanged={refreshResourceData} onPendingCountChange={setPendingTransfers}
+            highlightIds={copilotView?.highlight ?? []} />
         </div>
       </div>
     </div>
