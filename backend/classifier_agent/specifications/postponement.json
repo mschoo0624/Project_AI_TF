@@ -1,0 +1,212 @@
+{
+  "version": "0.1.0",
+  "status": "draft_for_review",
+  "source_table": 7,
+  "types": [
+    {
+      "id": "postponement.illness",
+      "label": "질병·심신장애",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "medical"
+      ],
+      "extraction_notes": "입원/거동불가/보호감시 필요/명백한 참석불가 소견 중 해당 근거. 훈련기간은 DB와 비교",
+      "branches": [
+        "입원",
+        "거동 제한",
+        "정신질환 보호·감시",
+        "질병·장애 참석 제한"
+      ],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음.",
+      "source_document_options": [
+        "진단서 또는 진료확인서(치료기간 명시)",
+        "장애인등록증 사본",
+        "입원확인서 사본"
+      ],
+      "document_option_semantics": "분기별 대체 또는 조합 서류. 나열한 전부를 일괄 필수로 요구하지 않는다."
+    },
+    {
+      "id": "postponement.family",
+      "label": "가족 위독·사망",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "medical",
+        "relationship",
+        "family_event"
+      ],
+      "extraction_notes": "위독은 간호 필요·다른 간호자 여부, 사망은 사망일과 허용 관계. 사망에 간호자 요건을 적용하지 않음",
+      "branches": [
+        "위독",
+        "사망"
+      ],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음.",
+      "source_document_options": [
+        "위독: 의료기관 진단서",
+        "사망: 사망확인서 및 관계증명 자료"
+      ],
+      "document_option_semantics": "분기별 대체 또는 조합 서류. 나열한 전부를 일괄 필수로 요구하지 않는다."
+    },
+    {
+      "id": "postponement.disaster",
+      "label": "재난·재해",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "disaster"
+      ],
+      "extraction_notes": "발생 사실과 복구 필요, 발생 전 신청은 별도 규칙 검증",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음.",
+      "source_document_options": [
+        "행정관서 사실확인서"
+      ],
+      "document_option_semantics": "분기별 대체 또는 조합 서류. 나열한 전부를 일괄 필수로 요구하지 않는다."
+    },
+    {
+      "id": "postponement.overseas",
+      "label": "출국 또는 출국 예정",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "travel"
+      ],
+      "extraction_notes": "공식 출입국 확인 및 훈련일 겹침; 4일 훈련 특칙은 3단계",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음.",
+      "source_document_options": [
+        "국방동원정보체계 출입국자 명부"
+      ],
+      "document_option_semantics": "분기별 대체 또는 조합 서류. 나열한 전부를 일괄 필수로 요구하지 않는다."
+    },
+    {
+      "id": "postponement.exam",
+      "label": "각종 시험 응시",
+      "source_page": 2,
+      "field_groups": [
+        "identity",
+        "exam"
+      ],
+      "extraction_notes": "접수·시험·단계별 결과 및 발표일; 다음 시험 6개월 조건과 누적 6회는 DB 규칙",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음.",
+      "source_document_options": [
+        "접수증·합격증·수험표 등",
+        "승진시험: 직장확인서",
+        "시험일 미기재: 시행기관 확인 근거"
+      ],
+      "document_option_semantics": "분기별 대체 또는 조합 서류. 나열한 전부를 일괄 필수로 요구하지 않는다."
+    },
+    {
+      "id": "postponement.distance_attendance",
+      "label": "방송통신·원격교육 출석수업·시험",
+      "source_page": 2,
+      "field_groups": [
+        "identity",
+        "education",
+        "event"
+      ],
+      "extraction_notes": "출석 대상자·수업 또는 시험 일정; 단순 재학과 구별",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음.",
+      "source_document_options": [
+        "출석수업 통지명단 또는 학사일정",
+        "재학증명서 및 시험 일정"
+      ],
+      "document_option_semantics": "분기별 대체 또는 조합 서류. 나열한 전부를 일괄 필수로 요구하지 않는다."
+    },
+    {
+      "id": "postponement.family_event",
+      "label": "경조사·출산·육아휴직",
+      "source_page": 2,
+      "field_groups": [
+        "identity",
+        "relationship",
+        "event",
+        "family_event",
+        "pregnancy"
+      ],
+      "extraction_notes": "본인 결혼/형제자매 결혼/부모 회갑/육아휴직/배우자 출산 별 요건 분리",
+      "branches": [
+        "본인 결혼",
+        "본인 또는 배우자 형제자매 결혼",
+        "본인 또는 배우자 부모 회갑",
+        "육아휴직",
+        "배우자 출산"
+      ],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음.",
+      "source_document_options": [
+        "예식장계약서 등 증빙",
+        "진단서 또는 임신확인서"
+      ],
+      "document_option_semantics": "분기별 대체 또는 조합 서류. 나열한 전부를 일괄 필수로 요구하지 않는다."
+    },
+    {
+      "id": "postponement.work",
+      "label": "주요 업무 수행",
+      "source_page": 3,
+      "field_groups": [
+        "identity",
+        "employment",
+        "work_event",
+        "event"
+      ],
+      "extraction_notes": "교육·회의연구·대체불가업무·대회·기타불가피사유 구별; 누적 횟수는 DB",
+      "branches": [
+        "교육",
+        "회의·연구",
+        "대체 불가능 업무",
+        "대회",
+        "기타 불가피한 사유"
+      ],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음.",
+      "source_document_options": [
+        "교육확인서",
+        "주최기관·단체장 확인서",
+        "주요업무수행 확인서",
+        "개인사유서"
+      ],
+      "document_option_semantics": "분기별 대체 또는 조합 서류. 나열한 전부를 일괄 필수로 요구하지 않는다."
+    },
+    {
+      "id": "postponement.agriculture",
+      "label": "농·어업 종사",
+      "source_page": 3,
+      "field_groups": [
+        "identity",
+        "agriculture",
+        "designation"
+      ],
+      "extraction_notes": "후계자 지정 및 생업 지장, 연간 2회는 DB",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음.",
+      "source_document_options": [
+        "후계농업·어업경영인 선정확인서",
+        "농지대장(원부)·어업허가증 등"
+      ],
+      "document_option_semantics": "분기별 대체 또는 조합 서류. 나열한 전부를 일괄 필수로 요구하지 않는다."
+    },
+    {
+      "id": "postponement.other",
+      "label": "기타",
+      "source_page": 3,
+      "field_groups": [
+        "identity",
+        "application",
+        "designation"
+      ],
+      "extraction_notes": "대체역 신청 심사와 필수요원 선정 심사를 구분; 별도 지침 확인 필요",
+      "branches": [
+        "대체역 편입 신청",
+        "필수요원 선정 심사"
+      ],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음.",
+      "source_document_options": [
+        "병무청 접수증",
+        "선발부대 심사확인서"
+      ],
+      "document_option_semantics": "분기별 대체 또는 조합 서류. 나열한 전부를 일괄 필수로 요구하지 않는다."
+    }
+  ]
+}

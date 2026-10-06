@@ -1,2 +1,8 @@
 __pycache__/
+data/
 *.py[cod]
+.models/
+.hf_modules/
+.venv*/
+evaluation/runs/
+evaluation/smoke-result.json

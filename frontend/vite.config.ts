@@ -15,8 +15,10 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/classifier-api': {
-        target: 'http://127.0.0.1:8001',
+        target: 'http://127.0.0.1:8003',
         changeOrigin: true,
+        timeout: 0,
+        proxyTimeout: 0,
         rewrite: (path) => path.replace(/^\/classifier-api/, ''),
       },
       '/rag-api': {

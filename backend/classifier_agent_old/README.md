@@ -1,6 +1,6 @@
 # AITF Classifier 독립 서버
 
-이 폴더는 기존 구현을 보존한 `classifier_agent_old`입니다. 현재 프런트엔드와 업무 백엔드는 이 서버의 8001 포트에 계속 연결됩니다. 새 `classifier_agent`는 별도 작업 공간이며 아직 API를 제공하지 않습니다.
+이 폴더는 기존 구현과 기록을 보존한 `classifier_agent_old`입니다. 새 프런트엔드는 `classifier_agent`의 8003 API를 사용합니다. 아래 내용은 과거 서버(8001)를 별도로 실행할 때의 안내입니다.
 
 폴더 이름 변경 전 서버가 실행 중이었다면 종료 후 아래 새 경로에서 다시 실행하세요. 이번 이름 변경에서는 `ML/submissions.jsonl`과 `ML/uploads/`을 포함한 기존 파일을 함께 보존했습니다.
 
@@ -17,7 +17,7 @@ cd .\backend\classifier_agent_old
 
 백엔드의 가상환경이 없으면 먼저 `python -m venv .\backend\.venv`로 생성하고 AITF의 `backend/requirements.txt`도 설치하세요. Ollama 앱 자체가 실행 중이어야 하며, 모델 다운로드와 Python 패키지 설치는 별도입니다. `http://127.0.0.1:8001/docs` 또는 `http://127.0.0.1:8001/submissions`로 시작 여부를 확인합니다. `/submissions`가 `[]`를 반환한다면 빈 목록이 정상입니다.
 
-AITF는 별도 터미널에서 `backend` 폴더에서 8002 포트로, Vite는 `frontend` 폴더에서 실행합니다. 기존 `frontend/vite.config.ts`의 `/classifier-api` 프록시와 `backend/user/app/services/classifier_client.py`는 모두 8001번 포트를 사용하므로 **현재 AITF 파일에 추가 수정 없이 연결**됩니다.
+업무 백엔드는 8002, 새 문서 API는 8003을 사용합니다. 현재 `/classifier-api` 프록시는 8003을 가리키므로 이 구형 서버를 시작해도 새 화면에 연결되지는 않습니다.
 
 ## 이식 범위와 제한
 

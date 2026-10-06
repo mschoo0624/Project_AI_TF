@@ -1,0 +1,1145 @@
+[
+  {
+    "id": "attendance",
+    "filename": "attendance.pdf",
+    "application_type": "postponement.distance_attendance",
+    "application_type_note": "출석수업 신청으로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "school_name": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "event_start": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "event_end": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+    ],
+    "document": "[PAGE 1]\n출석수업통지서\n성명 홍길동\n군번 22-76010001\n확인사항 시연용 더미 문서입니다\n비고 -\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "9f49fb3591eca1758a23e851aaa4bac6810946567e60b68542cde148c02d70ea",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "boarding",
+    "filename": "boarding.pdf",
+    "application_type": "policy.ship_crew",
+    "application_type_note": "선박 승선 보류 신청으로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "vessel_name": {
+        "value": "HANARO No.7",
+        "accepted_values": [
+          "HANARO No.7"
+        ],
+        "evidence_must_include": [
+          "HANARO No.7"
+        ]
+      },
+      "crew_role": {
+        "value": "3등항해사",
+        "accepted_values": [
+          "3등항해사"
+        ],
+        "evidence_must_include": [
+          "3등항해사"
+        ]
+      },
+      "onboard_start": {
+        "value": "2026-03-02",
+        "accepted_values": [
+          "2026-03-02"
+        ],
+        "evidence_must_include": [
+          "2026-03-02"
+        ]
+      },
+      "onboard_end": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "vessel_tonnage": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+    ],
+    "document": "[PAGE 1]\n승선증명서\n성명 홍길동\n군번 22-76010001\n선박명 HANARO No.7\n직책 3등항해사\n승선일 2026-03-02\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "58eb00a9c05e55ccb699a1e4a27bd20104f7491eb2b3da8f473fabac281bac48",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "business",
+    "filename": "business.pdf",
+    "application_type": "postponement.work",
+    "application_type_note": "주요업무 수행 신청으로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "work_description": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "work_start": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "work_end": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+    ],
+    "document": "[PAGE 1]\n업무확인서\n성명 홍길동\n군번 22-76010001\n확인사항 시연용 더미 문서입니다\n비고 -\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "a5f1cf00231f6fffe1a4d93e6aa221de830fd091da1f558967accca8acdf3818",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "competition",
+    "filename": "competition.pdf",
+    "application_type": "postponement.work",
+    "application_type_note": "대회 참가 분기로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "event_kind": {
+        "value": "대회",
+        "accepted_values": [
+          "대회",
+          "대회 참가"
+        ],
+        "evidence_must_include": [
+          "대회참가확인서"
+        ]
+      },
+      "event_start": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "event_end": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "event_organizer": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+    ],
+    "document": "[PAGE 1]\n대회참가확인서\n성명 홍길동\n군번 22-76010001\n확인사항 시연용 더미 문서입니다\n비고 -\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "b0199e1eaf4e9d40c5f23b269e7f24054f5649c49857e3b26675d1f6cb6d7de2",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "death",
+    "filename": "death.pdf",
+    "application_type": "postponement.family",
+    "application_type_note": "가족 사망 분기로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "related_person_name": {
+        "value": "OOO",
+        "accepted_values": [
+          "OOO"
+        ],
+        "evidence_must_include": [
+          "OOO"
+        ]
+      },
+      "relationship": {
+        "value": "부친",
+        "accepted_values": [
+          "부친",
+          "부",
+          "아버지"
+        ],
+        "evidence_must_include": [
+          "관계 부"
+        ]
+      },
+      "death_date": {
+        "value": "2026-05-18",
+        "accepted_values": [
+          "2026-05-18"
+        ],
+        "evidence_must_include": [
+          "2026-05-18"
+        ]
+      },
+      "other_caregiver_available": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "발급일이 사망일보다 앞선 더미 데이터. 값을 고치지 않고 원문대로 추출."
+    ],
+    "document": "[PAGE 1]\n사망진단서\n성명 홍길동\n군번 22-76010001\n고인 OOO\n관계 부\n사망일시 2026-05-18\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "03727696750c5ec5c454574a63f47076ed36609c8253f982c923e05ad3a53ab7",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "disaster",
+    "filename": "disaster.pdf",
+    "application_type": "postponement.disaster",
+    "application_type_note": "재난 신청으로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "disaster_kind": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "disaster_date": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "recovery_start": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "recovery_end": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+    ],
+    "document": "[PAGE 1]\n재해증명서\n성명 홍길동\n군번 22-76010001\n확인사항 시연용 더미 문서입니다\n비고 -\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "c57038f14375a7b6dc14d25526b8b3df153b57dd773fc0d84dd82563b3b82fe0",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "disembark",
+    "filename": "disembark.pdf",
+    "application_type": "policy.ship_crew",
+    "application_type_note": "선박 승선 보류 신청으로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "vessel_name": {
+        "value": "HANARO No.7",
+        "accepted_values": [
+          "HANARO No.7"
+        ],
+        "evidence_must_include": [
+          "HANARO No.7"
+        ]
+      },
+      "onboard_start": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "onboard_end": {
+        "value": "2026-04-01",
+        "accepted_values": [
+          "2026-04-01"
+        ],
+        "evidence_must_include": [
+          "2026-04-01"
+        ]
+      },
+      "vessel_tonnage": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+    ],
+    "document": "[PAGE 1]\n하선증명서\n성명 홍길동\n군번 22-76010001\n선박명 HANARO No.7\n하선일 2026-04-01\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "178d9ba4fe20dad5b0ac7fdc2186e1163f5b4c96d457ced3f5a573e988c14179",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "employment",
+    "filename": "employment.pdf",
+    "application_type": "statutory.police",
+    "application_type_note": "경찰관 법규보류 신청으로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "employer": {
+        "value": "OO경찰서",
+        "accepted_values": [
+          "OO경찰서"
+        ],
+        "evidence_must_include": [
+          "OO경찰서"
+        ]
+      },
+      "job_title": {
+        "value": "경위",
+        "accepted_values": [
+          "경위"
+        ],
+        "evidence_must_include": [
+          "경위"
+        ]
+      },
+      "current_employment": {
+        "value": true,
+        "accepted_values": [
+          true
+        ],
+        "evidence_must_include": [
+          "2019-03 ~ 현재"
+        ]
+      },
+      "employment_start": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": [
+          "2019-03"
+        ]
+      },
+      "employment_end": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+    ],
+    "document": "[PAGE 1]\n재직증명서\n성명 홍길동\n군번 22-76010001\n소속 OO경찰서\n직위 경위\n재직기간 2019-03 ~ 현재\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "31b3269906b82ddf15d9a127636d5bede2c581a6482855a20c2338b6766ff1ed",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "enrollment",
+    "filename": "enrollment.pdf",
+    "application_type": "policy.school_student",
+    "application_type_note": "각급학교 학생 신청으로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "school_name": {
+        "value": "OO대학교",
+        "accepted_values": [
+          "OO대학교"
+        ],
+        "evidence_must_include": [
+          "OO대학교"
+        ]
+      },
+      "academic_status": {
+        "value": "재학",
+        "accepted_values": [
+          "재학",
+          "재학중",
+          "재학 중"
+        ],
+        "evidence_must_include": [
+          "재학중"
+        ]
+      },
+      "enrollment_start": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": [
+          "2024-03"
+        ]
+      },
+      "enrollment_end": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "degree_course": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+    ],
+    "document": "[PAGE 1]\n재학증명서\n성명 홍길동\n군번 22-76010001\n학교 OO대학교\n학과 OO학과\n재학기간 2024-03 ~ 재학중\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "503b87e3bbd24fa6906a0fa602d33592c77ab7f467733a1a2f9a57c0ad439543",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "exam",
+    "filename": "exam.pdf",
+    "application_type": "postponement.exam",
+    "application_type_note": "시험 응시 신청으로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "exam_name": {
+        "value": "2026년도 정보처리기사 실기",
+        "accepted_values": [
+          "2026년도 정보처리기사 실기"
+        ],
+        "evidence_must_include": [
+          "2026년도 정보처리기사 실기"
+        ]
+      },
+      "registration_date": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "exam_date": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "result_date": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+    ],
+    "document": "[PAGE 1]\n수험표\n성명 홍길동\n군번 22-76010001\n시험 2026년도 정보처리기사 실기\n수험번호 26-2-04117\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "292d1939f06f0ad4226a405115b8dcb6e2a91799c7695aaaabf4ed602287bb31",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "exit_entry",
+    "filename": "exit_entry.pdf",
+    "application_type": "postponement.overseas",
+    "application_type_note": "출국 연기 신청으로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "departure_date": {
+        "value": "2025-03-18",
+        "accepted_values": [
+          "2025-03-18"
+        ],
+        "evidence_must_include": [
+          "2025-03-18"
+        ]
+      },
+      "return_date": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "travel_status": {
+        "value": "미귀국",
+        "accepted_values": [
+          "미귀국",
+          "국외 체류 중",
+          "국외 체류",
+          "미귀국 상태"
+        ],
+        "evidence_must_include": [
+          "미귀국"
+        ]
+      }
+    },
+    "review_notes": [
+      "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+    ],
+    "document": "[PAGE 1]\n출귀국자명부\n성명 홍길동\n군번 22-76010001\n출국일 2025-03-18\n귀국일 미귀국\n체류국 베트남\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "e28192215a560308d372f5f16ae7082c960693672f59459f5b4020f6344c8edb",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "exit_plan",
+    "filename": "exit_plan.pdf",
+    "application_type": "postponement.overseas",
+    "application_type_note": "출국 예정 연기 신청으로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "departure_date": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "return_date": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "overseas_stay_period": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+    ],
+    "document": "[PAGE 1]\n출국예정확인서\n성명 홍길동\n군번 22-76010001\n확인사항 시연용 더미 문서입니다\n비고 -\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "af4db4bd6fc944010a18b8c6391989a0ddb0c4ed8fa9270c307ee0dff6a4a6f3",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "farming",
+    "filename": "farming.pdf",
+    "application_type": "postponement.agriculture",
+    "application_type_note": "농어업 연기 신청으로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "work_impact": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "designation_date": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "busy_start": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "busy_end": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+    ],
+    "document": "[PAGE 1]\n농어업경영체등록확인서\n성명 홍길동\n군번 22-76010001\n확인사항 시연용 더미 문서입니다\n비고 -\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "e4fc6a904b017be81314f66fe39f7ce2859e03aa6af58ecad8a53428d3a4ec92",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "medical",
+    "filename": "medical.pdf",
+    "application_type": "postponement.illness",
+    "application_type_note": "질병 치료 연기 신청으로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "diagnosis": {
+        "value": "요추 추간판탈출증",
+        "accepted_values": [
+          "요추 추간판탈출증"
+        ],
+        "evidence_must_include": [
+          "요추 추간판탈출증"
+        ]
+      },
+      "treatment_duration": {
+        "value": "약 4주간",
+        "accepted_values": [
+          "약 4주간",
+          "약 4주",
+          "4주",
+          "4주간"
+        ],
+        "evidence_must_include": [
+          "약 4주간"
+        ]
+      },
+      "treatment_start": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "treatment_end": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "inpatient_status": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "발급일이 진료일보다 앞선 더미 데이터. 진료일은 치료 시작일과 동일하지 않음."
+    ],
+    "document": "[PAGE 1]\n진단서\n성명 홍길동\n군번 22-76010001\n병명 요추 추간판탈출증\n진료일 2026-04-28\n소견 약 4주간 안정 및 물리치료 요함\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "561af0dc06447b57f1a63640ed91ebd2c954e791fb83f88a3e1ca7dc65cf390c",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "personal_statement",
+    "filename": "personal_statement.pdf",
+    "application_type": "postponement.work",
+    "application_type_note": "주요업무/기타 불가피 사유 신청으로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "work_description": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "work_start": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "work_end": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+    ],
+    "document": "[PAGE 1]\n개인사유서\n성명 홍길동\n군번 22-76010001\n확인사항 시연용 더미 문서입니다\n비고 -\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "98182d91f1bbf358a93f86ad2140ac27b125a3638a1b21a589a11694b416d616",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  },
+  {
+    "id": "wedding",
+    "filename": "wedding.pdf",
+    "application_type": "postponement.family_event",
+    "application_type_note": "본인 결혼 분기로 가정",
+    "expected": {
+      "subject_name": {
+        "value": "홍길동",
+        "accepted_values": [
+          "홍길동"
+        ],
+        "evidence_must_include": [
+          "홍길동"
+        ]
+      },
+      "subject_service_number": {
+        "value": "22-76010001",
+        "accepted_values": [
+          "22-76010001"
+        ],
+        "evidence_must_include": [
+          "22-76010001"
+        ]
+      },
+      "issued_on": {
+        "value": "2026-04-19",
+        "accepted_values": [
+          "2026-04-19"
+        ],
+        "evidence_must_include": [
+          "2026년 04월 19일"
+        ]
+      },
+      "event_date": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "related_person_name": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      },
+      "relationship": {
+        "value": null,
+        "accepted_values": [
+          null
+        ],
+        "evidence_must_include": []
+      }
+    },
+    "review_notes": [
+      "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+    ],
+    "document": "[PAGE 1]\n청첩장\n성명 홍길동\n군번 22-76010001\n확인사항 시연용 더미 문서입니다\n비고 -\n발급일자 : 2026년 04월 19일\n문서확인번호 : 1734-5821-9043-2216\n시연용 더미 문서 ― 실제 발급 서류가 아닙니다",
+    "pdf_sha256": "1f41b7934816c7097837bd1e0533770a81816801f02141675dfbded3d0e7f283",
+    "origin": "existing_repository_demo_pdf_via_pdfplumber"
+  }
+]

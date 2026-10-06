@@ -1,86 +1,108 @@
-# 새 문서 처리 작업 공간
+# Qwen 신청 문서 정보 추출
 
-전자 PDF의 표·셀·텍스트 추출부터 단계적으로 구현할 디렉터리입니다.
-`pdfplumber`로 표·텍스트·좌표를 추출하는 독립 모듈입니다. 기존 코드나 Ollama에 의존하지 않으며 API 서버는 아직 제공하지 않습니다.
+전자 PDF를 pdfplumber로 읽고, 신청 유형별 명세에 지정된 항목을 로컬
+`qwen3:4b-instruct`로 추출한다. 모델 학습·외부 추론 서비스는 사용하지 않는다.
+기준 목록은 [specifications/README.md](specifications/README.md)를 참고한다.
 
-## 설치
+## 설치 및 실행
 
-Python 3.10 이상을 사용하세요. 현재 검증 환경은 Windows / Python 3.14입니다.
-프로젝트 루트에서 다음을 실행합니다.
+Python 3.10 이상, Ollama가 필요하다. 프로젝트 루트에서:
 
 ```powershell
 python -m venv backend/.venv
-# 이미 가상환경이 있으면 생성 단계는 생략합니다.
-backend/.venv/Scripts/python.exe -m pip install -r backend/requirements.txt
-```
-
-새 추출기만 설치하려면 다음 명령을 사용합니다.
-
-```powershell
 backend/.venv/Scripts/python.exe -m pip install -r backend/classifier_agent/requirements.txt
+ollama pull qwen3:4b-instruct
+# Ollama 앱/서버가 실행 중이어야 한다. 미실행 환경은 별도 터미널에서 ollama serve.
+backend/.venv/Scripts/python.exe -m uvicorn backend.classifier_agent.API:app --host 127.0.0.1 --port 8003
 ```
 
-Linux/macOS에서는 실행 파일을 `backend/.venv/bin/python`으로 바꿉니다.
-`pdfplumber==0.11.10`과 PDF 파싱·이미지 처리 의존 패키지는 pip가 함께 설치합니다.
-추가 언어모델, GPU, OCR 엔진, 학습 데이터는 필요하지 않습니다.
+기존 가상환경이 있으면 생성은 생략한다. Linux/macOS는 `Scripts/python.exe` 대신
+`bin/python`을 사용한다. 모델은 Ollama 저장소에 설치되며 Git에 포함하지 않는다.
+환경 변수 `OLLAMA_URL` 기본값은 `http://127.0.0.1:11434`,
+`CLASSIFIER_MODEL` 기본값은 `qwen3:4b-instruct`다. Qwen 계열만 지원한다.
+환경 변수를 사용하려면 서버를 시작하는 프로세스에 설정한다(.env 자동 로딩 없음).
 
-## 사용
+## API
 
-프로젝트 루트에서 실행합니다. 출력 디렉터리는 미리 존재해야 하며, 기존 출력 파일은 덮어쓰지 않습니다.
+- `GET /application-types`: 신청 유형 ID·라벨·명세 목록.
+- `POST /extract-pdf`: multipart `file`(전자 PDF, 최대 20MB), `application_type`(목록의 ID),
+  선택값 `applicant_name`(여러 인물 중 신청자 지정).
+- 대화형 API 문서: `http://127.0.0.1:8003/docs`.
+- 잘못된 유형/PDF는 422, 용량 초과는 413, 처리 중 요청은 429, 모델 실패는 503.
+- 한 프로세스에서 한 문서씩 처리한다. 각 요청의 임시 PDF는 종료 시 제거한다.
+  기본 localhost 실행용이며 외부 공개 서비스의 인증은 포함하지 않는다.
+
+CLI도 같은 구현을 사용한다:
 
 ```powershell
-backend/.venv/Scripts/python.exe -m backend.classifier_agent.pdf_extract "문서.pdf" -o "추출결과.json"
+backend/.venv/Scripts/python.exe -m backend.classifier_agent.extraction frontend/public/pdfs/medical.pdf --application-type postponement.illness -o extraction-result.json
 ```
 
-선이 없는 표는 다음 옵션을 시도할 수 있습니다. 일반 문장을 표로 인식할 수 있으므로 결과 확인이 필요합니다.
+출력 파일은 덮어쓰지 않는다. 종료 코드 0은 추출 완료, 2는 확인 필요, 1은 실행 오류다.
+단순 PDF 텍스트·표·좌표만 필요한 경우 기존 `pdf_extract` 모듈을 계속 사용할 수 있다.
+
+## 반환 계약과 검증
+
+`fields`의 각 항목에 `value`, `status`, `evidence`, `candidates`, `errors`를 반환한다.
+미기재는 `missing`과 null이며 false로 바꾸지 않는다. 명시적 부정은 `explicit_negative`다.
+여러 페이지의 서로 다른 값은 `conflicting`으로 표시하고 모든 후보를 남긴다.
+부분 날짜 등 근거만 있는 항목은 `unresolved`로 보존한다.
+자료형/원문 인용/날짜 정밀도 검사 실패는 `invalid`이며 확정값을 null로 차단한다.
+
+근거는 PDF SHA-256 식별자·페이지·원문 인용을 포함한다. 근거 좌표는 추측하지 않아
+bbox/table/row/column은 null이다. 원래 단어·표 좌표는 응답 `pdf`에 따로 보존된다.
+`model_responses`에는 검토용 원문 응답이 있다. 개인정보가 포함될 수 있으므로
+응답은 자동 파일 저장/로그 출력하지 않는다.
+
+신청 유형의 모든 field_groups를 사용한다. 분기는 아직 별도 필터링하지 않으며
+미기재 항목 전체를 승인 필수 요건으로 취급하지 않는다. 페이지별 최대 6000자,
+4개 항목씩 독립 요청하고 이전 대화를 전달하지 않는다. 지시문을 합친 입력도 UTF-8
+6500바이트로 제한해 문맥 공간을 확보한다. 초과 페이지는 조용히 자르지 않고
+오류로 반환한다. 긴 문서/항목이 많은 유형은 여러 번 추론하므로 오래 걸릴 수 있다.
+스캔·빈 페이지가 섞이면 `needs_review`다. 인용 일치는 의미적 정확성을 보장하지 않는다.
+같은 페이지에서 복수 인물·상충 정보가 있으면 모델이 놓칠 수 있어 담당자 검토가 필요하다.
+
+추출 API는 **1단계 읽기와 2단계 추출**이며 `eligibility_decision`은 항상 null이다.
+**3단계 검증**은 별도 `/verify` API에서 수행한다. [검증 API 안내](VERIFICATION.md)를 참고한다.
+문서 진위는 자동 판정하지 않는다. 프런트엔드의 서류 AI 판정·검토함·명부는 새 제출 저장소를 사용한다.
+담당자 승인·반려는 업무 백엔드와 새 제출 저장소에 반영하며 검증 결과와 별도로 보존한다.
+구형 `classifier_agent_old`(8001)는 과거 코드·기록 보관용이며 새 화면은 8003을 사용한다.
+
+## 제출·프런트엔드 연결
+
+- 업무 백엔드 8002, 새 Qwen API 8003, Ollama 11434를 실행한다.
+- Vite `/api` → 8002, `/classifier-api` → 8003. 운영 배포에서도 같은 역방향 프록시가 필요하다.
+- `POST /submissions`: multipart file/application_type/military_number/applicant_name. 원본 PDF와 새 추출 결과를 저장한다.
+- `GET /submissions`, `GET /submissions/{id}`, `GET /submissions/{id}/pdf`: 목록·상세·원본 조회.
+- `POST /submissions/{id}/verify`: 저장된 추출 결과를 검증하며 결과와 확인 정보를 저장한다.
+  화면은 DB 본인 정보를 사용하는 업무 백엔드 `/postponements/verify`를 통해 호출한다.
+- 승인·반려는 업무 백엔드 `/postponements/{id}/approve|reject`에서 처리한다.
+  검증 결과가 부족/검토 필요여도 담당자가 최종 판단할 수 있다.
+- `POST /submissions/{id}/request-confirmation`: 확인요청 의견 저장. 외부 알림 발송은 하지 않는다.
+- 저장 위치: `classifier_agent/data/`의 SQLite 및 PDF. `CLASSIFIER_DATA_DIR`로 변경 가능하며 Git에서 제외된다.
+  `/extract-pdf`는 기존처럼 임시 처리이며 `/submissions`만 영구 저장한다.
+
+과거 제출 건은 신청 유형을 담당자가 지정해 새 엔진으로 재처리한다. 기존 분석값·승인 상태를
+새 결과로 복사하지 않는다. 원본 기록은 보존하고 새 기록은 검토대기로 등록한다.
+동일 과거 ID의 중복 실행은 기존 재처리 결과를 반환한다.
 
 ```powershell
-backend/.venv/Scripts/python.exe -m backend.classifier_agent.pdf_extract "문서.pdf" --table-strategy text -o "추출결과.json"
+backend/.venv/Scripts/python.exe -m backend.classifier_agent.reprocess_legacy --submission-id 과거ID --application-type postponement.illness
 ```
 
-Python에서 사용:
-
-```python
-from backend.classifier_agent.pdf_extract import extract_pdf
-
-result = extract_pdf("문서.pdf")
-```
-
-`backend` 디렉터리에서 실행하는 경우 모듈 경로는 `classifier_agent.pdf_extract`입니다.
-
-## 결과와 한계
-
-- UTF-8 JSON: 페이지별 `text`, 단어 좌표 `words`, 표 `tables`, 항목 후보 `field_candidates`를 반환합니다.
-- 표는 `rows` 안에 셀의 `text`, `bbox`를 저장합니다. 병합 셀로 생긴 빈 격자 위치는 `null`로 보존합니다.
-- 좌표는 PDF 포인트 단위이며 왼쪽 위 원점 기준 `[x0, top, x1, bottom]`입니다. 페이지·표·행·열 번호는 1부터 시작합니다.
-- 정확히 일치하는 알려진 항목명(성명, 군번, 직위 등)의 바로 오른쪽 셀만 항목 후보로 연결합니다. `성 명`도 `성명`으로 연결합니다. 후보는 배열이므로 같은 항목이 여러 번 나와도 덮어쓰지 않습니다.
-- 항목 후보는 위치 기반 결과입니다. 표의 아래 셀 연결, 복잡한 병합 구조, 직업·사유 추론이나 신청 판정은 하지 않습니다. 인식되지 않은 항목도 원문 표에는 남습니다.
-- 한국어를 번역하지 않고 내장 문자로 읽습니다. 잘못된 글꼴 매핑, 깨진 텍스트 레이어, 불규칙한 표에서는 결과가 부정확할 수 있습니다.
-- 스캔·이미지의 글자는 읽지 않습니다. 텍스트 없는 페이지는 `no_text`, 읽을 수 있는 페이지와 없는 페이지가 섞이면 문서 상태는 `partial`입니다. 이미지가 함께 있으면 경고를 제공합니다.
-- 종료 코드: `0` 모든 페이지에 텍스트 있음, `2` 일부 또는 전체 페이지에 텍스트 없음, `1` 파일·암호·출력 오류. `0`은 의미나 표 추출 정확성의 보증이 아닙니다.
-- 원본 PDF와 기존 DB·제출 저장소를 변경하지 않습니다.
+스캔본은 OCR을 하지 않으므로 읽기 불가 상태로 저장되며 Qwen 추론은 수행하지 않는다.
+3단계에서는 읽을 수 있는 근거가 전혀 없으면 ‘근거 부족’으로 판정한다.
 
 ## 검증
 
-백엔드 의존성을 설치한 뒤 프로젝트 루트에서:
-
 ```powershell
-backend/.venv/Scripts/python.exe -m pytest backend/tests/test_pdf_extract.py -q
+backend/.venv/Scripts/python.exe -m pytest backend/tests/test_qwen_extraction.py backend/tests/test_pdf_extract.py -q
 ```
 
-테스트는 임시 전자 PDF를 생성하여 한글 셀과 좌표, 반복 항목 보존, 텍스트 없는 페이지, 잘못된 파일 처리를 확인합니다. 실제 신청서 전체에 대한 정확도 평가는 별도로 필요합니다.
+[Qwen 평가 실행기](evaluation/README.md)는 운영 구현과 분리된 고정 입력 평가용이다.
 
-## 현재 연결
-
-- 기존 서버: `../classifier_agent_old/API.py`, 포트 `8001`.
-- 프런트엔드 `/classifier-api`와 업무 백엔드 `CLASSIFIER_URL`은 기존 연결을 유지합니다.
-- 기존 제출 PDF, 제출 이력, 모델과 기준 문서는 `classifier_agent_old`에 보존되어 있습니다.
-- 새 구현으로 API를 전환하거나 기존 자료를 이전하는 작업은 아직 수행하지 않았습니다.
-
-기존 서버 실행 방법은 [기존 서버 README](../classifier_agent_old/README.md)를 참고하세요.
-
-## 첫 작업 범위
-
-- 텍스트 레이어가 있는 전자 PDF만 취급합니다.
-- 표 구조, 셀 텍스트, 페이지와 좌표를 추출합니다.
-- 스캔 OCR, 신청 판정, 프런트엔드 연결은 이후 별도 단계에서 구현합니다.
+2026-10-06 연동 확인: 기존 시연용 `medical.pdf`를 질병 유형 22개 항목으로
+6회 호출했다. 성명·군번·병명·치료기간 등을 추출했으며 원문에 없는 인용은
+`invalid`로 차단하고 전체 결과를 `needs_review`로 반환했다.
+이는 연결 및 방어 검증 확인이며 22개 항목 전체의 정확도 평가가 아니다.
+추출/API 자동 테스트 9개와 평가기 테스트 5개가 통과했다.
