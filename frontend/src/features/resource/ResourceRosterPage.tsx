@@ -173,7 +173,12 @@ async function responseError(response: Response, fallback: string) {
   }
 }
 
-export default function ResourceRosterPage({ revision, onDataChanged }: { revision: number; onDataChanged: () => void }) {
+export default function ResourceRosterPage({ revision, onDataChanged, copilotFilter = null, onClearCopilotFilter }: {
+  revision: number
+  onDataChanged: () => void
+  copilotFilter?: { label: string; ids: string[] } | null
+  onClearCopilotFilter?: () => void
+}) {
   const [squads, setSquads] = useState<Squad[]>([])
   const [people, setPeople] = useState<ResourcePerson[]>([])
   const [loading, setLoading] = useState(true)
@@ -266,6 +271,13 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
     return () => controller.abort()
   }, [selectedId, revision])
 
+  // Copilot 검색 결과(군번 목록)는 기존 검색 조건 위에 한 번 더 걸립니다.
+  const copilotIds = useMemo(() => copilotFilter ? new Set(copilotFilter.ids) : null, [copilotFilter])
+  const [seenCopilotFilter, setSeenCopilotFilter] = useState(copilotFilter)
+  if (copilotFilter !== seenCopilotFilter) {
+    setSeenCopilotFilter(copilotFilter)
+    setPage(1)
+  }
   const squadNames = useMemo(() => new Map(squads.map(squad => [squad.id, squad.name])), [squads])
   const units = useMemo(() => [...new Set(people.map(person => person.unit).filter((name): name is string => !!name))].sort(), [people])
   const positions = useMemo(() => [...new Set(people.map(person => person.position).filter((name): name is string => !!name))].sort(), [people])
@@ -273,13 +285,14 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
     .filter((number): number is number => number !== null))].sort((a, b) => a - b), [people])
   const searchFiltered = useMemo(() => people.filter(person => {
     const term = appliedFilters.query.toLocaleLowerCase()
-    return (!term || person.name.toLocaleLowerCase().includes(term) || person.military_number.toLocaleLowerCase().includes(term))
+    return (!copilotIds || copilotIds.has(person.military_number))
+      && (!term || person.name.toLocaleLowerCase().includes(term) || person.military_number.toLocaleLowerCase().includes(term))
       && (!appliedFilters.unit || (appliedFilters.unit === '__unassigned__'
         ? person.squad_id === null : person.unit === appliedFilters.unit))
       && (!appliedFilters.status || person.status === appliedFilters.status)
       && (!appliedFilters.position || person.position === appliedFilters.position)
       && (!appliedFilters.year || String(person.service_year) === appliedFilters.year)
-  }), [people, appliedFilters])
+  }), [people, appliedFilters, copilotIds])
   const groupOptions = useMemo(() => {
     if (groupTab === 'none') return []
     return sortGroupValues([...new Set(searchFiltered.map(person => groupKeyFor(person, groupTab)))], groupTab)
@@ -564,6 +577,8 @@ export default function ResourceRosterPage({ revision, onDataChanged }: { revisi
               })
             }} />현재 페이지 전체선택</label>
           <span>선택 {checked.size}명</span>
+          {copilotFilter && <span className="rm-copilot-filter">Copilot: {copilotFilter.label}
+            <button type="button" onClick={onClearCopilotFilter} aria-label="Copilot 필터 해제" title="필터 해제">×</button></span>}
           <span className="rm-list-total">총 {filtered.length.toLocaleString('ko-KR')}명</span>
           <button type="button" className="rm-roster-add-button" onClick={() => {
             setCreatePersonForm(initialCreatePersonForm)

@@ -8,7 +8,10 @@ import { resourceTabs } from './features/resource/resourceTabs'
 import type { ResourceTabId } from './features/resource/resourceTabs'
 import WorkLogManagement from './features/worklog/WorkLogManagement'
 import { countReviewDocuments, fetchBootstrap } from './features/review/api'
+import ChatLauncher from './features/chatbot/ChatLauncher'
 import LegalChatbot from './features/chatbot/LegalChatbot'
+import type { CopilotAction } from './features/chatbot/CopilotChat'
+import type { CopilotView } from './features/resource/ResourceManagement'
 
 const featurePages = [
   { id: 'reserve', label: '부대관리', Component: EmptyReservePage },
@@ -137,6 +140,27 @@ function App() {
   const [resourceLanding, setResourceLanding] = useState<ResourceTabId>('organization')
   const [expandedMenus, setExpandedMenus] = useState<Set<FeaturePageId>>(() => new Set())
   const [chatOpen, setChatOpen] = useState(false)
+  const [copilotView, setCopilotView] = useState<CopilotView | null>(null)
+  const [dataRevision, setDataRevision] = useState(0)
+  // Copilot의 화면 명령. 응답마다 navigate가 먼저 와서 이전 필터·강조를 지웁니다.
+  const runCopilotAction = (action: CopilotAction) => {
+    if (action.tab !== 'roster') return
+    setResourceLanding('roster')
+    setActivePage('resource')
+    setCopilotView(current => {
+      const next: CopilotView = {
+        key: (current?.key ?? 0) + 1,
+        subtab: action.subtab ?? current?.subtab ?? 'people',
+        filter: current?.filter ?? null,
+        highlight: current?.highlight ?? [],
+      }
+      if (action.type === 'navigate') { next.filter = null; next.highlight = [] }
+      else if (action.type === 'filter') next.filter = { label: action.label ?? 'Copilot 검색', ids: action.ids }
+      else if (next.subtab === 'people') next.filter = { label: action.ids.join(', '), ids: action.ids }
+      else next.highlight = action.ids
+      return next
+    })
+  }
   const navigate = (destination: HomeDestination) => {
     if (destination === 'home') setHomeRevision(value => value + 1)
     if (destination === 'resource:hold' || destination === 'resource:prosecution' || destination === 'resource:travel') {
@@ -153,9 +177,7 @@ function App() {
   return <div className={`app ${chatOpen ? 'chat-open' : ''}`}>
     <header className="system-topbar">
       <div className="system-brand"><img className="system-brand-logo" src={ministryLogo} alt="대한민국 국방부" /><span>예비군 업무체계</span><HeaderClock /></div>
-      <div className="account-area">
-        <button type="button" className="legal-chat-toggle" aria-pressed={chatOpen} onClick={() => setChatOpen(value => !value)}>법령 챗봇</button>
-      </div>
+      <div className="account-area" />
     </header>
     <div className="system-body">
       <aside className="sidebar" aria-label="주 메뉴">
@@ -180,16 +202,20 @@ function App() {
             </div>}
           </div>
         })}
+        <ChatLauncher open={chatOpen} onToggle={() => setChatOpen(value => !value)} />
       </aside>
       <main className="workspace">
         <div className="workspace-content">
           {activePage === 'home'
             ? <Home key={homeRevision} onNavigate={navigate} />
-            : activePage === 'resource' ? <ResourceManagement selectedTab={resourceLanding} onTabChange={setResourceLanding} />
+            : activePage === 'resource' ? <ResourceManagement selectedTab={resourceLanding} onTabChange={setResourceLanding}
+              copilotView={copilotView} dataRevision={dataRevision}
+              onClearCopilotFilter={() => setCopilotView(current => current && { ...current, filter: null })} />
             : ActiveComponent ? <ActiveComponent key={activePage} /> : null}
         </div>
       </main>
-      <LegalChatbot open={chatOpen} onClose={() => setChatOpen(false)} />
+      <LegalChatbot open={chatOpen} onClose={() => setChatOpen(false)}
+        onCopilotAction={runCopilotAction} onDataChanged={() => setDataRevision(value => value + 1)} />
     </div>
   </div>
 }
