@@ -26,6 +26,24 @@ def upload(client):
     return response.json()
 
 
+def test_optional_identity_and_archive(client):
+    response = client.post('/submissions', data={'application_type': 'postponement.illness'},
+                           files={'file': ('medical.pdf', b'%PDF-fixture', 'application/pdf')})
+    assert response.status_code == 200
+    item = response.json()
+    assert item['military_number'] == ''
+    result = client.post(f'/submissions/{item["id"]}/verify', json={'context': {}})
+    assert result.status_code == 200
+    assert result.json()['result'] != 'sufficient'
+    response = client.post(f'/submissions/{item["id"]}/identity', json={'military_number': '22-1', 'applicant_name': '홍길동'})
+    assert response.status_code == 200
+    assert response.json()['verification'] is None
+    assert client.post(f'/submissions/{item["id"]}/identity', json={'military_number': 'other', 'applicant_name': '다른 사람'}).status_code == 409
+    api.submissions.update(item['id'], lambda row: row.update(archived=True))
+    assert client.get('/submissions').json() == []
+    assert client.get(f'/submissions/{item["id"]}/pdf').status_code == 200
+
+
 def test_saved_pdf_verification_confirmation_and_human_decision(client):
     item = upload(client); id = item['id']
     assert client.get('/submissions').json()[0]['id'] == id
@@ -86,6 +104,27 @@ def test_business_link_and_decision_are_persisted(client, monkeypatch):
             response.raise_for_status(); return response.json()
         monkeypatch.setattr(business, 'verify_documents', verify)
         app = TestClient(service); item = upload(client)
+        # Name resolution uses only the newly extracted field, never the filename or legacy data.
+        unresolved = {**item, 'military_number': '', 'extraction': {'fields': {
+            'subject_name': {'value': '홍길동', 'status': 'observed'}}}}
+        with monkeypatch.context() as patch:
+            patch.setattr(business, 'get_submission', lambda id: unresolved)
+            import httpx
+            linked = []
+            def identity(url, json, timeout):
+                linked.append(json)
+                return httpx.Response(200, json={**unresolved, **json}, request=httpx.Request('POST', url))
+            patch.setattr(business.httpx, 'post', identity)
+            resolved = app.post('/postponements/resolve-applicant', json={'submission_id': item['id']})
+            assert resolved.json()['submission']['military_number'] == '22-1'
+            db.add(business.Person(military_number='22-2', name='홍길동', branch='육군', service_year=3))
+            db.commit()
+            ambiguous = app.post('/postponements/resolve-applicant', json={'submission_id': item['id']})
+            assert ambiguous.json()['submission']['military_number'] == ''
+            assert len(linked) == 1
+            unresolved['extraction']['fields']['subject_name']['status'] = 'conflicting'
+            assert app.post('/postponements/resolve-applicant', json={'submission_id': item['id']}).json()['submission']['military_number'] == ''
+            assert len(linked) == 1
         payload = {'person_id': '22-1', 'reason': 'caller reason', 'category': 'incorrect', 'classifier_submission_id': item['id']}
         first = app.post('/postponements', json=payload)
         assert first.status_code == 201, first.text

@@ -49,6 +49,7 @@ export async function loadSubmissions(signal?: AbortSignal): Promise<Submission[
   })
 }
 export async function linkSubmission(item: Submission): Promise<number> {
+  if (!item.military_number) throw new Error('먼저 대상자를 연결하세요.')
   const linked = await request<Postponement>(`${API_BASE}/postponements`, jsonRequest('POST', {
     person_id: item.military_number, type: item.application_type.startsWith('postponement.') ? 'delay' : 'hold',
     reason: item.reason_category, category: item.application_type, source_file: item.filename, classifier_submission_id: item.id,
@@ -62,7 +63,7 @@ export async function decide(item: Submission, decision: 'approved' | 'declined'
   notifyReviewChanged()
 }
 export async function verifySubmission(item: Submission, context: Record<string, Fact>): Promise<Verification> {
-  const result = await request<Verification>(`${API_BASE}/postponements/verify`, jsonRequest('POST', {
+  const result = !item.military_number ? await request<Verification>(`${CLASSIFIER_BASE}/submissions/${item.id}/verify`, jsonRequest('POST', { context })) : await request<Verification>(`${API_BASE}/postponements/verify`, jsonRequest('POST', {
     person_id: item.military_number, submission_id: item.id, documents: [item.extraction], context,
   }))
   notifyReviewChanged()

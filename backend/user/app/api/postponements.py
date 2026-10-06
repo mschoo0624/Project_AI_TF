@@ -19,6 +19,38 @@ from user.app.services.classifier_client import classify_reason, decide_submissi
 router = APIRouter(prefix="/postponements", tags=["postponements"])
 
 
+class ResolveApplicant(BaseModel):
+    submission_id: str = Field(pattern=r'^qwen_[0-9a-f]{32}$')
+    military_number: str | None = None
+
+
+@router.post('/resolve-applicant')
+def resolve_applicant(payload: ResolveApplicant, db: Session = Depends(get_db)):
+    from user.app.services.classifier_client import VERIFICATION_URL
+    try:
+        item = get_submission(payload.submission_id)
+        if item.get('military_number'):
+            return {'submission': item, 'message': '대상자가 연결되어 있습니다.'}
+        field = item.get('extraction', {}).get('fields', {}).get('subject_name', {})
+        name = field.get('value') if field.get('status') == 'observed' else None
+        if payload.military_number:
+            person = db.get(Person, payload.military_number.strip())
+            matches = [person] if person else []
+        else:
+            matches = list(db.scalars(select(Person).where(Person.name == name.strip())).all()) if isinstance(name, str) and name.strip() else []
+        if len(matches) != 1:
+            return {'submission': item, 'message': '동명이인이 있습니다. 군번으로 대상자를 연결하세요.' if len(matches) > 1 else '일치하는 대상자를 찾지 못했습니다. 군번으로 대상자를 연결하세요.'}
+        person = matches[0]
+        if isinstance(name, str) and name.strip() and person.name != name.strip():
+            raise HTTPException(422, 'PDF에서 추출한 성명과 대상자 성명이 다릅니다.')
+        response = httpx.post(f'{VERIFICATION_URL}/submissions/{item["id"]}/identity', json={
+            'military_number': person.military_number, 'applicant_name': person.name}, timeout=15)
+        response.raise_for_status()
+        return {'submission': response.json(), 'message': f'{person.name} 대상자와 연결했습니다.'}
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, '대상자 연결 서비스를 확인하세요.') from exc
+
+
 class VerificationInput(BaseModel):
     person_id: str
     education_id: int | None = None

@@ -45,6 +45,24 @@ test('all views share real submissions and pending confirmation counts', async (
   assert.equal(data.queue[0].verification.result, 'insufficient')
   assert.ok(!calls.some(c => c.url.includes('data.json')))
 })
+
+test('old records cannot populate the empty new roster or inbox', async () => {
+  const original = globalThis.fetch
+  rows = []
+  globalThis.fetch = async (url, options) => url === '/api/postponements'
+    ? Response.json([{ id: 99, person_id: 'legacy-person', classifier_submission_id: 'old-id', status: 'approved' }])
+    : original(url, options)
+  const data = await api.fetchBootstrap()
+  assert.deepEqual(data.people, [])
+  assert.deepEqual(data.queue, [])
+})
+
+test('unlinked PDFs can be verified but cannot be approved', async () => {
+  const item = { ...rows[0], military_number: '' }
+  await classifier.verifySubmission(item, {})
+  assert.ok(calls.some(c => c.url === `/classifier-api/submissions/${item.id}/verify`))
+  await assert.rejects(classifier.decide(item, 'approved'), /대상자/)
+})
 test('human approval stays possible despite insufficient verification', async () => {
   await api.acceptDocument('qwen_pending', {})
   assert.ok(calls.some(c => c.url === '/api/postponements/1/approve' && c.method === 'PATCH'))

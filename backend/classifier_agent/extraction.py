@@ -110,6 +110,27 @@ def validate_field(item, spec, page, document_id):
             'candidates': [], 'errors': errors, 'raw': item}
 
 
+def explicit_issue_dates(page, spec, document_id):
+    """Read only complete dates in explicitly labelled issuance lines.
+
+    Preserve exact source quotes; never complete partial dates from model values.
+    Multiple labelled dates are kept for the existing conflict detection.
+    """
+    pattern = re.compile(
+        r'^\s*(?:발급일자|발급일|발행일자|발행일)\s*[:：]?\s*'
+        r'(?P<year>\d{4})(?:\s*년\s*|\s*[-./]\s*)'
+        r'(?P<month>\d{1,2})(?:\s*월\s*|\s*[-./]\s*)'
+        r'(?P<day>\d{1,2})(?:\s*일|\s*\.)?\s*$')
+    items = []
+    for line in page['text'].splitlines():
+        match = pattern.fullmatch(line)
+        if not match:
+            continue
+        value = f'{int(match["year"]):04d}-{int(match["month"]):02d}-{int(match["day"]):02d}'
+        items.append(validate_field({'value': value, 'evidence': [line]}, spec, page, document_id))
+    return items
+
+
 def extract_application(path, application_type, *, applicant_name=None, client=ask_qwen):
     application, fields = selected_fields(application_type)
     pdf = extract_pdf(path)
@@ -137,7 +158,11 @@ def extract_application(path, application_type, *, applicant_name=None, client=a
                 raise ModelError('모델의 JSON 항목 형식이 잘못되었습니다. 결과를 저장하지 않았습니다.') from exc
             calls.append({'page': page['number'], 'fields': list(batch), 'response': raw})
             for key, spec in batch.items():
-                results[key].append(validate_field(obj[key], spec, page, digest))
+                explicit = explicit_issue_dates(page, spec, digest) if key == 'issued_on' else []
+                if explicit:
+                    results[key].extend(explicit)
+                else:
+                    results[key].append(validate_field(obj[key], spec, page, digest))
     merged = {}
     for key, items in results.items():
         candidates = []
