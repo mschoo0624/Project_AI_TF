@@ -30,10 +30,10 @@ from user.app.services.training_recalculation import (
 router = APIRouter(prefix="/postponements", tags=["postponements"])
 
 
-<<<<<<< HEAD
 def _actor_value(actor: User) -> str:
     return actor.username[:100]
-=======
+
+
 class ResolveApplicant(BaseModel):
     submission_id: str = Field(pattern=r'^qwen_[0-9a-f]{32}$')
     military_number: str | None = None
@@ -64,7 +64,6 @@ def resolve_applicant(payload: ResolveApplicant, db: Session = Depends(get_db)):
         return {'submission': response.json(), 'message': f'{person.name} 대상자와 연결했습니다.'}
     except httpx.HTTPError as exc:
         raise HTTPException(502, '대상자 연결 서비스를 확인하세요.') from exc
->>>>>>> origin/frontend
 
 
 class VerificationInput(BaseModel):
