@@ -646,12 +646,14 @@ def test_postponed_rounds_and_next_year_no_show_only_advance_that_year() -> None
     db.flush()
 
     recalculated_rounds = _rounds_for_person(
-        person.military_number,
+        db,
+        person,
         [*prior_rounds, attended_round, next_year_absence],
         db.scalars(select(Postponement).where(
             Postponement.person_id == person.military_number,
         )).all(),
         DEFAULT_STATUS_POLICIES,
+        all_training_progress(db, person),
     )
     progress = training_progress(db, person, 2)
 
@@ -764,6 +766,16 @@ def test_round_advancement_requires_confirmed_absence_or_approved_deferral() -> 
 
 
 def test_round_ladder_resets_for_each_obligation_year() -> None:
+    db = make_session()
+    person = Person(
+        military_number="round-reset",
+        name="연차 차수 초기화",
+        branch="육군",
+        rank="병장",
+        service_year=2,
+        mobilization_status="동원미지정",
+        status="active",
+    )
     previous_year_attempt = Education(
         id=20, person_id="round-reset", education_year=1, training_type="기본훈련",
         training_round=1, attendance_status="무단불참", training_hours=0, confirmed_by="확인자",
@@ -772,12 +784,20 @@ def test_round_ladder_resets_for_each_obligation_year() -> None:
         id=21, person_id="round-reset", education_year=2, training_type="기본훈련",
         training_round=1, attendance_status="이수", training_hours=8,
     )
+    db.add_all([person, previous_year_attempt, current_year_attempt])
+    db.flush()
 
     rounds = _rounds_for_person(
-        "round-reset", [previous_year_attempt, current_year_attempt], [], DEFAULT_STATUS_POLICIES
+        db,
+        person,
+        [previous_year_attempt, current_year_attempt],
+        [],
+        DEFAULT_STATUS_POLICIES,
+        all_training_progress(db, person),
     )
 
     assert rounds == {(1, "기본훈련"): 2, (2, "기본훈련"): 1}
+    db.close()
 
 
 def test_current_year_hours_count_before_resolving_prior_carryover() -> None:

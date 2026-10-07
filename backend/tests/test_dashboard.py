@@ -110,6 +110,55 @@ def test_training_review_list_excludes_future_scheduled_session():
         assert list_training_review_targets(db) == []
 
 
+def test_outstanding_overdue_and_missing_records_only_appear_in_review_list():
+    engine = create_engine('sqlite://')
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        people = [
+            Person(
+                military_number=number, name=number, branch='육군', rank='병장',
+                service_year=1, position='소총수',
+                mobilization_status='동원미지정', status='active',
+            )
+            for number in ('review-outstanding', 'review-overdue', 'review-no-record')
+        ]
+        db.add_all(people)
+        db.add_all([
+            Education(
+                person_id='review-outstanding',
+                education_year=1,
+                training_year=date.today().year,
+                training_type='동원훈련Ⅰ형',
+                training_round=1,
+                attendance_status='참석',
+                training_hours=8,
+            ),
+            Education(
+                person_id='review-overdue',
+                education_year=1,
+                training_year=date.today().year,
+                scheduled_date=date.today() - timedelta(days=30),
+                training_type='동원훈련Ⅱ형',
+                training_round=1,
+                attendance_status='scheduled',
+                training_hours=0,
+            ),
+        ])
+        db.commit()
+
+        review = list_training_review_targets(db)
+        prosecution = list_prosecution_targets(db)
+
+        assert {row['military_number'] for row in review} == {
+            'review-outstanding', 'review-overdue', 'review-no-record',
+        }
+        assert all(row['military_number'] not in {
+            'review-outstanding', 'review-overdue', 'review-no-record',
+        } for row in prosecution)
+        overdue = next(row for row in review if row['military_number'] == 'review-overdue')
+        assert any(item['reason'] == 'overdue_result_not_entered' for item in overdue['review_rows'])
+
+
 def test_no_show_without_confirmer_metadata_stays_in_review_not_prosecution():
     engine = create_engine('sqlite://')
     Base.metadata.create_all(engine)

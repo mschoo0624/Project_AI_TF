@@ -9,12 +9,15 @@
 Python 3.10 이상, Ollama가 필요하다. 프로젝트 루트에서:
 
 ```powershell
-python -m venv backend/.venv
-backend/.venv/Scripts/python.exe -m pip install -r backend/classifier_agent/requirements.txt
+python -m venv .\backend\.venv
+.\backend\.venv\Scripts\python.exe -m pip install -r .\backend\classifier_agent\requirements.txt
 ollama pull qwen3:4b-instruct
 # Ollama 앱/서버가 실행 중이어야 한다. 미실행 환경은 별도 터미널에서 ollama serve.
-backend/.venv/Scripts/python.exe -m uvicorn backend.classifier_agent.API:app --host 127.0.0.1 --port 8003
+.\backend\.venv\Scripts\python.exe -m uvicorn backend.classifier_agent.API:app --host 127.0.0.1 --port 8003
 ```
+
+위 명령은 프로젝트 루트에서 실행한다. `backend` 폴더 안에서 실행하려면 앱 경로를
+`classifier_agent.API:app`으로 바꾸고 실행 파일을 `.\.venv\Scripts\python.exe`로 지정한다.
 
 기존 가상환경이 있으면 생성은 생략한다. Linux/macOS는 `Scripts/python.exe` 대신
 `bin/python`을 사용한다. 모델은 Ollama 저장소에 설치되며 Git에 포함하지 않는다.
@@ -35,7 +38,7 @@ backend/.venv/Scripts/python.exe -m uvicorn backend.classifier_agent.API:app --h
 CLI도 같은 구현을 사용한다:
 
 ```powershell
-backend/.venv/Scripts/python.exe -m backend.classifier_agent.extraction frontend/public/pdfs/old/medical.pdf --application-type postponement.illness -o extraction-result.json
+.\backend\.venv\Scripts\python.exe -m backend.classifier_agent.extraction .\frontend\public\pdfs\old\medical.pdf --application-type postponement.illness -o extraction-result.json
 ```
 
 출력 파일은 덮어쓰지 않는다. 종료 코드 0은 추출 완료, 2는 확인 필요, 1은 실행 오류다.
