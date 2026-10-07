@@ -11,11 +11,12 @@
 군종, 계급, 상태로 필터링
 """
 
+from typing import Literal
 import json
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -30,8 +31,9 @@ from user.app.models.user import User
 from user.app.models.training_recalculation import TrainingCarryover, TrainingYearResult
 from user.app.schemas.person import PersonCreate, PersonRead, PersonUpdate, PersonProfileUpdate
 from user.app.services.person_profile import ProfileError, profile_options, save_profile
-from user.app.services.assignment import grouped_candidates
+from user.app.services.assignment import grouped_candidates, is_assignable, not_assignable_reason
 from user.app.services.person import create_person
+from user.app.services.person_search import PersonSearch, search_people
 from user.app.services.training import (
 	OVERDUE_GRACE_DAYS,
 	ROUND_SCHEDULED,
@@ -234,21 +236,21 @@ def list_reservists(
 	rank: str | None = Query(default=None),
 	status: str | None = Query(default=None),
 	mobilization_status: str | None = Query(default=None),
+	platoon: str | None = Query(default=None, description="소대 이름, 예: 1소대"),
+	category: Literal["병사", "부사관", "장교", "간부"] | None = Query(default=None),
+	assigned: bool | None = Query(default=None, description="true=편성, false=미편성"),
 	db: Session = Depends(get_db),
 ) -> list[Person]:
-	query = select(Person)
-	if query_text:
-		search = f"%{query_text}%"
-		query = query.where(or_(Person.name.like(search), Person.military_number.like(search)))
-	if branch:
-		query = query.where(Person.branch == branch)
-	if rank:
-		query = query.where(Person.rank == rank)
-	if status:
-		query = query.where(Person.status == status)
-	if mobilization_status:
-		query = query.where(Person.mobilization_status == mobilization_status)
-	return list(db.scalars(query.order_by(Person.military_number)).all())
+	return search_people(db, PersonSearch(
+		query_text=query_text,
+		branch=branch,
+		rank=rank,
+		status=status,
+		mobilization_status=mobilization_status,
+		platoon=platoon,
+		category=category,
+		assigned=assigned,
+	))
 
 @persons_router.get("/profile-options")
 def get_profile_options():
@@ -382,6 +384,9 @@ def update_reservist(
 	new_mobilization_status = updates.pop("mobilization_status", None)
 	for field, value in updates.items():
 		setattr(person, field, value)
+	if updates.get("squad_id") is not None and not is_assignable(person):
+		db.rollback()
+		raise HTTPException(status_code=409, detail=f"편성 대상이 아닙니다 ({not_assignable_reason(person)})")
 	if new_mobilization_status is not None and new_mobilization_status != person.mobilization_status:
 		apply_mobilization_status_change(db, person, new_mobilization_status)
 	from user.app.services.training_recalculation import recalculate_person

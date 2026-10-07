@@ -19,6 +19,7 @@ from user.app.api.training import (
 )
 from user.app.api.training_results import router as training_results_router
 from user.app.api.transfers import router as transfers_router
+from user.app.copilot.router import router as copilot_router
 from user.app.services.training import reconcile_all_due_training_absences
 from user.app.services.training_recalculation import recalculate_ended_holds, run_jan1_rollover
 
@@ -44,6 +45,7 @@ app.include_router(postponements_router)
 app.include_router(training_router)
 app.include_router(persons_training_router)
 app.include_router(transfers_router)
+app.include_router(copilot_router)
 
 def _reconcile_due_training_records() -> None:
     with SessionLocal() as db:

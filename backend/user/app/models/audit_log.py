@@ -23,3 +23,8 @@ class AuditLog(Base):
     before_data: Mapped[str | None] = mapped_column(Text, nullable=True)
     after_data: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    # 어디서(화면/copilot), 무엇을 바꿨는지. detail은 JSON 문자열(대상 인원·분대 목록). 되돌리기가 읽는다.
+    source: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -19,7 +19,7 @@ export default function ChatLauncher({ open, onToggle }: { open: boolean; onTogg
     <button type="button" className={`chat-launcher ${open ? 'is-open' : ''}`} aria-expanded={open} aria-controls="legal-chat-panel"
       onClick={() => { setHint(false); onToggle() }} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       <Mascot size={58} mood={hovered || hint ? 'wave' : 'idle'} />
-      <strong>법령 도우미</strong>
+      <strong>AI 온누리</strong>
       <span>{open ? '닫기' : '무엇이든 물어보세요'}</span>
     </button>
   </div>

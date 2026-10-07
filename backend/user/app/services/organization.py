@@ -14,9 +14,10 @@ from user.app.models.organization import OrganizationNode
 from user.app.models.person import Person
 from user.app.models.squad import Squad
 from user.app.services.assignment import (
-    POSITION_SPECIALTIES, personnel_category, rank_candidates_for_position,
+    POSITION_SPECIALTIES, is_assignable, personnel_category, rank_candidates_for_position,
     set_assignment_mobilization_status,
 )
+from user.app.services.audit import record_change
 
 KINDS = {"root", "company", "platoon", "squad"}
 ALLOWED_CHILDREN = {
@@ -91,13 +92,19 @@ def release_members(db: Session, selected_id: int, person_id: str | None = None,
         people = list(db.scalars(query).all())
         if requested is not None and {person.military_number for person in people} != requested:
             raise ValueError("선택한 부대에 편성된 인원이 아닙니다.")
+        released: list[dict[str, object]] = []
         for person in people:
             db.execute(delete(Assignment).where(
                 Assignment.person_id == person.military_number,
                 Assignment.squad_id == person.squad_id,
             ))
+            released.append({"military_number": person.military_number, "name": person.name,
+                             "squad_id": person.squad_id})
             person.squad_id = None
             set_assignment_mobilization_status(db, person, False)
+        if released:
+            scope = "" if selected.kind == "root" else f"{selected.name} "
+            record_change(db, "release", f"{scope}편성 해제 {len(released)}명", released)
         if people:
             _audit_organization(
                 db, actor_user_id, actor_label, "organization.release_members", selected_id,
@@ -264,11 +271,13 @@ def delete_unit(
         db.rollback()
         raise
 
-def assign_vacancies(
-    db: Session, selected_id: int,
-    actor_user_id: int | None = None, actor_label: str = "system",
-) -> dict[str, object]:
-    """Fill vacancies in existing squads without changing the hierarchy."""
+def plan_vacancies(db: Session, selected_id: int,
+                   people: list[Person] | None = None) -> dict[str, object]:
+    """Plan how to fill vacancies in existing squads without saving anything.
+
+    people limits who may be placed (default: everyone). Candidates are ordered by
+    position and specialty priority, and a squad never mixes branch or personnel category.
+    """
     nodes = _nodes(db)
     selected = _get(nodes, selected_id)
     target_squads = [node for node in [selected, *_descendants(nodes, selected_id)]
@@ -283,8 +292,8 @@ def assign_vacancies(
             squad_members.setdefault(person.squad_id, []).append(person)
 
     position_order = {position: index for index, position in enumerate(POSITION_SPECIALTIES)}
-    available = [person for person in members if person.squad_id is None
-                 and person.status == "active" and person.service_year is not None]
+    pool = members if people is None else people
+    available = [person for person in pool if person.squad_id is None and is_assignable(person)]
     ordered: list[Person] = []
     for position in sorted({person.position or "" for person in available},
                            key=lambda p: (position_order.get(p, len(position_order)), p)):
@@ -292,39 +301,57 @@ def assign_vacancies(
             [person for person in available if (person.position or "") == position], position))
 
     used: set[str] = set()
+    planned: list[tuple[Person, int]] = []
+    for node in target_squads:
+        squad_id = node.squad_id
+        current = list(squad_members.get(squad_id, []))
+        remaining = max(0, (node.planned_strength or 11) - len(current))
+        for _ in range(remaining):
+            existing_groups = {(person.branch, personnel_category(person.rank))
+                               for person in current}
+            candidate = next((person for person in ordered if person.military_number not in used
+                              and (not existing_groups or existing_groups == {
+                                  (person.branch, personnel_category(person.rank))})), None)
+            if candidate is None:
+                break
+            current.append(candidate)
+            used.add(candidate.military_number)
+            planned.append((candidate, squad_id))
+        squad_members[squad_id] = current
+    shortfall = sum(max(0, (node.planned_strength or 11) - len(squad_members[node.squad_id]))
+                    for node in target_squads)
+    return {"planned": planned, "shortfall": shortfall}
+
+
+def root_node_id(db: Session) -> int | None:
+    return db.scalar(select(OrganizationNode.id).where(OrganizationNode.kind == "root")
+                     .order_by(OrganizationNode.id).limit(1))
+
+
+def assign_vacancies(
+    db: Session, selected_id: int,
+    actor_user_id: int | None = None, actor_label: str = "system",
+) -> dict[str, object]:
+    """Fill vacancies in existing squads without changing the hierarchy."""
+    plan = plan_vacancies(db, selected_id)
     assignments: list[dict[str, object]] = []
     try:
-        for node in target_squads:
-            squad_id = node.squad_id
-            current = squad_members.setdefault(squad_id, [])
-            remaining = max(0, (node.planned_strength or 11) - len(current))
-            for _ in range(remaining):
-                existing_groups = {(person.branch, personnel_category(person.rank))
-                                   for person in current}
-                candidate = next((person for person in ordered if person.military_number not in used
-                                  and (not existing_groups or existing_groups == {
-                                      (person.branch, personnel_category(person.rank))})), None)
-                if candidate is None:
-                    break
-                candidate.squad_id = squad_id
-                set_assignment_mobilization_status(db, candidate, True)
-                db.add(Assignment(person_id=candidate.military_number, squad_id=squad_id,
-                                  assigned_date=date.today(), status="assigned"))
-                current.append(candidate)
-                used.add(candidate.military_number)
-                assignments.append({"military_number": candidate.military_number,
-                                    "name": candidate.name, "squad_id": squad_id})
-        shortfall = sum(max(0, (node.planned_strength or 11) - len(squad_members[node.squad_id]))
-                        for node in target_squads)
-        result = {"total_assigned": len(assignments), "total_shortfall": shortfall,
-                  "assigned": assignments, "scope_id": selected_id}
+        for candidate, squad_id in plan["planned"]:
+            candidate.squad_id = squad_id
+            set_assignment_mobilization_status(db, candidate, True)
+            db.add(Assignment(person_id=candidate.military_number, squad_id=squad_id,
+                              assigned_date=date.today(), status="assigned"))
+            assignments.append({"military_number": candidate.military_number,
+                                "name": candidate.name, "squad_id": squad_id})
         if assignments:
+            record_change(db, "assign", f"빈자리 자동 편성 {len(assignments)}명", assignments)
             _audit_organization(
                 db, actor_user_id, actor_label, "organization.assign_vacancies", selected_id,
                 {"total_assigned": 0}, {"total_assigned": len(assignments), "scope_id": selected_id},
             )
         db.commit()
-        return result
+        return {"total_assigned": len(assignments), "total_shortfall": plan["shortfall"],
+                "assigned": assignments, "scope_id": selected_id}
     except Exception:
         db.rollback()
         raise

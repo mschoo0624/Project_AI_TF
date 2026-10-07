@@ -35,6 +35,8 @@ def init_db() -> None:
     postponement_columns = {
         column["name"] for column in inspect(engine).get_columns("postponement")
     }
+    audit_columns = {column["name"] for column in inspect(engine).get_columns("audit_log")}
+    copilot_message_columns = {column["name"] for column in inspect(engine).get_columns("copilot_message")}
     transfer_intake_columns = {
         column["name"] for column in inspect(engine).get_columns("transfer_intake")
     }
@@ -279,6 +281,13 @@ def init_db() -> None:
             connection.execute(text("ALTER TABLE postponement ADD COLUMN classifier_submission_id VARCHAR(64)"))
         if "approved_at" not in postponement_columns:
             connection.execute(text("ALTER TABLE postponement ADD COLUMN approved_at DATETIME"))
+        for column, column_type in (("source", "VARCHAR(50)"),
+                                    ("trace_id", "VARCHAR(32)"), ("summary", "TEXT"), ("detail", "TEXT")):
+            if column not in audit_columns:
+                connection.execute(text(f"ALTER TABLE audit_log ADD COLUMN {column} {column_type}"))
+        for column, column_type in (("undone_at", "DATETIME"), ("undone_summary", "TEXT")):
+            if column not in copilot_message_columns:
+                connection.execute(text(f"ALTER TABLE copilot_message ADD COLUMN {column} {column_type}"))
         if "education_record_id" not in postponement_columns:
             connection.execute(text("ALTER TABLE postponement ADD COLUMN education_record_id INTEGER"))
         if "start_date" not in postponement_columns:
