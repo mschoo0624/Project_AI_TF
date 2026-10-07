@@ -248,3 +248,10 @@ def conversation(conversation_id: str, client_id: str = Query(pattern=CLIENT_ID_
 	if found is None:
 		raise HTTPException(status_code=404, detail="대화를 찾을 수 없습니다.")
 	return found
+
+
+@router.delete("/conversations/{conversation_id}", status_code=204)
+def delete_conversation(conversation_id: str, client_id: str = Query(pattern=CLIENT_ID_PATTERN),
+		db: Session = Depends(get_db)) -> None:
+	if not history.delete_conversation(db, conversation_id, client_id):
+		raise HTTPException(status_code=404, detail="대화를 찾을 수 없습니다.")

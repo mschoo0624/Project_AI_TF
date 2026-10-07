@@ -264,13 +264,26 @@ function ProposalCard({ proposal, state, onSelect, onApprove, onCancel, onUndoSt
   </div>
 }
 
-function HistoryPanel({ items, error, currentId, onOpen, onClose }: {
+function HistoryPanel({ items, error, currentId, onOpen, onDelete, onClose }: {
   items: ConversationSummary[] | null
   error: string | null
   currentId: string | null
   onOpen: (id: string) => void
+  onDelete: (id: string) => Promise<void>
   onClose: () => void
 }) {
+  // 휴지통을 누른 대화. 한 번 더 확인한 뒤에 지웁니다.
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const remove = async (id: string) => {
+    setDeleting(true)
+    try {
+      await onDelete(id)
+      setConfirming(null)
+    } finally {
+      setDeleting(false)
+    }
+  }
   const groups = new Map<string, ConversationSummary[]>()
   items?.forEach(item => groups.set(dayGroup(item.updated_at), [...(groups.get(dayGroup(item.updated_at)) ?? []), item]))
   return <div className="copilot-history" role="dialog" aria-label="지난 대화">
@@ -283,14 +296,28 @@ function HistoryPanel({ items, error, currentId, onOpen, onClose }: {
     {items?.length === 0 && <p className="copilot-history-empty">아직 대화가 없어요.</p>}
     {[...groups.entries()].map(([group, conversations]) => <section key={group}>
       <h4>{group}</h4>
-      {conversations.map(item => <button key={item.id} type="button" onClick={() => onOpen(item.id)}
-        aria-current={item.id === currentId ? 'true' : undefined} title={formatTime(item.updated_at)}>
-        <span>{item.title}</span>
-        {item.changes > 0 && <em title="승인해서 데이터를 바꾼 횟수">변경 {item.changes}건</em>}
-        {item.undone > 0 && <em className="is-undone" title="되돌린 횟수">되돌림 {item.undone}</em>}
-      </button>)}
+      {conversations.map(item => confirming === item.id
+        ? <div key={item.id} className="copilot-history-confirm">
+          <p><b>“{item.title}”</b> 대화를 지울까요?</p>
+          {item.changes > 0 && <p className="copilot-history-warn">승인한 변경은 변경 기록에 남지만, 이 대화에서 되돌리기는 더 이상 할 수 없어요.</p>}
+          <div>
+            <button type="button" onClick={() => setConfirming(null)} disabled={deleting}>취소</button>
+            <button type="button" className="is-danger" onClick={() => remove(item.id)} disabled={deleting}>
+              {deleting ? '지우는 중…' : '지우기'}
+            </button>
+          </div>
+        </div>
+        : <div key={item.id} className="copilot-history-row" aria-current={item.id === currentId ? 'true' : undefined}>
+          <button type="button" className="copilot-history-open" onClick={() => onOpen(item.id)} title={formatTime(item.updated_at)}>
+            <span>{item.title}</span>
+            {item.changes > 0 && <em title="승인해서 데이터를 바꾼 횟수">변경 {item.changes}건</em>}
+            {item.undone > 0 && <em className="is-undone" title="되돌린 횟수">되돌림 {item.undone}</em>}
+          </button>
+          <button type="button" className="copilot-history-delete" onClick={() => setConfirming(item.id)}
+            aria-label={`“${item.title}” 대화 지우기`} title="대화 지우기">🗑</button>
+        </div>)}
     </section>)}
-    <p className="copilot-history-note">대화는 이 브라우저에만 보이고, 90일 뒤 지워져요. 데이터 변경은 변경 기록에 계속 남아요.</p>
+    <p className="copilot-history-note">대화는 이 브라우저에만 보이고, 90일 뒤 지워져요. 직접 지울 수도 있어요. 데이터 변경은 변경 기록에 계속 남아요.</p>
   </div>
 }
 
@@ -381,6 +408,24 @@ export default function CopilotChat({ onAction, onDataChanged }: {
       setHistoryItems(await response.json() as ConversationSummary[])
     } catch (error) {
       setHistoryError(`목록을 불러오지 못했어요: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  const remove = async (id: string) => {
+    setHistoryError(null)
+    try {
+      const response = await fetch(`${API_BASE}/copilot/conversations/${encodeURIComponent(id)}?client_id=${clientId()}`, { method: 'DELETE' })
+      if (!response.ok && response.status !== 404) throw new Error(await errorDetail(response))
+      setHistoryItems(current => current?.filter(item => item.id !== id) ?? null)
+      if (id === conversationId) {
+        // 보고 있던 대화를 지웠으면 빈 화면으로 돌아가되 목록은 열어 둡니다.
+        remember(null)
+        setTitle(null)
+        setMessages([])
+        lastList.current = null
+      }
+    } catch (error) {
+      setHistoryError(`대화를 지우지 못했어요: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -507,7 +552,7 @@ export default function CopilotChat({ onAction, onDataChanged }: {
     </div>
     <div className="copilot-main">
     {historyOpen && <HistoryPanel items={historyItems} error={historyError} currentId={conversationId}
-      onOpen={open} onClose={() => setHistoryOpen(false)} />}
+      onOpen={open} onDelete={remove} onClose={() => setHistoryOpen(false)} />}
     <div className="legal-chat-log" ref={logRef} onScroll={onLogScroll} aria-live="polite">
       {messages.length === 0 && <div className="legal-chat-empty">
         <Mascot size={88} mood="wave" />

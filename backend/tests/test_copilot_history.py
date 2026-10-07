@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from user.app.copilot import history, llm
-from user.app.copilot.router import apply, chat, conversation, conversations
+from user.app.copilot.router import apply, chat, conversation, conversations, delete_conversation
 from user.app.copilot.schemas import ApplyRequest, ChatContext, ChatRequest
 from user.app.models.copilot import CopilotConversation, CopilotMessage
 from user.app.models.organization import OrganizationNode
@@ -175,6 +175,26 @@ def test_conversations_older_than_90_days_are_deleted() -> None:
 	assert db.scalars(select(CopilotMessage).where(CopilotMessage.trace_id == old.trace_id)).first() is None
 	assert db.get(CopilotConversation, recent.conversation_id) is not None
 
+
+def test_deleting_a_conversation_removes_it_but_keeps_the_change_log() -> None:
+	from user.app.models.audit_log import AuditLog
+
+	db = make_session()
+	seed(db)
+	response = ask(db, "0년차 편성된 사람 빼줘")
+	apply(ApplyRequest(kind="release", trace_id=response.trace_id, person_ids=["0-1"]), db)
+	kept = ask(db, "오늘 현황")
+	logs = db.scalars(select(AuditLog)).all()
+	assert logs
+
+	with pytest.raises(HTTPException) as error:  # 다른 브라우저는 못 지운다
+		delete_conversation(response.conversation_id, client_id=OTHER, db=db)
+	assert error.value.status_code == 404
+
+	delete_conversation(response.conversation_id, client_id=ME, db=db)
+	assert [item.id for item in conversations(client_id=ME, db=db)] == [kept.conversation_id]
+	assert db.scalars(select(CopilotMessage).where(CopilotMessage.trace_id == response.trace_id)).first() is None
+	assert len(db.scalars(select(AuditLog)).all()) == len(logs)  # 변경 기록은 그대로
 
 def test_questions_without_browser_id_are_still_logged() -> None:
 	db = make_session()

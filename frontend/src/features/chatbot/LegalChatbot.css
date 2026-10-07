@@ -132,12 +132,24 @@
 .copilot-history-head button { width:28px; height:28px; border:0; border-radius:50%; background:transparent; color:#4f6b5c; font:inherit; cursor:pointer; }
 .copilot-history-head button:hover { background:var(--chat-mint-soft); }
 .copilot-history h4 { margin:12px 0 4px; color:#6b8577; font-size:11px; font-weight:600; }
-.copilot-history section button { width:100%; display:flex; align-items:center; gap:6px; padding:8px 10px; border:0; border-radius:10px; background:transparent; color:#1e3a2e; font:inherit; font-size:13px; text-align:left; cursor:pointer; }
-.copilot-history section button:hover { background:var(--chat-mint-soft); }
-.copilot-history section button[aria-current="true"] { background:var(--chat-mint); font-weight:600; }
-.copilot-history section button span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.copilot-history section button em { flex:none; padding:1px 7px; border-radius:999px; background:#fff1d6; color:#9a5b00; font-size:10px; font-style:normal; font-weight:600; }
-.copilot-history section button em.is-undone { background:#eef1ef; color:#4f6b5c; }
+.copilot-history-row { display:flex; align-items:center; border-radius:10px; }
+.copilot-history-row:hover { background:var(--chat-mint-soft); }
+.copilot-history-row[aria-current="true"] { background:var(--chat-mint); font-weight:600; }
+.copilot-history-open { flex:1; min-width:0; display:flex; align-items:center; gap:6px; padding:8px 4px 8px 10px; border:0; background:transparent; color:#1e3a2e; font:inherit; font-size:13px; text-align:left; cursor:pointer; }
+.copilot-history-open span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.copilot-history-open em { flex:none; padding:1px 7px; border-radius:999px; background:#fff1d6; color:#9a5b00; font-size:10px; font-style:normal; font-weight:600; }
+.copilot-history-open em.is-undone { background:#eef1ef; color:#4f6b5c; }
+.copilot-history-delete { flex:none; width:28px; height:28px; margin-right:4px; border:0; border-radius:8px; background:transparent; font-size:13px; cursor:pointer; opacity:0; }
+.copilot-history-row:hover .copilot-history-delete, .copilot-history-delete:focus-visible { opacity:.7; }
+.copilot-history-delete:hover { opacity:1; background:#fde8e6; }
+@media (hover:none) { .copilot-history-delete { opacity:.6; } }
+.copilot-history-confirm { margin:2px 0; padding:8px 10px; border-radius:10px; background:#fff6f5; border:1px solid #f4c7c2; font-size:12px; color:#1e3a2e; }
+.copilot-history-confirm p { margin:0 0 6px; overflow-wrap:anywhere; }
+.copilot-history-warn { color:#9a5b00; }
+.copilot-history-confirm div { display:flex; justify-content:flex-end; gap:6px; }
+.copilot-history-confirm button { padding:4px 12px; border:1px solid #d5dfd9; border-radius:8px; background:#fff; color:#1e3a2e; font:inherit; font-size:12px; cursor:pointer; }
+.copilot-history-confirm button.is-danger { border-color:#b42318; background:#b42318; color:#fff; }
+.copilot-history-confirm button:disabled { opacity:.6; cursor:default; }
 .copilot-history .is-error { color:#b42318; font-size:12px; }
 .copilot-history-empty { margin:20px 0; color:#6b8577; font-size:12px; text-align:center; }
 .copilot-history-note { margin:16px 4px 0; color:#8aa194; font-size:11px; line-height:1.5; }

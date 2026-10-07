@@ -57,6 +57,16 @@ def delete_old(db: Session, now: datetime) -> None:
 	db.execute(delete(CopilotConversation).where(CopilotConversation.updated_at < now - KEEP_FOR))
 
 
+def delete_conversation(db: Session, conversation_id: str, owner: str) -> bool:
+	"""이 브라우저의 대화를 지운다. 승인한 변경은 AuditLog(변경 기록)에 남지만 이 대화에서 되돌리기는 더 이상 못 한다."""
+	conversation = db.get(CopilotConversation, conversation_id)
+	if conversation is None or conversation.owner != owner:
+		return False
+	db.execute(delete(CopilotMessage).where(CopilotMessage.conversation_id == conversation_id))
+	db.delete(conversation)
+	db.commit()
+	return True
+
 def save_turn(db: Session, payload: ChatRequest, response: ChatResponse, *, outcome: str,
 		args: BaseModel | None, used_context: bool, latency_ms: int) -> str:
 	"""Save one question and its answer; return the conversation id."""
