@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pdfplumber
+from .layout import make_sources
 from pdfminer.pdfdocument import PDFPasswordIncorrect
 from pdfminer.pdfparser import PDFSyntaxError
 
@@ -57,6 +58,10 @@ def extract_pdf(
         with pdfplumber.open(source, unicode_norm="NFC") as pdf:
             for page in pdf.pages:
                 text = page.extract_text() or ""
+                # Rotated text is retained separately, never interleaved with IDs.
+                rotated = [c for c in page.chars if abs(c.get('matrix', (1,0,0,1,0,0))[1]) > .01 or abs(c.get('matrix', (1,0,0,1,0,0))[2]) > .01]
+                body = page.filter(lambda c: c.get('object_type') != 'char' or not (
+                    abs(c.get('matrix', (1,0,0,1,0,0))[1]) > .01 or abs(c.get('matrix', (1,0,0,1,0,0))[2]) > .01))
                 words = [
                     {"text": word["text"], "bbox": _box((word["x0"], word["top"], word["x1"], word["bottom"]))}
                     for word in page.extract_words()
@@ -65,7 +70,7 @@ def extract_pdf(
                 fields = []
                 # Image-only pages are reported, never silently accepted as extracted.
                 if text.strip():
-                    for number, table in enumerate(page.find_tables(settings), start=1):
+                    for number, table in enumerate(body.find_tables(settings), start=1):
                         rows_text = table.extract()
                         rows = []
                         for row_index, row in enumerate(table.rows):
@@ -91,6 +96,10 @@ def extract_pdf(
                                     })
                         tables.append({"number": number, "bbox": _box(table.bbox), "rows": rows})
                 warnings = []
+                sources = make_sources(body, tables)
+                if rotated:
+                    sources.append({'id': f'p{page.page_number}rotated', 'text': ''.join(c['text'] for c in rotated),
+                                    'kind': 'rotated_text', 'bbox': None})
                 if not text.strip():
                     warnings.append("텍스트 레이어가 없거나 읽을 수 없는 페이지입니다. 스캔·빈 페이지 등은 수동 확인이 필요합니다. OCR은 수행하지 않습니다.")
                 elif page.images:
@@ -99,6 +108,7 @@ def extract_pdf(
                     "number": page.page_number, "width": float(page.width),
                     "height": float(page.height), "status": "extracted" if text.strip() else "no_text",
                     "text": text, "words": words, "tables": tables,
+                    "sources": sources,
                     "field_candidates": fields, "warnings": warnings,
                 })
     except PDFPasswordIncorrect as exc:

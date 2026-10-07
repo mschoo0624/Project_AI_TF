@@ -93,6 +93,18 @@ def test_conflicting_documents_and_unreadable_pages():
     assert verify_application([doc], context())['result'] == 'review_required'
 
 
+def test_document_consistency_flag_requires_review_even_when_rules_pass():
+    doc = illness()
+    doc['consistency_issues'] = [{'id': 'diagnosis_narrative_difference',
+        'label': '병명과 치료 소견의 표현 차이', 'message': '담당자가 확인해야 합니다.',
+        'evidence': doc['fields']['inpatient_status']['evidence']}]
+    result = verify_application([doc], context())
+    assert result['result'] == 'review_required'
+    check = next(c for c in result['checks'] if c['id'] == 'diagnosis_narrative_difference')
+    assert check['status'] == 'review'
+    assert check['evidence']
+
+
 def test_scanned_document_for_illness_is_insufficient_evidence():
     doc = document('postponement.illness', {})
     doc['pdf']['status'] = 'no_text'

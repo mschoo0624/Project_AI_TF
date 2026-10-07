@@ -29,10 +29,9 @@ OUT = Path("frontend/public/data.json")
 
 
 def doc_json(d, owner: str) -> dict:
-    # 일부 실제 문서는 생성된 더미 PDF 대신 별도 원본 파일을 사용합니다.
-    # 재학증명서는 실제 발급본을 그대로 열어야 하므로 경로를 강제 교체합니다.
+    # 시연 데이터는 public/pdfs 아래의 샘플 문서만 참조합니다.
     if d.doc_type == DocType.ENROLLMENT:
-        file_path = "/재학증명서.pdf"
+        file_path = "/pdfs/enrollment.pdf"
     else:
         # 파일은 dataset.py 의 "pdfs/employment.pdf" 처럼 상대경로로
         # 들어오므로, 여기서만 Vite public 서빙 경로로 변환합니다.

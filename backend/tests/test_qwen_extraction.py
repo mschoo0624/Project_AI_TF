@@ -26,7 +26,7 @@ def test_evidence_and_date():
 
 
 def test_employment_issue_date_with_incomplete_model_quote():
-    pdf = Path(__file__).resolve().parents[2] / 'frontend/public/pdfs/employment.pdf'
+    pdf = Path(__file__).resolve().parents[2] / 'frontend/public/pdfs/old/employment.pdf'
     def client(messages):
         payload = json.loads(messages[1]['content'])
         output = {key: {'value': None, 'evidence': []} for key in payload['requested_fields']}
@@ -81,8 +81,9 @@ def test_pipeline_conflicts_and_missing(tmp_path, monkeypatch):
     assert result['fields']['subject_name']['value'] is None
     assert result['status'] == 'needs_review'
     assert result['eligibility_decision'] is None
-    with pytest.raises(ex.ModelError):
-        ex.extract_application(pdf, 'postponement.illness', client=lambda _: '{}')
+    failed = ex.extract_application(pdf, 'postponement.illness', client=lambda _: '{}')
+    assert failed['status'] == 'needs_review'
+    assert failed['fields']['subject_name']['status'] == 'invalid'
 
 
 def test_api_rejects_unknown_type_and_invalid_pdf():
