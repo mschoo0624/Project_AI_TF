@@ -1,12 +1,13 @@
-"""Validated profile editing, including atomic military-number changes."""
 import re
 
 from sqlalchemy import delete, update
 from sqlalchemy.orm import Session
 
+from user.app.models.audit_log import AuditLog
 from user.app.models.person import Person
 from user.app.services.assignment import BRANCHES, POSITION_SPECIALTIES
 from user.app.services.training import apply_mobilization_status_change
+from user.app.services.training_recalculation import recalculate_person
 
 STATUSES = {"active": "복무 중", "on_leave": "휴가 중", "inactive": "비활성"}
 MOBILIZATION = ["동원지정", "동원미지정", "학생예비군", "일부보류", "해당없음"]
@@ -25,8 +26,11 @@ def profile_options():
                             for position, (primary, similar) in POSITION_SPECIALTIES.items()}}
 
 
-def save_profile(db: Session, person: Person, values: dict) -> Person:
-    values = {key: value.strip() for key, value in values.items()}
+def save_profile(
+    db: Session, person: Person, values: dict, actor: str = "미인증 요청",
+    actor_user_id: int | None = None,
+) -> Person:
+    values = {key: value.strip() if isinstance(value, str) else value for key, value in values.items()}
     errors = {}
     number = values["military_number"]
     if not number or len(number) > 50 or not re.fullmatch(r"[0-9-]+", number):
@@ -77,8 +81,16 @@ def save_profile(db: Session, person: Person, values: dict) -> Person:
             setattr(person, field, values[field])
         person.unit = values["unit"] or None
         person.specialty = code
+        if "discharge_date" in values:
+            person.discharge_date = values["discharge_date"]
+        if "callup_release_date" in values:
+            person.callup_release_date = values["callup_release_date"]
         if mobilization != (person.mobilization_status or ""):
             apply_mobilization_status_change(db, person, mobilization)
+        recalculate_person(
+            db, person.military_number, 1, "status_change", actor,
+            actor_user_id=actor_user_id,
+        )
         db.commit()
         db.refresh(person)
         return person

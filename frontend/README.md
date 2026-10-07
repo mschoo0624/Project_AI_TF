@@ -34,7 +34,7 @@ cd .\backend
 기존 업무 백엔드(8002) 외에 프로젝트 루트의 별도 터미널에서 새 문서 API를 실행합니다.
 
 ```powershell
-backend/.venv/Scripts/python.exe -m uvicorn backend.classifier_agent.API:app --host 127.0.0.1 --port 8003
+.\backend\.venv\Scripts\python.exe -m uvicorn backend.classifier_agent.API:app --host 127.0.0.1 --port 8003
 ```
 
 Ollama에 `qwen3:4b-instruct`가 설치되어 있어야 합니다. `/classifier-api`는 8003으로 전달됩니다.

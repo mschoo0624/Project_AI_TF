@@ -5,8 +5,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from user.app.models.assignment import Assignment
+from user.app.models.audit_log import AuditLog
 from user.app.models.person import Person
 from user.app.models.squad import Squad
+from user.app.models.user import User
 from user.app.services.assignment import (
     auto_assign_people,
     confirm_assignment_selections,
@@ -125,10 +127,15 @@ def test_suggest_position_for_specialty_accepts_readable_name_and_code() -> None
 def test_confirm_assignment_selections_persists_reviewed_squad_choice() -> None:
     db = make_session()
     db.add_all([Squad(id=1, name="1분대"), Squad(id=2, name="2분대")])
+    actor = User(username="scheduler", password_hash="test-hash", role="scheduler")
+    db.add(actor)
+    db.flush()
     add_person(db, "reviewed", "행정병", "3111 101")
     db.commit()
 
-    result = confirm_assignment_selections(db, [("reviewed", 2)])
+    result = confirm_assignment_selections(
+        db, [("reviewed", 2)], actor_user_id=actor.id, actor_label=actor.username,
+    )
 
     assert result["total_assigned"] == 1
     assert db.get(Person, "reviewed").squad_id == 2
@@ -137,6 +144,9 @@ def test_confirm_assignment_selections_persists_reviewed_squad_choice() -> None:
         {"name": "동원훈련Ⅰ형", "hours": 28}
     ]
     assert db.scalars(select(Assignment)).one().squad_id == 2
+    audit = db.scalars(select(AuditLog).where(AuditLog.action == "assignment.confirm")).one()
+    assert audit.user_id == actor.id
+    assert audit.actor_label == actor.username
     db.close()
 
 
@@ -274,4 +284,77 @@ def test_auto_assign_keeps_overflow_groups_separate() -> None:
     }
     assert all(len(groups) <= 1 for groups in squad_groups.values())
     assert db.get(Person, "navy").squad_id != db.get(Person, "army-00").squad_id
+    db.close()
+
+
+def test_confirm_respects_squad_capacity() -> None:
+    db = make_session()
+    db.add(Squad(id=1, name="1분대"))
+    for index in range(10):
+        add_person(db, f"member-{index}", "행정병", "3111 101", squad_id=1)
+    add_person(db, "eleventh", "행정병", "3111 101")
+    add_person(db, "twelfth", "행정병", "3111 101")
+    db.commit()
+
+    try:
+        confirm_assignment_selections(db, [("eleventh", 1), ("twelfth", 1)])
+    except ValueError as error:
+        assert "정원" in str(error)
+    else:
+        raise AssertionError("정원을 넘는 편성이 허용됨")
+    assert db.get(Person, "eleventh").squad_id is None  # 한 명이라도 넘으면 전체 취소
+
+    confirm_assignment_selections(db, [("eleventh", 1)])
+    assert db.get(Person, "eleventh").squad_id == 1
+
+
+def test_confirm_fills_empty_squad_in_one_batch() -> None:
+    db = make_session()
+    db.add(Squad(id=1, name="1분대"))
+    for index in range(11):
+        add_person(db, f"new-{index}", "행정병", "3111 101")
+    db.commit()
+
+    result = confirm_assignment_selections(db, [(f"new-{index}", 1) for index in range(11)])
+    assert result["total_assigned"] == 11
+
+
+def test_recommend_skips_full_squads_and_shows_positions() -> None:
+    db = make_session()
+    db.add_all([Squad(id=1, name="가득 찬 분대"), Squad(id=2, name="빈자리 분대")])
+    for index in range(11):
+        add_person(db, f"full-{index}", "행정병", "3111 101", squad_id=1)
+    add_person(db, "admin", "행정병", "3111 101", squad_id=2)
+    add_person(db, "signal", "통신병", "171 101", squad_id=2)
+    add_person(db, "new", "소총수", None)
+    db.commit()
+
+    recommendations = recommend_squads_for_person(db, "new")
+    assert [item["squad_id"] for item in recommendations] == [2]
+    assert recommendations[0]["reason"] == "육군 부사관 · 빈자리 9 · 통신병 1 · 행정병 1"
+
+
+def test_zero_year_reservists_are_never_assigned() -> None:
+    db = make_session()
+    db.add(Squad(id=1, name="1분대"))
+    add_person(db, "year-0", "행정병", "3111 101", service_year=0)
+    add_person(db, "year-1", "행정병", "3111 101", service_year=1)
+    db.commit()
+
+    fill_squad_positions(db, 1, {"행정병": 2})
+    assert db.get(Person, "year-0").squad_id is None
+    assert db.get(Person, "year-1").squad_id == 1
+
+    reset_assignment_pool(db)
+    auto_assign_people(db)
+    assert db.get(Person, "year-0").squad_id is None
+    assert db.get(Person, "year-1").squad_id is not None
+
+    reset_assignment_pool(db)
+    try:
+        confirm_assignment_selections(db, [("year-0", 1)])
+    except ValueError as error:
+        assert "0년차" in str(error)
+    else:
+        raise AssertionError("0년차 편성이 허용됨")
     db.close()

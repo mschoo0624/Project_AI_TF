@@ -28,11 +28,88 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
 
     person_columns = {column["name"] for column in inspect(engine).get_columns("person")}
+    user_columns = {column["name"] for column in inspect(engine).get_columns("app_user")}
     education_columns = {column["name"] for column in inspect(engine).get_columns("education")}
+    annual_status_columns = {column["name"] for column in inspect(engine).get_columns("annual_status")}
+    audit_log_columns = {column["name"] for column in inspect(engine).get_columns("audit_log")}
     postponement_columns = {
         column["name"] for column in inspect(engine).get_columns("postponement")
     }
+    audit_columns = {column["name"] for column in inspect(engine).get_columns("audit_log")}
+    copilot_message_columns = {column["name"] for column in inspect(engine).get_columns("copilot_message")}
+    transfer_intake_columns = {
+        column["name"] for column in inspect(engine).get_columns("transfer_intake")
+    }
+    training_schedule_columns = {
+        column["name"] for column in inspect(engine).get_columns("training_schedule")
+    }
+    training_batch_columns = {
+        column["name"]: column for column in inspect(engine).get_columns("training_result_batch")
+    }
     with engine.begin() as connection:
+        if "is_active" not in user_columns:
+            connection.execute(text("ALTER TABLE app_user ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1"))
+        if "version" not in training_schedule_columns:
+            connection.execute(text("ALTER TABLE training_schedule ADD COLUMN version INTEGER NOT NULL DEFAULT 1"))
+        if "demo_early_save_enabled" not in training_schedule_columns:
+            connection.execute(text(
+                "ALTER TABLE training_schedule ADD COLUMN demo_early_save_enabled BOOLEAN NOT NULL DEFAULT 0"
+            ))
+        if "demo_early_save_used" not in training_schedule_columns:
+            connection.execute(text(
+                "ALTER TABLE training_schedule ADD COLUMN demo_early_save_used BOOLEAN NOT NULL DEFAULT 0"
+            ))
+        if training_batch_columns and not training_batch_columns["user_id"]["nullable"]:
+            connection.execute(text("""
+                CREATE TABLE training_result_batch_rebuild (
+                    idempotency_key VARCHAR(128) NOT NULL PRIMARY KEY,
+                    user_id INTEGER NULL,
+                    request_hash VARCHAR(64) NOT NULL,
+                    response_data TEXT NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    FOREIGN KEY(user_id) REFERENCES app_user(id)
+                )
+            """))
+            connection.execute(text("""
+                INSERT INTO training_result_batch_rebuild
+                    (idempotency_key, user_id, request_hash, response_data, created_at)
+                SELECT idempotency_key, user_id, request_hash, response_data, created_at
+                FROM training_result_batch
+            """))
+            connection.execute(text("DROP TABLE training_result_batch"))
+            connection.execute(text(
+                "ALTER TABLE training_result_batch_rebuild RENAME TO training_result_batch"
+            ))
+        for status_key in ("이수", "completed", "참석", "attended"):
+            connection.execute(text("""
+                INSERT OR IGNORE INTO training_status_policy (
+                    status_key, counts_hours, credits_hours, advances_round,
+                    confirmed_absence, enabled, prosecution_kind
+                ) VALUES (:status_key, 1, 0, 0, 0, 1, NULL)
+            """), {"status_key": status_key})
+        for status_key in ("무단불참", "무단_불참", "unexcused_absence"):
+            connection.execute(text("""
+                INSERT OR IGNORE INTO training_status_policy (
+                    status_key, counts_hours, credits_hours, advances_round,
+                    confirmed_absence, enabled, prosecution_kind
+                ) VALUES (:status_key, 0, 0, 1, 1, 1, 'type_i_or_round_3')
+            """), {"status_key": status_key})
+        for status_key in ("연기", "postponed", "보류", "round_hold", "훈련 예정", "scheduled", "overdue"):
+            connection.execute(text("""
+                INSERT OR IGNORE INTO training_status_policy (
+                    status_key, counts_hours, credits_hours, advances_round,
+                    confirmed_absence, enabled, prosecution_kind
+                ) VALUES (:status_key, 0, 0, 0, 0, 1, NULL)
+            """), {"status_key": status_key})
+        early_dismissal_counts_hours = os.getenv(
+            "EARLY_DISMISSAL_COUNTS_HOURS", "true"
+        ).lower() in {"1", "true", "yes"}
+        connection.execute(text("""
+            INSERT OR IGNORE INTO training_status_policy (
+                status_key, counts_hours, credits_hours, advances_round,
+                confirmed_absence, enabled, prosecution_kind
+            ) VALUES ('조기퇴소', :counts_hours, 0, 0, 0, 1, NULL)
+        """), {"counts_hours": int(early_dismissal_counts_hours)})
         connection.execute(
             text(
                 """
@@ -123,6 +200,10 @@ def init_db() -> None:
             connection.execute(
                 text("ALTER TABLE person ADD COLUMN service_year INTEGER")
             )
+        if "discharge_date" not in person_columns:
+            connection.execute(text("ALTER TABLE person ADD COLUMN discharge_date DATE"))
+        if "callup_release_date" not in person_columns:
+            connection.execute(text("ALTER TABLE person ADD COLUMN callup_release_date DATE"))
         if "position" not in person_columns:
             connection.execute(
                 text("ALTER TABLE person ADD COLUMN position VARCHAR(50)")
@@ -143,6 +224,38 @@ def init_db() -> None:
             connection.execute(text("ALTER TABLE education ADD COLUMN training_year INTEGER"))
         if "scheduled_date" not in education_columns:
             connection.execute(text("ALTER TABLE education ADD COLUMN scheduled_date DATE"))
+        if "schedule_id" not in education_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE education ADD COLUMN schedule_id INTEGER "
+                    "REFERENCES training_schedule(id)"
+                )
+            )
+        connection.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_education_schedule_person "
+            "ON education(schedule_id, person_id) WHERE schedule_id IS NOT NULL"
+        ))
+        if "version" not in education_columns:
+            connection.execute(text("ALTER TABLE education ADD COLUMN version INTEGER NOT NULL DEFAULT 1"))
+        if "source_kind" not in education_columns:
+            connection.execute(text("ALTER TABLE education ADD COLUMN source_kind VARCHAR(20) NOT NULL DEFAULT 'attendance'"))
+        if "confirmed_by" not in education_columns:
+            connection.execute(text("ALTER TABLE education ADD COLUMN confirmed_by VARCHAR(100)"))
+        if "confirmed_at" not in education_columns:
+            connection.execute(text("ALTER TABLE education ADD COLUMN confirmed_at DATETIME"))
+        if "semester_completed" not in annual_status_columns:
+            connection.execute(text("ALTER TABLE annual_status ADD COLUMN semester_completed BOOLEAN"))
+        if "actor_label" not in audit_log_columns:
+            connection.execute(text("ALTER TABLE audit_log ADD COLUMN actor_label VARCHAR(100) NOT NULL DEFAULT '미인증 요청'"))
+        if "entity_key" not in audit_log_columns:
+            connection.execute(text("ALTER TABLE audit_log ADD COLUMN entity_key VARCHAR(100)"))
+        if "before_data" not in audit_log_columns:
+            connection.execute(text("ALTER TABLE audit_log ADD COLUMN before_data TEXT"))
+        if "after_data" not in audit_log_columns:
+            connection.execute(text("ALTER TABLE audit_log ADD COLUMN after_data TEXT"))
+        if "created_at" not in audit_log_columns:
+            connection.execute(text("ALTER TABLE audit_log ADD COLUMN created_at DATETIME"))
+        connection.execute(text("UPDATE audit_log SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
         if "training_type" not in education_columns:
             connection.execute(
                 text(
@@ -168,6 +281,34 @@ def init_db() -> None:
             connection.execute(text("ALTER TABLE postponement ADD COLUMN classifier_submission_id VARCHAR(64)"))
         if "approved_at" not in postponement_columns:
             connection.execute(text("ALTER TABLE postponement ADD COLUMN approved_at DATETIME"))
+        for column, column_type in (("source", "VARCHAR(50)"),
+                                    ("trace_id", "VARCHAR(32)"), ("summary", "TEXT"), ("detail", "TEXT")):
+            if column not in audit_columns:
+                connection.execute(text(f"ALTER TABLE audit_log ADD COLUMN {column} {column_type}"))
+        for column, column_type in (("undone_at", "DATETIME"), ("undone_summary", "TEXT")):
+            if column not in copilot_message_columns:
+                connection.execute(text(f"ALTER TABLE copilot_message ADD COLUMN {column} {column_type}"))
+        if "education_record_id" not in postponement_columns:
+            connection.execute(text("ALTER TABLE postponement ADD COLUMN education_record_id INTEGER"))
+        if "start_date" not in postponement_columns:
+            connection.execute(text("ALTER TABLE postponement ADD COLUMN start_date DATE"))
+        if "end_date" not in postponement_columns:
+            connection.execute(text("ALTER TABLE postponement ADD COLUMN end_date DATE"))
+        if "credited_hours" not in postponement_columns:
+            connection.execute(text("ALTER TABLE postponement ADD COLUMN credited_hours INTEGER"))
+        if "resolution_reported_at" not in postponement_columns:
+            connection.execute(text("ALTER TABLE postponement ADD COLUMN resolution_reported_at DATETIME"))
+        if "hold_ended_recalculated_at" not in postponement_columns:
+            connection.execute(text("ALTER TABLE postponement ADD COLUMN hold_ended_recalculated_at DATETIME"))
+        if "decided_by" not in postponement_columns:
+            connection.execute(text("ALTER TABLE postponement ADD COLUMN decided_by VARCHAR(100)"))
+        if "carryovers" not in transfer_intake_columns:
+            connection.execute(text("ALTER TABLE transfer_intake ADD COLUMN carryovers JSON NOT NULL DEFAULT '[]'"))
+        carryover_columns = {
+            column["name"] for column in inspect(engine).get_columns("training_carryover")
+        }
+        if "imported_hours" not in carryover_columns:
+            connection.execute(text("ALTER TABLE training_carryover ADD COLUMN imported_hours INTEGER NOT NULL DEFAULT 0"))
         connection.execute(
             text(
                 "UPDATE person SET service_year = 1 WHERE service_year IS NULL"

@@ -3,6 +3,7 @@ PRAGMA foreign_keys = ON;
 
 DELETE FROM audit_log;
 DELETE FROM postponement;
+DELETE FROM training_notification;
 DELETE FROM education;
 DELETE FROM annual_status;
 DELETE FROM assignment;

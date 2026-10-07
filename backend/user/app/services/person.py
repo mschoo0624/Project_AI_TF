@@ -8,6 +8,7 @@ from user.app.models.education import Education
 from user.app.models.person import Person
 from user.app.schemas.person import PersonCreate
 from user.app.services.training import target_training_hours
+from user.app.services.training_recalculation import recalculate_person
 
 
 def determine_registration_type(previous_training_hours: int | None) -> str:
@@ -17,7 +18,9 @@ def determine_registration_type(previous_training_hours: int | None) -> str:
     return "신규"
 
 
-def create_person(db: Session, payload: PersonCreate) -> Person:
+def create_person(
+    db: Session, payload: PersonCreate, actor_user_id: int | None = None
+) -> Person:
     """Create a new person and differentiate between new and transferred reservists.
 
     Condition:
@@ -64,11 +67,16 @@ def create_person(db: Session, payload: PersonCreate) -> Person:
                     training_round=1,
                     attendance_status="completed",
                     training_hours=allocated,
+                    source_kind="estimated",
                     notes=f"타 부대 전입 이수 훈련시간 ({y}년차)",
                 )
                 db.add(education)
                 remaining_hours -= allocated
 
+    recalculate_person(
+        db, person.military_number, 1, "status_change", "person creation",
+        actor_user_id=actor_user_id,
+    )
     db.commit()
     db.refresh(person)
     return person

@@ -1,0 +1,45 @@
+.training-auth-control { position:relative; height:100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; }
+.training-auth-control>button,.training-auth-popover button { min-height:30px; padding:5px 10px; border:1px solid #cbd5df; border-radius:4px; background:#fff; color:#243342; font-size:12px; }
+.training-auth-identity { max-width:185px; overflow:hidden; color:#4e5b67; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.training-auth-popover { position:absolute; z-index:80; top:42px; right:0; display:grid; width:260px; gap:10px; padding:14px; border:1px solid #d2dbe4; border-radius:5px; background:#fff; box-shadow:0 8px 25px #14283b22; }
+.training-auth-popover label { display:grid; gap:4px; color:#536271; font-size:11px; }
+.training-auth-popover input { min-width:0; height:32px; padding:5px 7px; border:1px solid #cbd5df; border-radius:3px; }
+.training-auth-popover p { margin:0; color:#b42318; font-size:11px; }
+.training-auth-popover .training-auth-switch { border:0; padding:2px 4px; background:transparent; color:#416a58; text-decoration:underline; }
+.training-auth-popover .training-auth-switch:disabled { cursor:wait; opacity:.6; }
+.training-account-form { width:300px; }
+.training-account-form>strong { color:#263a30; font-size:13px; }
+.training-account-form select { min-width:0; height:32px; padding:4px 7px; border:1px solid #cbd5df; border-radius:3px; background:#fff; color:#243342; font:inherit; }
+.training-auth-popover .training-account-success { color:#246744; }
+.training-login-page { min-height:100vh; display:grid; place-items:center; padding:32px; box-sizing:border-box; background-color:#edf1ee; background-image:linear-gradient(#23493b0a 1px,transparent 1px),linear-gradient(90deg,#23493b0a 1px,transparent 1px); background-size:32px 32px; }
+.training-login-panel { width:min(920px,100%); min-height:540px; display:grid; grid-template-columns:.92fr 1.08fr; overflow:hidden; border:1px solid #d2dad5; border-radius:6px; background:#fff; box-shadow:0 22px 60px #182a2418; }
+.training-login-brand { position:relative; display:flex; flex-direction:column; justify-content:center; overflow:hidden; padding:56px 48px; background:#173d34; color:#f4f6f2; }
+.training-login-brand>span:first-child { z-index:1; color:#c2d5c8; font-size:12px; }
+.training-login-brand h1 { z-index:1; margin:22px 0 16px; font-size:38px; font-weight:600; line-height:1.28; }
+.training-login-brand p { z-index:1; margin:0; color:#d5e0d8; font-size:14px; line-height:1.9; }
+.training-login-mark { position:absolute; right:-24px; bottom:-118px; color:#ffffff0b; font-family:'Space Mono',monospace; font-size:280px; font-weight:700; line-height:1; }
+.training-login-form { display:flex; flex-direction:column; justify-content:center; gap:18px; padding:60px clamp(28px,7vw,76px); }
+.training-login-heading>span { color:#567566; font-family:'Space Mono',monospace; font-size:10px; }
+.training-login-heading h2 { margin:10px 0 6px; color:#202d28; font-size:28px; font-weight:600; }
+.training-login-heading p,.training-login-footnote { margin:0; color:#68756e; font-size:13px; line-height:1.7; }
+.training-login-form>label { display:grid; gap:7px; color:#3b4b43; font-size:13px; font-weight:500; }
+.training-login-form>label input { width:100%; height:44px; box-sizing:border-box; padding:0 12px; border:1px solid #cbd5cf; border-radius:3px; color:#1f2d27; font:inherit; outline:none; }
+.training-login-form>label input:focus { border-color:#2f7258; box-shadow:0 0 0 3px #2f72581c; }
+.training-login-submit { min-height:46px; margin-top:4px; border:0; border-radius:3px; background:#1c5b43; color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+.training-login-submit:hover:not(:disabled) { background:#144833; }
+.training-login-submit:disabled { cursor:wait; opacity:.7; }
+.training-login-error { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0; color:#a12f27; font-size:12px; line-height:1.6; }
+.training-login-error button { flex:none; border:1px solid #d8b7b3; border-radius:3px; padding:6px 9px; background:#fff; color:#7d2923; font:inherit; cursor:pointer; }
+.training-login-notice { margin:0; color:#52635a; font-size:12px; }
+.training-login-footnote { margin-top:2px; font-size:11px; }
+.training-login-switch { align-self:center; border:0; padding:3px 8px; background:transparent; color:#416a58; font:inherit; font-size:12px; text-decoration:underline; cursor:pointer; }
+.training-login-switch:disabled { cursor:wait; opacity:.6; }
+@media (max-width:680px) {
+	.training-login-page { padding:16px; }
+	.training-login-panel { min-height:0; grid-template-columns:1fr; }
+	.training-login-brand { min-height:200px; padding:28px 30px; }
+	.training-login-brand h1 { margin:12px 0 8px; font-size:30px; }
+	.training-login-brand p { font-size:12px; }
+	.training-login-mark { right:-8px; bottom:-100px; font-size:220px; }
+	.training-login-form { padding:32px 28px 36px; }
+}

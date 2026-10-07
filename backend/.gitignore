@@ -1,2 +1,4 @@
 __pycache__/
 *.py[cod]
+/project_ai_tf.db
+/tests

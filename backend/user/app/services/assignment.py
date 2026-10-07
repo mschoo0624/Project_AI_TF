@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from user.app.models.assignment import Assignment
+from user.app.models.audit_log import AuditLog
 from user.app.models.organization import OrganizationNode
 from user.app.models.person import Person
 from user.app.models.squad import Squad
+from user.app.services.audit import record_change
 
 POSITION_SPECIALTIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 	"행정병": (("3111101",), ("311102",)),
@@ -67,6 +70,49 @@ NCO_RANKS = {"하사", "중사", "상사", "원사"}
 OFFICER_RANKS = {"소위", "중위", "대위", "소령", "중령", "대령"}
 BRANCHES = ("육군", "해군", "공군", "해병대")
 PERSONNEL_CATEGORIES = ("병사", "부사관", "장교")
+
+
+MIN_ASSIGNABLE_SERVICE_YEAR = 1  # 0년차는 편성 대상이 아니다.
+
+
+def is_assignable(person: Person) -> bool:
+	return (
+		person.status == "active"
+		and person.service_year is not None
+		and person.service_year >= MIN_ASSIGNABLE_SERVICE_YEAR
+	)
+
+
+def not_assignable_reason(person: Person) -> str:
+	if person.status != "active":
+		return "비활성 인원"
+	if person.service_year is None:
+		return "연차 미등록"
+	return f"{person.service_year}년차는 편성 대상 아님"
+
+
+# SQL 조건 버전 (service_year가 NULL이면 비교 결과도 거짓이라 함께 제외된다)
+ASSIGNABLE_CONDITIONS = (
+	Person.status == "active",
+	Person.service_year >= MIN_ASSIGNABLE_SERVICE_YEAR,
+)
+def _audit_assignment(
+	db: Session,
+	actor_user_id: int | None,
+	actor_label: str,
+	action: str,
+	before: dict[str, object],
+	after: dict[str, object],
+) -> None:
+	db.add(AuditLog(
+		user_id=actor_user_id,
+		action=action,
+		table_name="assignment",
+		actor_label=actor_label,
+		before_data=json.dumps(before, ensure_ascii=False, sort_keys=True),
+		after_data=json.dumps(after, ensure_ascii=False, sort_keys=True),
+		created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+	))
 
 
 @dataclass(frozen=True)
@@ -196,6 +242,8 @@ def fill_squad_positions(
 	position_quotas: dict[str, int] | dict[str, dict[str, int]],
 	branch_order: tuple[str, ...] = BRANCHES,
 	allow_branch_merge: bool = True,
+	actor_user_id: int | None = None,
+	actor_label: str = "system",
 ) -> dict[str, object]:
 	"""Fill one squad from the shared, unassigned candidate pool."""
 	for quota in position_quotas.values():
@@ -209,7 +257,7 @@ def fill_squad_positions(
 		remaining = list(
 			db.scalars(
 				select(Person).where(
-					Person.status == "active",
+					*ASSIGNABLE_CONDITIONS,
 					Person.squad_id.is_(None),
 				)
 			).all()
@@ -267,8 +315,10 @@ def fill_squad_positions(
 				"assigned": assigned,
 				"shortfall": requested - len(assigned),
 			}
-		db.commit()
-		return {
+		filled = [{**item, "squad_id": squad_id} for position in positions.values() for item in position["assigned"]]
+		if filled:
+			record_change(db, "assign", f"{squad_id}번 분대 직책별 채우기 {len(filled)}명", filled)
+		result = {
 			"squad_id": squad_id,
 			"positions": positions,
 			"total_requested": sum(
@@ -278,6 +328,14 @@ def fill_squad_positions(
 			"total_assigned": assigned_total,
 			"total_shortfall": sum(item["shortfall"] for item in positions.values()),
 		}
+		_audit_assignment(
+			db, actor_user_id, actor_label, "assignment.fill_squad",
+			{"total_assigned": 0},
+			{"squad_id": squad_id, "total_assigned": assigned_total,
+			 "total_shortfall": result["total_shortfall"]},
+		)
+		db.commit()
+		return result
 	except Exception:
 		db.rollback()
 		raise
@@ -291,7 +349,7 @@ def available_assignment_candidates(
 	people = list(
 		db.scalars(
 			select(Person).where(
-				Person.status == "active",
+				*ASSIGNABLE_CONDITIONS,
 				Person.squad_id.is_(None),
 			)
 		).all()
@@ -320,6 +378,10 @@ def available_assignment_candidates(
 def confirm_assignment_selections(
 	db: Session,
 	selections: Iterable[tuple[str, int]],
+	*,
+	commit: bool = True,
+	actor_user_id: int | None = None,
+	actor_label: str = "system",
 ) -> dict[str, object]:
 	"""Persist a reviewed assignment proposal as one atomic operation."""
 	selection_list = list(selections)
@@ -329,14 +391,16 @@ def confirm_assignment_selections(
 	try:
 		assigned = []
 		selected_groups: dict[int, tuple[str | None, str]] = {}
+		before: dict[int, int] = {}
+		added: dict[int, int] = {}
 		for person_id, squad_id in selection_list:
 			if db.get(Squad, squad_id) is None:
 				raise ValueError(f"Squad {squad_id} not found")
 			person = db.get(Person, person_id)
 			if person is None:
 				raise ValueError(f"Person {person_id} not found")
-			if person.service_year is None or person.status != "active":
-				raise ValueError(f"Person {person_id} is not eligible for assignment")
+			if not is_assignable(person):
+				raise ValueError(f"Person {person_id} is not eligible for assignment ({not_assignable_reason(person)})")
 			if person.squad_id is not None:
 				raise ValueError(f"Person {person_id} is already assigned")
 			person_group = (person.branch, personnel_category(person.rank))
@@ -349,6 +413,12 @@ def confirm_assignment_selections(
 			}
 			if existing_groups and existing_groups != {person_group}:
 				raise ValueError("A squad cannot mix branches or personnel categories")
+			if squad_id not in before:
+				# 이 승인에서 넣기 전의 인원을 한 번만 센다(이후 추가분은 added로 센다).
+				before[squad_id] = db.scalar(select(func.count()).select_from(Person).where(Person.squad_id == squad_id)) or 0
+			if before[squad_id] + added.get(squad_id, 0) >= squad_capacity(db, squad_id):
+				raise ValueError(f"{squad_id}번 분대는 정원({squad_capacity(db, squad_id)}명)이 찼습니다.")
+			added[squad_id] = added.get(squad_id, 0) + 1
 			selected_groups[squad_id] = person_group
 			person.squad_id = squad_id
 			set_assignment_mobilization_status(db, person, True)
@@ -361,14 +431,26 @@ def confirm_assignment_selections(
 				)
 			)
 			assigned.append({"military_number": person_id, "name": person.name, "squad_id": squad_id})
-		db.commit()
-		return {"total_assigned": len(assigned), "assigned": assigned}
+		result = {"total_assigned": len(assigned), "assigned": assigned}
+		if assigned:
+			record_change(db, "assign", f"편성 {len(assigned)}명", assigned)
+			_audit_assignment(
+				db, actor_user_id, actor_label, "assignment.confirm",
+				{"total_assigned": 0}, {"total_assigned": len(assigned)},
+			)
+		if commit:
+			db.commit()
+		return result
 	except Exception:
 		db.rollback()
 		raise
 
 
-def reset_assignment_pool(db: Session) -> dict[str, int]:
+def reset_assignment_pool(
+	db: Session,
+	actor_user_id: int | None = None,
+	actor_label: str = "system",
+) -> dict[str, int]:
 	"""Move every reservist back to the temporary, unassigned pool."""
 	try:
 		assigned_people = list(db.scalars(select(Person).where(Person.squad_id.is_not(None))).all())
@@ -377,6 +459,12 @@ def reset_assignment_pool(db: Session) -> dict[str, int]:
 			set_assignment_mobilization_status(db, person, False)
 		reset_count = len(assigned_people)
 		db.query(Assignment).delete(synchronize_session=False)
+		if reset_count:
+			record_change(db, "release", f"전체 편성 초기화 {reset_count}명", {"count": reset_count})
+			_audit_assignment(
+				db, actor_user_id, actor_label, "assignment.reset",
+				{"assigned_count": reset_count}, {"assigned_count": 0},
+			)
 		db.commit()
 		return {"reset_count": reset_count}
 	except Exception:
@@ -387,16 +475,18 @@ def reset_assignment_pool(db: Session) -> dict[str, int]:
 def auto_assign_people(
 	db: Session,
 	limit: int | None = None,
+	actor_user_id: int | None = None,
+	actor_label: str = "system",
 ) -> dict[str, object]:
 	"""Reset assignments and distribute people by branch and personnel category."""
 	if limit is not None and limit < 1:
 		raise ValueError("Assignment limit must be positive")
 
 	try:
-		reset_assignment_pool(db)
+		reset_assignment_pool(db, actor_user_id, actor_label)
 		people = list(
 			db.scalars(
-				select(Person).where(Person.status == "active").order_by(Person.military_number)
+				select(Person).where(*ASSIGNABLE_CONDITIONS).order_by(Person.military_number)
 			).all()
 		)
 		squads = list(db.scalars(select(Squad).order_by(Squad.id)).all())
@@ -469,8 +559,17 @@ def auto_assign_people(
 					"tier": candidate.tier,
 				})
 				assigned_count += 1
+		result = {"total_assigned": len(assigned), "assigned": assigned}
+		if assigned:
+			record_change(db, "assign", f"전체 자동 편성 {len(assigned)}명", [
+				{key: item[key] for key in ("military_number", "name", "squad_id")} for item in assigned
+			])
+			_audit_assignment(
+				db, actor_user_id, actor_label, "assignment.auto",
+				{"total_assigned": 0}, {"total_assigned": len(assigned)},
+			)
 		db.commit()
-		return {"total_assigned": len(assigned), "assigned": assigned}
+		return result
 	except Exception:
 		db.rollback()
 		raise
@@ -483,10 +582,33 @@ def recommend_squads_for_person(db: Session, person_id: str) -> list[dict[str, o
 		raise ValueError(f"Person {person_id} not found")
 	if person.squad_id is not None:
 		raise ValueError(f"Person {person_id} is already assigned")
+	return recommend_squads_for(db, person)
+
+
+def squad_capacity(db: Session, squad_id: int) -> int:
+	return db.scalar(select(OrganizationNode.planned_strength).where(OrganizationNode.squad_id == squad_id)) or 11
+
+
+def recommend_squads_for(
+	db: Session,
+	person: Person,
+	exclude_squad_ids: Iterable[int] = (),
+) -> list[dict[str, object]]:
+	"""Rank squads that have room for a person; the person may be transient (e.g. a pending transfer preview).
+
+	Squads at capacity are never recommended. exclude_squad_ids is used when moving an
+	assigned person to another squad (재편성).
+	"""
 	group = (person.branch, personnel_category(person.rank))
+	excluded = set(exclude_squad_ids)
 	candidates = []
 	for squad in db.scalars(select(Squad).order_by(Squad.id)).all():
-		members = list(squad.persons)
+		if squad.id in excluded:
+			continue
+		members = [member for member in squad.persons if member.military_number != person.military_number]
+		capacity = squad_capacity(db, squad.id)
+		if len(members) >= capacity:
+			continue
 		groups = {(member.branch, personnel_category(member.rank)) for member in members}
 		if groups and groups != {group}:
 			continue
@@ -503,10 +625,57 @@ def recommend_squads_for_person(db: Session, person_id: str) -> list[dict[str, o
 			"current_count": len(members),
 			"same_position_count": position_count,
 			"same_tier_count": matching_specialty_count,
-			"reason": f"{person.branch} {personnel_category(person.rank)} 호환 · {person.position or '직책 미지정'} 균형",
+			"reason": f"{person.branch} {personnel_category(person.rank)} · 빈자리 {capacity - len(members)} · {_position_mix(members)}",
 			"score": (len(members), position_count, matching_specialty_count, squad.id),
 		})
 	return sorted(candidates, key=lambda item: item["score"])[:3]
+
+
+def _position_mix(members: list[Person]) -> str:
+	"""분대의 실제 직책 구성: "행정병 10 · 병기취급병 1". 비어 있으면 "빈 분대"."""
+	counts: dict[str, int] = {}
+	for member in members:
+		position = member.position or "직책 미지정"
+		counts[position] = counts.get(position, 0) + 1
+	if not counts:
+		return "빈 분대"
+	return " · ".join(f"{position} {count}" for position, count in sorted(counts.items(), key=lambda pair: (-pair[1], pair[0])))
+
+
+def reassign_person(db: Session, person_id: str, squad_id: int) -> dict[str, object]:
+	"""Move an assigned person to another squad in one transaction (재편성).
+
+	Same rules as confirm_assignment_selections: the person must be assignable and the
+	target squad must not mix branch or personnel category; it must also have room.
+	"""
+	try:
+		person = db.get(Person, person_id)
+		if person is None:
+			raise ValueError(f"Person {person_id} not found")
+		if not is_assignable(person):
+			raise ValueError(f"Person {person_id} is not eligible for assignment ({not_assignable_reason(person)})")
+		if db.get(Squad, squad_id) is None:
+			raise ValueError(f"Squad {squad_id} not found")
+		if person.squad_id == squad_id:
+			raise ValueError("이미 그 분대에 편성돼 있습니다.")
+		members = [member for member in db.scalars(select(Person).where(Person.squad_id == squad_id)).all()]
+		groups = {(member.branch, personnel_category(member.rank)) for member in members}
+		if groups and groups != {(person.branch, personnel_category(person.rank))}:
+			raise ValueError("A squad cannot mix branches or personnel categories")
+		if len(members) >= squad_capacity(db, squad_id):
+			raise ValueError("옮길 분대에 빈자리가 없습니다.")
+		previous = person.squad_id
+		db.query(Assignment).filter(Assignment.person_id == person_id).delete(synchronize_session=False)
+		person.squad_id = squad_id
+		set_assignment_mobilization_status(db, person, True)
+		db.add(Assignment(person_id=person_id, squad_id=squad_id, assigned_date=date.today(), status="assigned"))
+		moved = {"military_number": person_id, "name": person.name, "from_squad_id": previous, "squad_id": squad_id}
+		record_change(db, "move", f"재편성 {person.name} ({previous}번 → {squad_id}번 분대)", [moved])
+		db.commit()
+		return moved
+	except Exception:
+		db.rollback()
+		raise
 
 
 def grouped_candidates(

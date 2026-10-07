@@ -1,4 +1,8 @@
+from datetime import date
+
 from fastapi import HTTPException
+from pydantic import ValidationError
+import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -9,6 +13,7 @@ from user.app.models.education import Education
 from user.app.models.person import Person
 from user.app.models.squad import Squad
 from user.app.models.transfer_intake import TransferIntake
+from user.app.models.training_recalculation import TrainingCarryover, TrainingRoundState, TrainingYearResult
 from user.app.schemas.transfer_intake import (
 	TransferIntakeCreate,
 	TransferPersonDetails,
@@ -98,7 +103,7 @@ def test_transfer_confirmation_requires_compatible_squad() -> None:
 	db.close()
 
 
-def test_officer_type_two_makeup_round_accepts_32_hours() -> None:
+def test_officer_type_two_round_accepts_28_hours() -> None:
 	payload = TransferIntakeCreate(
 		person=TransferPersonDetails(
 			military_number="26-70000031",
@@ -115,7 +120,7 @@ def test_officer_type_two_makeup_round_accepts_32_hours() -> None:
 				training_year=2026,
 				training_type="동원훈련Ⅱ형",
 				training_round=2,
-				training_hours=32,
+				training_hours=28,
 			),
 		],
 	)
@@ -123,6 +128,89 @@ def test_officer_type_two_makeup_round_accepts_32_hours() -> None:
 
 	transfer = submit_transfer_intake(payload, db)
 	assert transfer.status == "pending"
+	db.close()
+
+
+def test_officer_type_two_repeated_failed_attempts_allow_32_hour_makeup() -> None:
+	payload = TransferIntakeCreate(
+		person=TransferPersonDetails(
+			military_number="26-70000033",
+			name="간부 보충훈련 전입",
+			branch="육군",
+			rank="하사",
+			service_year=1,
+			position="분대장",
+			mobilization_status="동원미지정",
+		),
+		training_records=[
+			TransferTrainingRecord(
+				service_year=1,
+				training_year=2026,
+				training_type="동원훈련Ⅱ형",
+				training_round=1,
+				training_hours=0,
+				attendance_status="무단불참",
+				confirmed_by="확인자",
+			),
+			TransferTrainingRecord(
+				service_year=1,
+				training_year=2026,
+				training_type="동원훈련Ⅱ형",
+				training_round=2,
+				training_hours=0,
+				attendance_status="연기",
+			),
+			TransferTrainingRecord(
+				service_year=1,
+				training_year=2026,
+				training_type="동원훈련Ⅱ형",
+				training_round=3,
+				training_hours=32,
+			),
+		],
+	)
+	db = make_session()
+
+	transfer = submit_transfer_intake(payload, db)
+
+	assert transfer.status == "pending"
+	db.close()
+
+
+def test_single_officer_type_two_failure_does_not_enable_32_hour_makeup() -> None:
+	payload = TransferIntakeCreate(
+		person=TransferPersonDetails(
+			military_number="26-70000034",
+			name="간부 단일 불참 전입",
+			branch="육군",
+			rank="하사",
+			service_year=1,
+			position="분대장",
+			mobilization_status="동원미지정",
+		),
+		training_records=[
+			TransferTrainingRecord(
+				service_year=1,
+				training_year=2026,
+				training_type="동원훈련Ⅱ형",
+				training_round=1,
+				training_hours=0,
+				attendance_status="무단불참",
+				confirmed_by="확인자",
+			),
+			TransferTrainingRecord(
+				service_year=1,
+				training_year=2026,
+				training_type="동원훈련Ⅱ형",
+				training_round=2,
+				training_hours=32,
+			),
+		],
+	)
+	db = make_session()
+
+	with pytest.raises(HTTPException, match="28-hour requirement"):
+		submit_transfer_intake(payload, db)
 	db.close()
 
 
@@ -157,3 +245,78 @@ def test_officer_type_two_carryover_uses_32_hour_target() -> None:
 	transfer = submit_transfer_intake(payload, db)
 	assert transfer.status == "pending"
 	db.close()
+
+
+def test_transfer_preserves_confirmed_round_one_absence_and_current_year_completion() -> None:
+	db = make_session()
+	db.add(Squad(id=1, name="육군 병사 1분대"))
+	db.commit()
+	payload = TransferIntakeCreate(
+		person=TransferPersonDetails(
+			military_number="26-70000040",
+			name="차수 전입",
+			branch="육군",
+			rank="병장",
+			service_year=2,
+			position="소총수",
+			mobilization_status="동원미지정",
+		),
+		training_records=[
+			TransferTrainingRecord(
+				service_year=1,
+				training_year=date.today().year - 1,
+				training_type="동원훈련Ⅱ형",
+				training_round=1,
+				training_hours=0,
+				attendance_status="무단불참",
+				confirmed_by="전 소속 확인자",
+			),
+			TransferTrainingRecord(
+				service_year=1,
+				training_year=date.today().year - 1,
+				training_type="동원훈련Ⅱ형",
+				training_round=2,
+				training_hours=0,
+				attendance_status="무단불참",
+				confirmed_by="전 소속 확인자",
+			),
+			TransferTrainingRecord(
+				service_year=2,
+				training_year=date.today().year,
+				training_type="기본훈련",
+				training_round=1,
+				training_hours=8,
+			),
+		],
+	)
+	transfer = submit_transfer_intake(payload, db)
+	confirm_transfer_intake(transfer.id, db)
+
+	carryover = db.scalars(select(TrainingCarryover).where(
+		TrainingCarryover.person_id == payload.person.military_number,
+		TrainingCarryover.origin_year == 1,
+	)).one()
+	round_state = db.scalars(select(TrainingRoundState).where(
+		TrainingRoundState.person_id == payload.person.military_number,
+		TrainingRoundState.training_type == "동원훈련Ⅱ형",
+	)).one()
+	current_result = db.scalars(select(TrainingYearResult).where(
+		TrainingYearResult.person_id == payload.person.military_number,
+		TrainingYearResult.service_year == 2,
+		TrainingYearResult.training_type == "동원훈련Ⅰ형",
+	)).one()
+	assert carryover.current_round == 3
+	assert round_state.current_round == 3
+	assert current_result.unmet_hours == 0
+	db.close()
+
+
+def test_transfer_no_show_requires_confirming_person() -> None:
+	with pytest.raises(ValidationError, match="confirmed_by"):
+		TransferTrainingRecord(
+			service_year=1,
+			training_year=2025,
+			training_type="동원훈련Ⅰ형",
+			training_hours=0,
+			attendance_status="무단불참",
+		)
