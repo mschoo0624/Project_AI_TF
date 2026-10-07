@@ -203,6 +203,10 @@ function UndoBox({ undo, onStart, onConfirm, onClose }: {
     <p>↩ 되돌림{undo.at && <small> · {formatTime(undo.at)}</small>}</p>
     {undo.message && <p>{undo.message}</p>}
     <SkippedList skipped={undo.skipped ?? []} />
+    {/* 건너뛴 인원이 있으면 마저 되돌릴 수 있습니다. 다시 연 대화에는 명단이 없어 안내 문구로 판단합니다. */}
+    {(undo.skipped?.length || undo.message?.includes('건너뛰었습니다')) && <div className="copilot-proposal-actions">
+      <button type="button" onClick={onStart}>↩ 남은 인원 마저 되돌리기</button>
+    </div>}
   </div>
   if (undo.status === 'loading') return <p className="copilot-undo">되돌릴 내용을 확인하는 중…</p>
   const steps = undo.preview?.steps ?? []
@@ -213,7 +217,7 @@ function UndoBox({ undo, onStart, onConfirm, onClose }: {
       <ul className="copilot-undo-steps">
         {steps.map(step => <li key={step.person_id}>{step.name}({step.person_id}) <small>{step.now} → {step.after}</small></li>)}
       </ul>
-    </> : <p><b>되돌릴 수 있는 인원이 없어요.</b> 모두 이후에 다시 바뀌었거나 원래 자리로 돌아갈 수 없어요.</p>}
+    </> : <p><b>되돌릴 수 있는 인원이 없어요.</b> 모두 이후에 다시 바뀌었거나 원래 분대가 없어졌어요.</p>}
     <SkippedList skipped={undo.preview?.skipped ?? []} />
     <div className="copilot-proposal-actions">
       <button type="button" onClick={onClose} disabled={undo.status === 'saving'}>{steps.length ? '취소' : '닫기'}</button>

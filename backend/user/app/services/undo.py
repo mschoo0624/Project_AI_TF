@@ -15,9 +15,7 @@ from user.app.models.assignment import Assignment
 from user.app.models.audit_log import AuditLog
 from user.app.models.person import Person
 from user.app.models.squad import Squad
-from user.app.services.assignment import (
-	is_assignable, not_assignable_reason, personnel_category, set_assignment_mobilization_status, squad_capacity,
-)
+from user.app.services.assignment import set_assignment_mobilization_status
 from user.app.services.audit import record_change
 
 UNDOABLE = ("assign", "move", "release")
@@ -43,6 +41,7 @@ class UndoPlan:
 	changes: list[AuditLog]
 	steps: list[UndoStep] = field(default_factory=list)
 	skipped: list[Skipped] = field(default_factory=list)
+	already: int = 0  # 앞선 되돌리기에서 이미 되돌린 인원
 
 
 def changes_for(db: Session, trace_id: str) -> list[AuditLog]:
@@ -60,14 +59,26 @@ def _items(change: AuditLog) -> list[dict[str, object]]:
 	return [item for item in detail if isinstance(item, dict) and "military_number" in item] if isinstance(detail, list) else []
 
 
+def _already_undone(db: Session, trace_id: str) -> set[str]:
+	"""앞선 되돌리기에서 이미 되돌린 인원. 남은 인원만 마저 되돌릴 수 있게 한다."""
+	done = db.scalars(select(AuditLog).where(AuditLog.trace_id == trace_id, AuditLog.action == "undo")).all()
+	return {str(item["military_number"]) for change in done for item in _items(change)}
+
+
 def plan_undo(db: Session, trace_id: str, label: Callable[[int], str]) -> UndoPlan:
-	"""What undoing this approval would do now. Changes nothing."""
+	"""What undoing this approval would do now. Changes nothing.
+
+	되돌리기는 승인 전 상태로 그대로 돌려놓는다. 새로 편성할 때의 규칙(0년차, 정원, 군별)은 따지지 않는다.
+	건너뛰는 경우는 그 뒤에 다시 바뀐 사람(나중 변경을 덮어쓰지 않음)과 원래 분대가 없어진 경우뿐이다.
+	"""
 	plan = UndoPlan(changes_for(db, trace_id))
-	# 같은 되돌리기 안에서 분대에 다시 넣는 인원도 정원·군별에 센다.
-	added: dict[int, list[Person]] = {}
+	already = _already_undone(db, trace_id)
 	for change in plan.changes:
 		for item in _items(change):
 			number = str(item["military_number"])
+			if number in already:
+				plan.already += 1
+				continue
 			person = db.get(Person, number)
 			name = str(item.get("name") or number)
 			if person is None:
@@ -83,28 +94,19 @@ def plan_undo(db: Session, trace_id: str, label: Callable[[int], str]) -> UndoPl
 				# 편성을 되돌리거나, 미편성이던 사람을 옮긴 것을 되돌리면 해제한다.
 				plan.steps.append(UndoStep(number, person.name, person.squad_id, None))
 				continue
-			reason = _cannot_return(db, person, back, added)
+			reason = _cannot_return(db, back)
 			if reason:
 				plan.skipped.append(Skipped(number, person.name, reason))
 				continue
-			added.setdefault(int(back), []).append(person)
 			plan.steps.append(UndoStep(number, person.name, person.squad_id, int(back)))
 	return plan
 
 
-def _cannot_return(db: Session, person: Person, squad_id: object, added: dict[int, list[Person]]) -> str | None:
+def _cannot_return(db: Session, squad_id: object) -> str | None:
 	if not isinstance(squad_id, int):
 		return "원래 분대가 기록되지 않음"
 	if db.get(Squad, squad_id) is None:
 		return "원래 분대가 삭제됨"
-	if not is_assignable(person):
-		return f"지금은 편성 대상이 아님 ({not_assignable_reason(person)})"
-	members = [*db.scalars(select(Person).where(Person.squad_id == squad_id)).all(), *added.get(squad_id, [])]
-	if len(members) >= squad_capacity(db, squad_id):
-		return "원래 분대 정원이 참"
-	group = (person.branch, personnel_category(person.rank))
-	if any((member.branch, personnel_category(member.rank)) != group for member in members):
-		return "원래 분대에 다른 군별·신분 인원이 있음"
 	return None
 
 
@@ -114,7 +116,7 @@ def apply_undo(db: Session, trace_id: str, label: Callable[[int], str]) -> UndoP
 	if not plan.changes:
 		raise ValueError("되돌릴 변경 기록이 없습니다.")
 	if not plan.steps:
-		raise ValueError("되돌릴 수 있는 인원이 없습니다. 모두 이후에 다시 바뀌었거나 원래 분대로 돌아갈 수 없습니다.")
+		raise ValueError("되돌릴 수 있는 인원이 없습니다. 모두 이후에 다시 바뀌었거나 원래 분대가 없어졌습니다.")
 	try:
 		for step in plan.steps:
 			person = db.get(Person, step.military_number)

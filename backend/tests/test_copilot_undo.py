@@ -148,20 +148,46 @@ def test_moved_again_on_screen_is_skipped() -> None:
 	assert squad_of(db, "a") == 1
 
 
-def test_returning_skips_full_squad_and_unassignable_person() -> None:
+def test_undo_restores_exactly_even_past_assignment_rules() -> None:
+	"""되돌리기는 새 편성이 아니다. 0년차·정원 규칙에 걸려도 승인 전 상태로 돌려놓는다."""
 	db = make_session()
 	seed(db)
 	add_person(db, "z", 1, service_year=0)  # 예전에 잘못 편성된 0년차
 	db.commit()
 	trace = approved(db, "1소대 1분대 비워줘", ApplyRequest(kind="release", person_ids=["a", "b", "z"]))
 	db.get(OrganizationNode, 11).planned_strength = 1  # 이제 1분대 정원은 1명
+	db.commit()
 
 	preview = preview_undo(trace, client_id=ME, db=db)
-	assert [step.person_id for step in preview.steps] == ["a"]
-	assert {item.person_id: item.reason for item in preview.skipped} == {
-		"b": "원래 분대 정원이 참",
-		"z": "지금은 편성 대상이 아님 (0년차는 편성 대상 아님)",
-	}
+	assert sorted(step.person_id for step in preview.steps) == ["a", "b", "z"]
+	assert preview.skipped == []
+	assert undo(trace, UndoRequest(client_id=ME), db).message == "3명을 되돌렸습니다."
+	assert [squad_of(db, number) for number in ("a", "b", "z")] == [1, 1, 1]
+
+
+def test_partly_undone_change_can_be_finished() -> None:
+	"""예전 규칙으로 일부만 되돌린 변경은 남은 인원만 마저 되돌린다."""
+	import json
+
+	from user.app.copilot import history
+
+	db = make_session()
+	seed(db)
+	trace = approved(db, "1소대 1분대 비워줘", ApplyRequest(kind="release", person_ids=["a", "b"]))
+	# a만 되돌린 상태를 만든다.
+	db.get(Person, "a").squad_id = 1
+	db.add(AuditLog(action="undo", trace_id=trace, summary="되돌리기 1명",
+		detail=json.dumps([{"military_number": "a", "name": "a", "squad_id": 1}])))
+	history.mark_undone(db, history._message(db, trace), "1명을 되돌렸습니다. 1명은 건너뛰었습니다.")
+
+	preview = preview_undo(trace, client_id=ME, db=db)
+	assert [step.person_id for step in preview.steps] == ["b"]
+	assert undo(trace, UndoRequest(client_id=ME), db).message == "남은 1명을 마저 되돌렸습니다."
+	assert squad_of(db, "a") == 1 and squad_of(db, "b") == 1
+
+	with pytest.raises(HTTPException) as error:
+		undo(trace, UndoRequest(client_id=ME), db)
+	assert (error.value.status_code, error.value.detail) == (409, "이미 되돌린 변경입니다.")
 
 
 def test_undo_once_only_and_only_by_owner() -> None:

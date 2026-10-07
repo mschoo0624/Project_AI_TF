@@ -195,9 +195,13 @@ def _undoable(db: Session, trace_id: str, client_id: str) -> CopilotMessage:
 		raise HTTPException(status_code=404, detail="이 대화의 제안을 찾을 수 없습니다.")
 	if message.applied_at is None:
 		raise HTTPException(status_code=409, detail="승인하지 않은 제안이라 되돌릴 변경이 없습니다.")
-	if message.undone_at is not None:
-		raise HTTPException(status_code=409, detail="이미 되돌린 변경입니다.")
 	return message
+
+
+def _nothing_left(message: CopilotMessage, plan: UndoPlan) -> None:
+	"""한 번 되돌렸어도 남은 인원이 있으면 마저 되돌릴 수 있다."""
+	if message.undone_at is not None and not plan.steps:
+		raise HTTPException(status_code=409, detail="이미 되돌린 변경입니다.")
 
 
 def _skipped(plan: UndoPlan) -> list[UndoSkipView]:
@@ -207,9 +211,10 @@ def _skipped(plan: UndoPlan) -> list[UndoSkipView]:
 @router.get("/undo/{trace_id}", response_model=UndoPreview)
 def preview_undo(trace_id: str, client_id: str = Query(pattern=CLIENT_ID_PATTERN), db: Session = Depends(get_db)) -> UndoPreview:
 	"""되돌리면 누가 어디로 가는지, 누구를 왜 건너뛰는지. 아무것도 바꾸지 않는다."""
-	_undoable(db, trace_id, client_id)
+	message = _undoable(db, trace_id, client_id)
 	label = partial(squad_label, db)
 	plan = plan_undo(db, trace_id, label)
+	_nothing_left(message, plan)
 	return UndoPreview(
 		steps=[
 			UndoStepView(person_id=step.military_number, name=step.name,
@@ -225,12 +230,13 @@ def preview_undo(trace_id: str, client_id: str = Query(pattern=CLIENT_ID_PATTERN
 def undo(trace_id: str, payload: UndoRequest, db: Session = Depends(get_db)) -> UndoResponse:
 	"""미리 본 뒤 [되돌리기 확인]을 눌렀을 때. 그사이 데이터가 바뀌었을 수 있어 지금 데이터로 다시 계산한다."""
 	message = _undoable(db, trace_id, payload.client_id)
+	_nothing_left(message, plan_undo(db, trace_id, partial(squad_label, db)))
 	try:
 		with change_source("copilot", trace_id):
 			plan = apply_undo(db, trace_id, partial(squad_label, db))
 	except ValueError as error:
 		raise HTTPException(status_code=400, detail=str(error)) from error
-	summary = f"{len(plan.steps)}명을 되돌렸습니다." + (f" {len(plan.skipped)}명은 건너뛰었습니다." if plan.skipped else "")
+	summary = (f"남은 {len(plan.steps)}명을 마저 되돌렸습니다." if plan.already else f"{len(plan.steps)}명을 되돌렸습니다.") 		+ (f" {len(plan.skipped)}명은 건너뛰었습니다." if plan.skipped else "")
 	undone_at = history.mark_undone(db, message, summary)
 	return UndoResponse(message=summary, undone_at=undone_at, skipped=_skipped(plan))
 
