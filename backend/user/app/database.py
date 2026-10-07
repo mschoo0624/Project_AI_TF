@@ -33,6 +33,7 @@ def init_db() -> None:
         column["name"] for column in inspect(engine).get_columns("postponement")
     }
     audit_columns = {column["name"] for column in inspect(engine).get_columns("audit_log")}
+    copilot_message_columns = {column["name"] for column in inspect(engine).get_columns("copilot_message")}
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -171,6 +172,9 @@ def init_db() -> None:
                                     ("trace_id", "VARCHAR(32)"), ("summary", "TEXT"), ("detail", "TEXT")):
             if column not in audit_columns:
                 connection.execute(text(f"ALTER TABLE audit_log ADD COLUMN {column} {column_type}"))
+        for column, column_type in (("undone_at", "DATETIME"), ("undone_summary", "TEXT")):
+            if column not in copilot_message_columns:
+                connection.execute(text(f"ALTER TABLE copilot_message ADD COLUMN {column} {column_type}"))
         connection.execute(
             text(
                 "UPDATE person SET service_year = 1 WHERE service_year IS NULL"

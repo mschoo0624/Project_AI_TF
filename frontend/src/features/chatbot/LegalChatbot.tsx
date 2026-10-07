@@ -4,6 +4,7 @@ import Mascot from './Mascot'
 import CopilotChat from './CopilotChat'
 import type { CopilotAction } from './CopilotChat'
 import './LegalChatbot.css'
+import { useStickToBottom } from './useStickToBottom'
 
 // 예비군 법령 RAG 서버 (backend/RAG, 기본 포트 8004). vite.config.ts의 /rag-api 프록시를 거칩니다.
 const RAG_API_BASE = import.meta.env.VITE_RAG_API_BASE_URL ?? '/rag-api'
@@ -94,7 +95,6 @@ export default function LegalChatbot({ open, onClose, onCopilotAction, onDataCha
   const [messages, setMessages] = useState<Message[]>([])
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
-  const logRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   // 패널이 열려 있는 동안 모델 로딩이 끝날 때까지 상태를 확인합니다.
@@ -124,10 +124,7 @@ export default function LegalChatbot({ open, onClose, onCopilotAction, onDataCha
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
-  useEffect(() => {
-    const log = logRef.current
-    if (log) log.scrollTop = log.scrollHeight
-  }, [messages])
+  const { ref: logRef, onScroll: onLogScroll, follow: followLog } = useStickToBottom(messages)
 
   const updateAssistant = (id: number, update: (message: Extract<Message, { role: 'assistant' }>) => Partial<Extract<Message, { role: 'assistant' }>>) =>
     setMessages(current => current.map(message => message.id === id && message.role === 'assistant' ? { ...message, ...update(message) } : message))
@@ -136,6 +133,7 @@ export default function LegalChatbot({ open, onClose, onCopilotAction, onDataCha
     if (!question || busy || !ready) return
     const answerId = nextMessageId + 1
     nextMessageId += 2
+    followLog()
     setMessages(current => [...current,
       { id: answerId - 1, role: 'user', text: question },
       { id: answerId, role: 'assistant', text: '', hits: [], phase: 'searching' }])
@@ -210,7 +208,7 @@ export default function LegalChatbot({ open, onClose, onCopilotAction, onDataCha
     </header>
 
     {mode === 'copilot' ? <CopilotChat onAction={onCopilotAction} onDataChanged={onDataChanged} /> : <>
-    <div className="legal-chat-log" ref={logRef} aria-live="polite">
+    <div className="legal-chat-log" ref={logRef} onScroll={onLogScroll} aria-live="polite">
       {messages.length === 0 && <div className="legal-chat-empty">
         <Mascot size={88} mood="wave" />
         <h3>안녕하세요! 예비군 법령 도우미예요</h3>

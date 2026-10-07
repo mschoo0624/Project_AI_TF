@@ -22,3 +22,7 @@ __all__ = [
 from user.app.models.organization import OrganizationNode
 
 __all__.append("OrganizationNode")
+
+from user.app.models.copilot import CopilotConversation, CopilotMessage
+
+__all__ += ["CopilotConversation", "CopilotMessage"]

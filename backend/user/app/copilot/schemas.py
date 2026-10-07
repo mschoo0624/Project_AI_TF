@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -14,9 +15,15 @@ class ChatContext(BaseModel):
 	ids: list[str] = Field(max_length=2000)
 
 
+# 로그인이 생기기 전까지 대화는 브라우저별 무작위 ID로 구분한다.
+CLIENT_ID_PATTERN = r"^[A-Za-z0-9_-]{8,64}$"
+
+
 class ChatRequest(BaseModel):
 	message: str = Field(min_length=1, max_length=500)
 	context: ChatContext | None = None
+	client_id: str | None = Field(default=None, pattern=CLIENT_ID_PATTERN)
+	conversation_id: str | None = Field(default=None, max_length=32, description="없으면 새 대화를 시작한다.")
 
 
 class UiAction(BaseModel):
@@ -70,6 +77,7 @@ class ChatResponse(BaseModel):
 	tool: str | None = None
 	routed_by: Literal["rule", "llm", "none"]
 	trace_id: str
+	conversation_id: str | None = None
 
 
 class AssignmentSelection(BaseModel):
@@ -88,3 +96,59 @@ class ApplyRequest(BaseModel):
 
 class ApplyResponse(BaseModel):
 	message: str
+
+
+class ConversationSummary(BaseModel):
+	"""대화 목록 한 줄. changes = 승인해서 데이터를 바꾼 횟수."""
+
+	id: str
+	title: str
+	updated_at: datetime
+	changes: int
+	undone: int = 0
+
+
+class ConversationMessage(BaseModel):
+	question: str
+	response: ChatResponse
+	created_at: datetime
+	applied_at: datetime | None = None
+	applied_summary: str | None = None
+	undone_at: datetime | None = None
+	undone_summary: str | None = None
+
+
+class ConversationDetail(BaseModel):
+	id: str
+	title: str
+	messages: list[ConversationMessage]
+
+
+class UndoStepView(BaseModel):
+	person_id: str
+	name: str
+	now: str
+	after: str
+
+
+class UndoSkipView(BaseModel):
+	person_id: str
+	name: str
+	reason: str
+
+
+class UndoPreview(BaseModel):
+	"""[되돌리기]를 누르면 먼저 보여 주는 내용. 아무것도 바꾸지 않는다."""
+
+	steps: list[UndoStepView]
+	skipped: list[UndoSkipView]
+
+
+class UndoRequest(BaseModel):
+	client_id: str = Field(pattern=CLIENT_ID_PATTERN)
+
+
+class UndoResponse(BaseModel):
+	message: str
+	undone_at: datetime
+	skipped: list[UndoSkipView] = Field(default_factory=list)

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 import Mascot from './Mascot'
+import { useStickToBottom } from './useStickToBottom'
 
 // 업무 Copilot (main app /copilot/chat). Copilot은 조회·제안만 하고,
 // 저장은 제안 카드의 [승인]을 눌렀을 때 이 화면이 기존 API를 직접 호출합니다.
@@ -40,13 +41,37 @@ type ChatResponse = {
   conditions: string[]
   unparsed: string[]
   trace_id: string
+  conversation_id: string | null
 }
 type ApplyResponse = { message: string }
+// expired: 다시 연 대화에서 승인하지 않았던 카드. 그사이 데이터가 바뀌었을 수 있어 다시 요청하게 합니다.
 type ProposalState = {
-  status: 'open' | 'saving' | 'approved' | 'cancelled'
+  status: 'open' | 'saving' | 'approved' | 'cancelled' | 'expired'
   selected: number
   error?: string
   done?: ApplyResponse
+  doneAt?: string
+  undo?: UndoState
+}
+type UndoSkip = { person_id: string; name: string; reason: string }
+type UndoPreview = { steps: { person_id: string; name: string; now: string; after: string }[]; skipped: UndoSkip[] }
+// 되돌리기: [되돌리기] → 미리 보기(loading → preview) → [확인] → saving → done
+type UndoState = {
+  status: 'loading' | 'preview' | 'saving' | 'done'
+  preview?: UndoPreview
+  error?: string
+  message?: string
+  at?: string
+  skipped?: UndoSkip[]
+}
+type ConversationSummary = { id: string; title: string; updated_at: string; changes: number; undone: number }
+type ConversationDetail = {
+  id: string
+  title: string
+  messages: {
+    question: string; response: ChatResponse; created_at: string
+    applied_at: string | null; applied_summary: string | null; undone_at: string | null; undone_summary: string | null
+  }[]
 }
 
 type Message =
@@ -57,6 +82,53 @@ type Message =
     conditions?: string[]; unparsed?: string[]
   }
 
+// 로그인이 생기기 전까지 대화는 브라우저별 무작위 ID로 구분합니다. 저장소를 못 쓰면 이 창에서만 유지됩니다.
+const CLIENT_KEY = 'copilot-client-id'
+const CONVERSATION_KEY = 'copilot-conversation-id'
+
+function readStorage(key: string) {
+  try { return window.localStorage.getItem(key) } catch { return null }
+}
+
+function writeStorage(key: string, value: string | null) {
+  try {
+    if (value === null) window.localStorage.removeItem(key)
+    else window.localStorage.setItem(key, value)
+  } catch { /* 저장소를 못 쓰면 새로고침 때 대화가 이어지지 않을 뿐입니다. */ }
+}
+
+let memoryClientId: string | null = null
+function clientId() {
+  const saved = readStorage(CLIENT_KEY) ?? memoryClientId
+  if (saved) return saved
+  // crypto.randomUUID는 https에서만 되므로, 내부망 http에서도 되는 getRandomValues를 씁니다.
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  const created = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+  memoryClientId = created
+  writeStorage(CLIENT_KEY, created)
+  return created
+}
+
+function dayGroup(iso: string) {
+  const day = new Date(iso)
+  const today = new Date()
+  const startOf = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  const days = Math.round((startOf(today) - startOf(day)) / 86_400_000)
+  if (days <= 0) return '오늘'
+  if (days === 1) return '어제'
+  if (days < 7) return '지난 7일'
+  return '이전'
+}
+
+const formatTime = (iso: string) =>
+  new Date(iso).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+// 답변의 명단: "저 인원들 편성해줘"가 가리키는 대상
+function listOf(result: ChatResponse) {
+  const action = [...result.ui_actions].reverse().find(item => item.type !== 'navigate' && item.ids.length > 0)
+  return action ? { label: action.label ?? action.ids.join(', '), ids: action.ids } : null
+}
+
 async function errorDetail(response: Response) {
   try {
     const body = await response.json() as { detail?: unknown }
@@ -64,6 +136,14 @@ async function errorDetail(response: Response) {
   } catch {
     return `HTTP ${response.status}`
   }
+}
+
+// 없거나 다른 브라우저의 대화면 null
+async function fetchConversation(id: string) {
+  const response = await fetch(`${API_BASE}/copilot/conversations/${encodeURIComponent(id)}?client_id=${clientId()}`)
+  if (response.status === 404) return null
+  if (!response.ok) throw new Error(await errorDetail(response))
+  return await response.json() as ConversationDetail
 }
 
 // 분대를 하나 고르는 카드: 한 사람 편성, 재편성(이동)
@@ -101,16 +181,63 @@ function BulkPlan({ proposal }: { proposal: Proposal }) {
   </div>
 }
 
-function ProposalCard({ proposal, state, onSelect, onApprove, onCancel }: {
+function SkippedList({ skipped }: { skipped: UndoSkip[] }) {
+  if (!skipped.length) return null
+  return <details className="copilot-undo-skipped">
+    <summary>그대로 두는 인원 {skipped.length}명</summary>
+    <ul>{skipped.map(item => <li key={item.person_id}>{item.name}({item.person_id}): {item.reason}</li>)}</ul>
+  </details>
+}
+
+// 승인한 카드 아래: [되돌리기] → 무엇이 바뀌는지 미리 보여 주고 확인을 받은 뒤에만 실행합니다.
+function UndoBox({ undo, onStart, onConfirm, onClose }: {
+  undo?: UndoState
+  onStart: () => void
+  onConfirm: () => void
+  onClose: () => void
+}) {
+  if (!undo) return <div className="copilot-proposal-actions">
+    <button type="button" onClick={onStart}>↩ 되돌리기</button>
+  </div>
+  if (undo.status === 'done') return <div className="copilot-undo is-done">
+    <p>↩ 되돌림{undo.at && <small> · {formatTime(undo.at)}</small>}</p>
+    {undo.message && <p>{undo.message}</p>}
+    <SkippedList skipped={undo.skipped ?? []} />
+  </div>
+  if (undo.status === 'loading') return <p className="copilot-undo">되돌릴 내용을 확인하는 중…</p>
+  const steps = undo.preview?.steps ?? []
+  return <div className="copilot-undo">
+    {undo.error && <p className="is-error">{undo.error}</p>}
+    {steps.length > 0 ? <>
+      <p><b>되돌리면 {steps.length}명이 이렇게 바뀌어요.</b></p>
+      <ul className="copilot-undo-steps">
+        {steps.map(step => <li key={step.person_id}>{step.name}({step.person_id}) <small>{step.now} → {step.after}</small></li>)}
+      </ul>
+    </> : <p><b>되돌릴 수 있는 인원이 없어요.</b> 모두 이후에 다시 바뀌었거나 원래 자리로 돌아갈 수 없어요.</p>}
+    <SkippedList skipped={undo.preview?.skipped ?? []} />
+    <div className="copilot-proposal-actions">
+      <button type="button" onClick={onClose} disabled={undo.status === 'saving'}>{steps.length ? '취소' : '닫기'}</button>
+      {steps.length > 0 && <button type="button" className="is-primary" onClick={onConfirm} disabled={undo.status === 'saving'}>
+        {undo.status === 'saving' ? '되돌리는 중…' : `${steps.length}명 되돌리기`}
+      </button>}
+    </div>
+  </div>
+}
+
+function ProposalCard({ proposal, state, onSelect, onApprove, onCancel, onUndoStart, onUndoConfirm, onUndoClose }: {
   proposal: Proposal
   state: ProposalState
   onSelect: (squadId: number) => void
   onApprove: () => void
   onCancel: () => void
+  onUndoStart: () => void
+  onUndoConfirm: () => void
+  onUndoClose: () => void
 }) {
   const chosen = proposal.options.find(option => option.squad_id === state.selected)
-  const doneText = proposal.kind === 'assign_squad' ? `${chosen?.squad_name}에 편성했습니다.`
-    : proposal.kind === 'move' ? `${chosen?.squad_name}(으)로 옮겼습니다.` : state.done?.message
+  // 다시 연 대화에서는 어느 분대를 골랐는지 모르므로 서버가 저장한 결과 문장을 씁니다.
+  const doneText = chosen && proposal.kind === 'assign_squad' ? `${chosen.squad_name}에 편성했습니다.`
+    : chosen && proposal.kind === 'move' ? `${chosen.squad_name}(으)로 옮겼습니다.` : state.done?.message
   return <div className="copilot-proposal">
     <strong>{proposal.title}</strong>
     {!picksOneSquad(proposal) ? <BulkPlan proposal={proposal} /> : <fieldset disabled={state.status !== 'open'}>
@@ -122,14 +249,48 @@ function ProposalCard({ proposal, state, onSelect, onApprove, onCancel }: {
       </label>)}
     </fieldset>}
     {state.error && <p className="is-error">{state.error}</p>}
-    {state.status === 'approved' && <p className="copilot-proposal-done">✓ {doneText}</p>}
+    {state.status === 'approved' && <p className="copilot-proposal-done">
+      ✓ {doneText}{state.doneAt && <small> · {formatTime(state.doneAt)}</small>}
+    </p>}
+    {state.status === 'approved' && <UndoBox undo={state.undo} onStart={onUndoStart} onConfirm={onUndoConfirm} onClose={onUndoClose} />}
     {state.status === 'cancelled' && <p className="copilot-proposal-done">취소했습니다. 변경된 내용은 없습니다.</p>}
+    {state.status === 'expired' && <p className="copilot-proposal-done">승인하지 않은 제안이에요. 지금 데이터로 다시 요청해 주세요.</p>}
     {(state.status === 'open' || state.status === 'saving') && <div className="copilot-proposal-actions">
       <button type="button" onClick={onCancel} disabled={state.status === 'saving'}>취소</button>
       <button type="button" className="is-primary" onClick={onApprove} disabled={state.status === 'saving'}>
         {state.status === 'saving' ? '저장 중…' : approveLabel(proposal)}
       </button>
     </div>}
+  </div>
+}
+
+function HistoryPanel({ items, error, currentId, onOpen, onClose }: {
+  items: ConversationSummary[] | null
+  error: string | null
+  currentId: string | null
+  onOpen: (id: string) => void
+  onClose: () => void
+}) {
+  const groups = new Map<string, ConversationSummary[]>()
+  items?.forEach(item => groups.set(dayGroup(item.updated_at), [...(groups.get(dayGroup(item.updated_at)) ?? []), item]))
+  return <div className="copilot-history" role="dialog" aria-label="지난 대화">
+    <div className="copilot-history-head">
+      <strong>지난 대화</strong>
+      <button type="button" onClick={onClose} aria-label="지난 대화 닫기">✕</button>
+    </div>
+    {error && <p className="is-error">{error}</p>}
+    {!error && items === null && <p className="copilot-history-empty">불러오는 중…</p>}
+    {items?.length === 0 && <p className="copilot-history-empty">아직 대화가 없어요.</p>}
+    {[...groups.entries()].map(([group, conversations]) => <section key={group}>
+      <h4>{group}</h4>
+      {conversations.map(item => <button key={item.id} type="button" onClick={() => onOpen(item.id)}
+        aria-current={item.id === currentId ? 'true' : undefined} title={formatTime(item.updated_at)}>
+        <span>{item.title}</span>
+        {item.changes > 0 && <em title="승인해서 데이터를 바꾼 횟수">변경 {item.changes}건</em>}
+        {item.undone > 0 && <em className="is-undone" title="되돌린 횟수">되돌림 {item.undone}</em>}
+      </button>)}
+    </section>)}
+    <p className="copilot-history-note">대화는 이 브라우저에만 보이고, 90일 뒤 지워져요. 데이터 변경은 변경 기록에 계속 남아요.</p>
   </div>
 }
 
@@ -140,15 +301,100 @@ export default function CopilotChat({ onAction, onDataChanged }: {
   const [messages, setMessages] = useState<Message[]>([])
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
-  const logRef = useRef<HTMLDivElement>(null)
   const nextMessageId = useRef(1)
   // 직전 답변이 보여준 명단. "저 인원들 편성해줘"가 이 명단을 가리킵니다.
   const lastList = useRef<{ label: string; ids: string[] } | null>(null)
+  // 지금 대화. 새로고침하거나 법령 탭에 다녀와도 이어서 보이도록 브라우저에 기억합니다.
+  const [conversationId, setConversationId] = useState<string | null>(() => readStorage(CONVERSATION_KEY))
+  const [title, setTitle] = useState<string | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyItems, setHistoryItems] = useState<ConversationSummary[] | null>(null)
+  const [historyError, setHistoryError] = useState<string | null>(null)
 
+  const { ref: logRef, onScroll: onLogScroll, follow: followLog } = useStickToBottom(messages)
+
+  const remember = (id: string | null) => {
+    setConversationId(id)
+    writeStorage(CONVERSATION_KEY, id)
+  }
+
+  const reset = () => {
+    remember(null)
+    setTitle(null)
+    setMessages([])
+    lastList.current = null
+    setHistoryOpen(false)
+  }
+  const startNew = () => { if (!busy) reset() }
+
+  // 저장된 대화를 화면 메시지로 바꿉니다. 화면 이동(ui_actions)은 다시 실행하지 않습니다.
+  const show = (detail: ConversationDetail) => {
+    const restored: Message[] = detail.messages.flatMap(item => {
+      const userId = nextMessageId.current
+      nextMessageId.current += 2
+      const result = item.response
+      const proposalState: ProposalState | undefined = result.proposal ? item.applied_at
+        ? {
+          status: 'approved', selected: 0, done: { message: item.applied_summary ?? '승인했습니다.' }, doneAt: item.applied_at,
+          undo: item.undone_at ? { status: 'done', at: item.undone_at, message: item.undone_summary ?? undefined } : undefined,
+        }
+        : { status: 'expired', selected: 0 } : undefined
+      return [
+        { id: userId, role: 'user', text: item.question },
+        {
+          id: userId + 1, role: 'assistant', text: result.message, pending: false, traceId: result.trace_id,
+          proposal: result.proposal ?? undefined, proposalState, conditions: result.conditions, unparsed: result.unparsed,
+        },
+      ]
+    })
+    const last = detail.messages.at(-1)
+    lastList.current = last ? listOf(last.response) : null
+    remember(detail.id)
+    setTitle(detail.title)
+    followLog()
+    setMessages(restored)
+  }
+
+  const open = async (id: string) => {
+    if (busy) return
+    setHistoryOpen(false)
+    setBusy(true)
+    try {
+      const detail = await fetchConversation(id)
+      if (detail) show(detail)
+      else reset()  // 90일이 지나 지워진 대화
+    } catch (error) {
+      setHistoryError(`대화를 열지 못했어요: ${error instanceof Error ? error.message : String(error)}`)
+      setHistoryOpen(true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const showHistory = async () => {
+    setHistoryOpen(true)
+    setHistoryItems(null)
+    setHistoryError(null)
+    try {
+      const response = await fetch(`${API_BASE}/copilot/conversations?client_id=${clientId()}`)
+      if (!response.ok) throw new Error(await errorDetail(response))
+      setHistoryItems(await response.json() as ConversationSummary[])
+    } catch (error) {
+      setHistoryError(`목록을 불러오지 못했어요: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  // 처음 열 때 지난번 대화를 이어서 보여 줍니다.
   useEffect(() => {
-    const log = logRef.current
-    if (log) log.scrollTop = log.scrollHeight
-  }, [messages])
+    const saved = readStorage(CONVERSATION_KEY)
+    if (!saved) return
+    let cancelled = false
+    fetchConversation(saved)
+      .then(detail => { if (!cancelled) { if (detail) show(detail); else reset() } })
+      .catch(() => { /* 서버가 꺼져 있으면 빈 화면에서 시작합니다. 다음 질문이 대화를 이어 갑니다. */ })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const updateAssistant = (id: number, update: Partial<Extract<Message, { role: 'assistant' }>>) =>
     setMessages(current => current.map(message => message.id === id && message.role === 'assistant' ? { ...message, ...update } : message))
@@ -160,6 +406,7 @@ export default function CopilotChat({ onAction, onDataChanged }: {
     if (!question || busy) return
     const answerId = nextMessageId.current + 1
     nextMessageId.current += 2
+    followLog()
     setMessages(current => [...current,
       { id: answerId - 1, role: 'user', text: question },
       { id: answerId, role: 'assistant', text: '', pending: true }])
@@ -169,10 +416,14 @@ export default function CopilotChat({ onAction, onDataChanged }: {
       const response = await fetch(`${API_BASE}/copilot/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: question, context: lastList.current }),
+        body: JSON.stringify({ message: question, context: lastList.current, client_id: clientId(), conversation_id: conversationId }),
       })
       if (!response.ok) throw new Error(await errorDetail(response))
       const result = await response.json() as ChatResponse
+      if (result.conversation_id && result.conversation_id !== conversationId) {
+        remember(result.conversation_id)
+        setTitle(question)
+      }
       updateAssistant(answerId, {
         text: result.message,
         pending: false,
@@ -182,8 +433,7 @@ export default function CopilotChat({ onAction, onDataChanged }: {
         unparsed: result.unparsed,
         proposalState: result.proposal ? { status: 'open', selected: result.proposal.options[0]?.squad_id ?? 0 } : undefined,
       })
-      const listAction = [...result.ui_actions].reverse().find(action => action.type !== 'navigate' && action.ids.length > 0)
-      if (listAction) lastList.current = { label: listAction.label ?? listAction.ids.join(', '), ids: listAction.ids }
+      lastList.current = listOf(result) ?? lastList.current
       result.ui_actions.forEach(onAction)
     } catch (error) {
       updateAssistant(answerId, { pending: false, error: `오류: ${error instanceof Error ? error.message : String(error)}` })
@@ -202,10 +452,43 @@ export default function CopilotChat({ onAction, onDataChanged }: {
         body: JSON.stringify(applyBody(proposal, state, traceId)),
       })
       if (!response.ok) throw new Error(await errorDetail(response))
-      updateProposal(id, { status: 'approved', done: await response.json() as ApplyResponse })
+      updateProposal(id, { status: 'approved', done: await response.json() as ApplyResponse, doneAt: new Date().toISOString() })
       onDataChanged()
     } catch (error) {
       updateProposal(id, { status: 'open', error: `실패: ${error instanceof Error ? error.message : String(error)}` })
+    }
+  }
+
+  // 되돌리기 1단계: 서버가 지금 데이터로 무엇이 바뀔지 계산해 보여 줍니다. 아직 아무것도 바뀌지 않습니다.
+  const startUndo = async (id: number, traceId?: string) => {
+    if (!traceId) return
+    updateProposal(id, { undo: { status: 'loading' } })
+    try {
+      const response = await fetch(`${API_BASE}/copilot/undo/${traceId}?client_id=${clientId()}`)
+      if (!response.ok) throw new Error(await errorDetail(response))
+      updateProposal(id, { undo: { status: 'preview', preview: await response.json() as UndoPreview } })
+    } catch (error) {
+      updateProposal(id, { undo: { status: 'preview', preview: { steps: [], skipped: [] },
+        error: `확인하지 못했어요: ${error instanceof Error ? error.message : String(error)}` } })
+    }
+  }
+
+  // 되돌리기 2단계: [N명 되돌리기]를 눌렀을 때만 실행합니다. 변경 기록에도 남습니다.
+  const confirmUndo = async (id: number, undo: UndoState, traceId?: string) => {
+    if (!traceId) return
+    updateProposal(id, { undo: { ...undo, status: 'saving', error: undefined } })
+    try {
+      const response = await fetch(`${API_BASE}/copilot/undo/${traceId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId() }),
+      })
+      if (!response.ok) throw new Error(await errorDetail(response))
+      const result = await response.json() as { message: string; undone_at: string; skipped: UndoSkip[] }
+      updateProposal(id, { undo: { status: 'done', message: result.message, at: result.undone_at, skipped: result.skipped } })
+      onDataChanged()
+    } catch (error) {
+      updateProposal(id, { undo: { ...undo, status: 'preview', error: `되돌리지 못했어요: ${error instanceof Error ? error.message : String(error)}` } })
     }
   }
 
@@ -216,7 +499,16 @@ export default function CopilotChat({ onAction, onDataChanged }: {
   }
 
   return <>
-    <div className="legal-chat-log" ref={logRef} aria-live="polite">
+    <div className="copilot-bar">
+      <button type="button" onClick={() => historyOpen ? setHistoryOpen(false) : showHistory()} aria-expanded={historyOpen}
+        title="지난 대화">☰ 지난 대화</button>
+      <span title={title ?? undefined}>{title ?? '새 대화'}</span>
+      <button type="button" onClick={startNew} disabled={busy || (messages.length === 0 && !conversationId)} title="새 대화 시작">+ 새 대화</button>
+    </div>
+    <div className="copilot-main">
+    {historyOpen && <HistoryPanel items={historyItems} error={historyError} currentId={conversationId}
+      onOpen={open} onClose={() => setHistoryOpen(false)} />}
+    <div className="legal-chat-log" ref={logRef} onScroll={onLogScroll} aria-live="polite">
       {messages.length === 0 && <div className="legal-chat-empty">
         <Mascot size={88} mood="wave" />
         <h3>업무 Chatbot이에요.</h3>
@@ -246,9 +538,13 @@ export default function CopilotChat({ onAction, onDataChanged }: {
               onSelect={squadId => updateProposal(message.id, { selected: squadId })}
               onApprove={() => approve(message.id, message.proposal!, message.proposalState!, message.traceId)}
               onCancel={() => updateProposal(message.id, { status: 'cancelled' })}
+              onUndoStart={() => startUndo(message.id, message.traceId)}
+              onUndoConfirm={() => confirmUndo(message.id, message.proposalState!.undo!, message.traceId)}
+              onUndoClose={() => updateProposal(message.id, { undo: undefined })}
             />}
           </div>
         </div>)}
+    </div>
     </div>
 
     <form className="legal-chat-form" onSubmit={submit}>
