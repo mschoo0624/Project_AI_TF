@@ -1,1 +1,1 @@
-"""Classifier service copied into AITF as a standalone process."""
+"""New electronic-PDF processing workspace; no legacy imports or startup effects."""

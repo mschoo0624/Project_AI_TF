@@ -7,3 +7,4 @@ httpx
 numpy
 pandas
 scikit-learn
+-r classifier_agent/requirements.txt

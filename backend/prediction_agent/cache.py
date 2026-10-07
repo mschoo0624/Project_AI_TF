@@ -27,7 +27,7 @@ def initialize_prediction_cache() -> dict[str, Any]:
 
         # Importing the model performs its one-time training. Keep that work inside
         # application startup rather than inside dashboard request handling.
-        from prediction.ReserveForces_pop import generate_dashboard_data
+        from .ReserveForces_pop import generate_dashboard_data
 
         payload = generate_dashboard_data()
         CACHE_PATH.write_text(
@@ -55,7 +55,7 @@ def initialize_attendance_cache() -> dict[str, Any]:
         if _attendance_cache is not None:
             return _attendance_cache
 
-        from prediction.attendance import generate_attendance_forecast
+        from .attendance import generate_attendance_forecast
 
         payload = generate_attendance_forecast()
         ATTENDANCE_CACHE_PATH.write_text(

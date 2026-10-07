@@ -12,7 +12,7 @@ from user.app.api.postponements import router as postponements_router
 from user.app.api.reservists import persons_router, router as reservists_router
 from user.app.api.squads import router as squads_router
 from user.app.api.organization import router as organization_router
-from prediction.cache import initialize_attendance_cache, initialize_prediction_cache
+from prediction_agent.cache import initialize_attendance_cache, initialize_prediction_cache
 from user.app.api.training import (
     persons_training_router,
     router as training_router,

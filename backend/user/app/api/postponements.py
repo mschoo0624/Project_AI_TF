@@ -6,13 +6,20 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
 
 from user.app.database import get_db
 from user.app.models.person import Person
+from user.app.models.education import Education
 from user.app.models.postpoment import Postponement
 from user.app.models.user import User
 from user.app.schemas.postponement import PostponementCreate, PostponementRead, PostponementUpdate
-from user.app.services.classifier_client import classify_reason, decide_submission
+from user.app.services.classifier_client import (
+    classify_reason,
+    decide_submission,
+    get_submission,
+    verify_documents,
+)
 from user.app.services.auth import require_approver, require_scheduler, require_viewer
 from user.app.services.training_recalculation import (
     HOLD_RESOLUTION_GRACE_DAYS,
@@ -25,6 +32,44 @@ router = APIRouter(prefix="/postponements", tags=["postponements"])
 
 def _actor_value(actor: User) -> str:
     return actor.username[:100]
+
+
+class VerificationInput(BaseModel):
+    person_id: str
+    education_id: int | None = None
+    documents: list[dict] = Field(min_length=1, max_length=20)
+    context: dict = Field(default_factory=dict)
+    submission_id: str | None = None
+
+
+@router.post('/verify')
+def verify_postponement(payload: VerificationInput, db: Session = Depends(get_db)):
+    person = db.get(Person, payload.person_id)
+    if person is None:
+        raise HTTPException(404, '대상자를 찾을 수 없습니다.')
+    context = dict(payload.context)
+    # Database identity always overrides caller-supplied values.
+    for key, value in [('applicant_name', person.name), ('applicant_service_number', person.military_number)]:
+        context[key] = {'value': value, 'source': f'person:{person.military_number}'}
+    if payload.education_id is not None:
+        education = db.get(Education, payload.education_id)
+        if education is None or education.person_id != person.military_number:
+            raise HTTPException(404, '해당 대상자의 훈련을 찾을 수 없습니다.')
+        context['training_start'] = {'value': education.scheduled_date.isoformat() if education.scheduled_date else None,
+                                     'source': f'education:{education.id}:scheduled_date'}
+        # No end-date column or comprehensive MMA history exists: never invent either.
+    try:
+        if payload.submission_id:
+            import re
+            if not re.fullmatch(r'qwen_[0-9a-f]{32}', payload.submission_id): raise HTTPException(422, '잘못된 제출 ID입니다.')
+            return verify_documents(payload.documents, context, payload.submission_id)
+        return verify_documents(payload.documents, context)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 422:
+            raise HTTPException(422, '검증 입력 형식이나 외부 확인값을 확인하세요.') from exc
+        raise HTTPException(502, '검증 서비스를 사용할 수 없습니다.') from exc
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(502, '검증 서비스를 사용할 수 없습니다.') from exc
 
 
 @router.get("", response_model=list[PostponementRead])
@@ -43,6 +88,25 @@ def create_postponement(
 ) -> Postponement:
     if db.get(Person, payload.person_id) is None:
         raise HTTPException(status_code=404, detail="Reservist not found")
+
+    if payload.classifier_submission_id:
+        existing = db.scalar(select(Postponement).where(Postponement.classifier_submission_id == payload.classifier_submission_id))
+        if existing:
+            if existing.person_id != payload.person_id: raise HTTPException(409, '다른 대상자에게 연결된 신청입니다.')
+            return existing
+
+        if payload.classifier_submission_id.startswith('qwen_'):
+            import re
+            if not re.fullmatch(r'qwen_[0-9a-f]{32}', payload.classifier_submission_id): raise HTTPException(422, '잘못된 제출 ID입니다.')
+            try:
+                submission = get_submission(payload.classifier_submission_id)
+            except (httpx.HTTPError, ValueError) as exc:
+                raise HTTPException(502, '제출 원본을 확인하지 못했습니다.') from exc
+            if submission['military_number'] != payload.person_id: raise HTTPException(409, '제출 대상자가 일치하지 않습니다.')
+            payload.category = submission['application_type']
+            payload.reason = submission['reason_category']
+            payload.source_file = submission['filename']
+            payload.type = 'delay' if submission['application_type'].startswith('postponement.') else 'hold'
 
     try:
         category = payload.category or classify_reason(payload.reason)
@@ -74,13 +138,20 @@ def create_postponement(
 
 
 def _decide_postponement(
-    postponement: Postponement, decision: str, db: Session, actor: User
+    postponement: Postponement,
+    decision: str,
+    db: Session,
+    actor: User,
+    note: str | None = None,
 ) -> Postponement:
+    target = 'approved' if decision == 'approved' else 'rejected'
+    if postponement.status == target:
+        return postponement
     if postponement.status != "pending":
         raise HTTPException(status_code=409, detail="Postponement has already been decided")
     if postponement.classifier_submission_id:
         try:
-            decide_submission(postponement.classifier_submission_id, decision)
+            decide_submission(postponement.classifier_submission_id, decision, note)
         except httpx.HTTPError as error:
             raise HTTPException(status_code=502, detail="Classifier decision synchronization failed") from error
     postponement.status = "approved" if decision == "approved" else "rejected"
@@ -100,28 +171,38 @@ def _decide_postponement(
     return postponement
 
 
+class DecisionNote(BaseModel):
+    note: str | None = Field(default=None, max_length=2000)
+
+
 @router.patch("/{postponement_id}/approve", response_model=PostponementRead)
 def approve_postponement(
     postponement_id: int,
+    payload: DecisionNote | None = None,
     db: Session = Depends(get_db),
     actor: User = Depends(require_approver),
 ) -> Postponement:
     postponement = db.get(Postponement, postponement_id)
     if postponement is None:
         raise HTTPException(status_code=404, detail="Postponement not found")
-    return _decide_postponement(postponement, "approved", db, actor)
+    return _decide_postponement(
+        postponement, "approved", db, actor, payload.note if payload else None
+    )
 
 
 @router.patch("/{postponement_id}/reject", response_model=PostponementRead)
 def reject_postponement(
     postponement_id: int,
+    payload: DecisionNote | None = None,
     db: Session = Depends(get_db),
     actor: User = Depends(require_approver),
 ) -> Postponement:
     postponement = db.get(Postponement, postponement_id)
     if postponement is None:
         raise HTTPException(status_code=404, detail="Postponement not found")
-    return _decide_postponement(postponement, "declined", db, actor)
+    return _decide_postponement(
+        postponement, "declined", db, actor, payload.note if payload else None
+    )
 
 
 @router.patch("/{postponement_id}", response_model=PostponementRead)

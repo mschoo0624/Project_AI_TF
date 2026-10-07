@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from prediction.cache import get_attendance_cache, get_prediction_cache
+from prediction_agent.cache import get_attendance_cache, get_prediction_cache
 from user.app.database import get_db
 from user.app.models.person import Person
 from user.app.models.squad import Squad

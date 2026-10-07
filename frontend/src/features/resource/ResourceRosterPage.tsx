@@ -721,7 +721,7 @@ const roundStatusLabel: Record<RoundStatusKind, string> = {
 const attendanceKind = (status: string | undefined): RoundStatusKind => {
   if (!status) return 'pending'
   if (['이수', 'completed'].includes(status)) return 'completed'
-  if (['참석', 'attended'].includes(status)) return 'attended'
+  if (['참석', 'attended', '조기퇴소'].includes(status)) return 'attended'
   if (['무단불참', '무단_불참', 'unexcused_absence'].includes(status)) return 'absent'
   if (['연기', 'postponed'].includes(status)) return 'postponed'
   if (['보류', 'round_hold'].includes(status)) return 'hold'
@@ -735,7 +735,7 @@ type RoundCell = {
   trainingHours?: number
   requiredHours?: number | null
 }
-const countedAttendance = new Set(['이수', 'completed', '참석', 'attended'])
+const countedAttendance = new Set(['이수', 'completed', '참석', 'attended', '조기퇴소'])
 const isTypeITraining = (trainingType: string) =>
   ['동원훈련Ⅰ형', '동원훈련I형', '동원훈련1형'].includes(trainingType.replace(/\s/g, ''))
 
@@ -785,7 +785,12 @@ function buildYearRounds(records: TrainingRecord[], year: number): RoundCell[] {
       cells.push({ round, kind, label: '3차 무단불참 · 고발 대상', ...roundDetails })
       carriedFromRound = null
     } else {
-      cells.push({ round, kind, label: roundStatusLabel[kind], ...roundDetails })
+      cells.push({
+        round,
+        kind,
+        label: record?.attendance_status === '조기퇴소' ? '조기퇴소' : roundStatusLabel[kind],
+        ...roundDetails,
+      })
       carriedFromRound = null
     }
   }
@@ -794,7 +799,9 @@ function buildYearRounds(records: TrainingRecord[], year: number): RoundCell[] {
 function buildSingleStatus(records: TrainingRecord[]): RoundCell {
   const latest = records.reduce<TrainingRecord | null>((best, record) => (!best || record.id > best.id ? record : best), null)
   const kind = attendanceKind(latest?.attendance_status)
-  const label = kind === 'absent' ? '무단불참 · 즉시 고발 대상' : roundStatusLabel[kind]
+  const label = latest?.attendance_status === '조기퇴소'
+    ? '조기퇴소'
+    : kind === 'absent' ? '무단불참 · 즉시 고발 대상' : roundStatusLabel[kind]
   const trainingHours = records.reduce(
     (total, record) => total + (countedAttendance.has(record.attendance_status) ? record.training_hours : 0), 0,
   )
@@ -828,7 +835,9 @@ function TrainingResultsPanel({ currentYear, records, progress }: {
                 <div className={`rm-round-grid-cells${immediateTypeI ? ' rm-round-grid-cells--single' : ''}`}>
                   {cells.map(cell => <div key={cell.round} className={`rm-round-cell rm-round-cell--${cell.kind}`}>
                     <b>{immediateTypeI ? '결과' : `${cell.round}차`}</b><span>{cell.label}</span>
-                    {cell.requiredHours != null && <small>{cell.trainingHours ?? 0}/{cell.requiredHours}시간</small>}
+                    {cell.requiredHours != null
+                      ? <small>{cell.trainingHours ?? 0}/{cell.requiredHours}시간</small>
+                      : (cell.trainingHours ?? 0) > 0 && <small>{cell.trainingHours}시간</small>}
                   </div>)}
                 </div>
               </div>
@@ -878,4 +887,3 @@ function TrainingRecordsPanel({
     <p className="rm-detail-note">훈련시간은 해당 연차의 목표시간을 초과할 수 없습니다.</p>
   </div>
 }
-

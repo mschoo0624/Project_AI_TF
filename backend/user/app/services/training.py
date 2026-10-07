@@ -33,6 +33,13 @@ ROUND_SCHEDULED = {"훈련 예정", "scheduled"}
 EARLY_DISMISSAL_COUNTS_HOURS = os.getenv(
     "EARLY_DISMISSAL_COUNTS_HOURS", "true"
 ).lower() in {"1", "true", "yes"}
+# Policy defaults are unverified; confirm them against current authoritative guidance.
+EARLY_DISMISSAL_ADVANCES_ROUND = os.getenv(
+    "EARLY_DISMISSAL_ADVANCES_ROUND", "true"
+).lower() in {"1", "true", "yes"}
+SMALL_REMAINDER_REVIEW_HOURS = int(os.getenv("SMALL_REMAINDER_REVIEW_HOURS", "8"))
+if SMALL_REMAINDER_REVIEW_HOURS < 0:
+    raise ValueError("SMALL_REMAINDER_REVIEW_HOURS must be non-negative")
 # Any status requiring positive training hours vs. any status that must record zero hours.
 ATTENDANCE_HOURS_REQUIRED = COMPLETED | ATTENDED | (
     {"조기퇴소"} if EARLY_DISMISSAL_COUNTS_HOURS else set()
@@ -82,6 +89,8 @@ def is_local_reserve_command_position(position: str | None) -> bool:
 def type_ii_training_hours(
     branch: str | None, rank: str | None, officer_makeup: bool = False
 ) -> int:
+    if officer_makeup and is_officer_reservist(rank):
+        return 32
     return 28 if branch == "공군" or is_officer_reservist(rank) else 32
 
 def target_training_hours(
@@ -90,6 +99,7 @@ def target_training_hours(
     branch: str | None = None,
     rank: str | None = None,
     position: str | None = None,
+    officer_type_ii_makeup: bool = False,
 ) -> int:
     """Return the required hours for a reserve service year."""
     if mobilization_status in STUDENT and 1 <= service_year <= 6:
@@ -102,17 +112,19 @@ def target_training_hours(
     ):
         return 20
     if is_officer_reservist(rank) and 1 <= service_year <= 6:
-        return 28
+        if mobilization_status in DESIGNATED:
+            return 28
+        return type_ii_training_hours(branch, rank, officer_type_ii_makeup)
     if 1 <= service_year <= 4:
         if mobilization_status in DESIGNATED:
             return 28
         if mobilization_status in NON_DESIGNATED:
-            return type_ii_training_hours(branch, rank)
+            return type_ii_training_hours(branch, rank, officer_type_ii_makeup)
         return 0
     if 5 <= service_year <= 6:
         # 병 5~6년차는 기본훈련과 작계훈련이 기본. 일부보류는 별도 유형이다.
         if mobilization_status in PARTIAL_HOLD:
-            return type_ii_training_hours(branch, rank)
+            return type_ii_training_hours(branch, rank, officer_type_ii_makeup)
         # 그 외는 기본훈련 + 작계훈련.
         return 20
     if service_year in (7, 8):
@@ -144,17 +156,23 @@ def training_plan(
         ]
     if is_officer_reservist(rank) and 1 <= service_year <= 6:
         training_type = "동원훈련Ⅰ형" if mobilization_status in DESIGNATED else "동원훈련Ⅱ형"
-        hours = 28
+        hours = 28 if training_type == "동원훈련Ⅰ형" else type_ii_training_hours(
+            branch, rank, officer_type_ii_makeup
+        )
         return [{"name": training_type, "hours": hours}]
     if 1 <= service_year <= 4:
         if mobilization_status in DESIGNATED:
             return [{"name": "동원훈련Ⅰ형", "hours": 28}]
         if mobilization_status in NON_DESIGNATED:
-            return [{"name": "동원훈련Ⅱ형", "hours": type_ii_training_hours(branch, rank)}]
+            return [{"name": "동원훈련Ⅱ형", "hours": type_ii_training_hours(
+                branch, rank, officer_type_ii_makeup
+            )}]
         return []
     if 5 <= service_year <= 6:
         if mobilization_status in PARTIAL_HOLD:
-            return [{"name": "동원훈련Ⅱ형", "hours": type_ii_training_hours(branch, rank)}]
+            return [{"name": "동원훈련Ⅱ형", "hours": type_ii_training_hours(
+                branch, rank, officer_type_ii_makeup
+            )}]
         return [
             {"name": "기본훈련", "hours": 8},
             {"name": "작계훈련(전·후반기)", "hours": 12},
@@ -172,7 +190,7 @@ def training_record_required_hours(
         service_year, mobilization_status, branch, rank, position, officer_type_ii_makeup
     )
     if name in {"동원훈련Ⅱ형", "동원훈련II형", "동원훈련2형"}:
-        return type_ii_training_hours(branch, rank)
+        return type_ii_training_hours(branch, rank, officer_type_ii_makeup)
     if not name or name == "훈련":
         return int(plan[0]["hours"]) if len(plan) == 1 else None
     # A historical record can differ from the person's current annual plan.
@@ -308,7 +326,38 @@ def officer_type_ii_makeup_required(
     mobilization_status: str | None,
     carryover_hours: int = 0,
 ) -> bool:
-    return False
+    if not is_officer_reservist(person.rank) or not training_plan_has_type(
+        "동원훈련Ⅱ형",
+        service_year,
+        mobilization_status,
+        person.branch,
+        person.rank,
+        person.position,
+    ):
+        return False
+    if carryover_hours > 0:
+        return True
+
+    records = db.scalars(select(Education).where(
+        Education.person_id == person.military_number,
+        Education.education_year == service_year,
+    )).all()
+    type_ii_records = [
+        record for record in records
+        if _normalized_training_type(record.training_type) == "동원훈련Ⅱ형"
+    ]
+    approved_deferrals = _approved_deferral_record_ids(
+        db, person.military_number, type_ii_records
+    )
+    escalated_attempts = sum(
+        (
+            record.attendance_status in UNEXCUSED_ABSENCE and bool(record.confirmed_by)
+        ) or (
+            record.attendance_status in ROUND_POSTPONED and record.id in approved_deferrals
+        )
+        for record in type_ii_records
+    )
+    return escalated_attempts >= 2
 
 
 def apply_mobilization_status_change(db: Session, person: Person, new_status: str) -> None:
@@ -466,7 +515,16 @@ def training_round_sequence_error(
                 continue
             if training_round_satisfied(previous_status, previous_hours, required_hours):
                 return f"{round_number - 1}차 훈련이 이미 충족되어 {round_number}차 기록은 등록할 수 없습니다."
-            return f"{round_number}차는 {round_number - 1}차 무단불참 또는 연기 후에만 등록할 수 있습니다."
+            if (
+                EARLY_DISMISSAL_ADVANCES_ROUND
+                and previous_status == "조기퇴소"
+                and 0 < previous_hours < (required_hours or 0)
+            ):
+                continue
+            return (
+                f"{round_number}차는 {round_number - 1}차 무단불참, 연기 또는 "
+                "미이수 조기퇴소 후에만 등록할 수 있습니다."
+            )
     return None
 
 
@@ -663,7 +721,8 @@ def training_progress(
         db, person, service_year, mobilization_status, carryover_hours
     )
     target = target_training_hours(
-        service_year, mobilization_status, person.branch, person.rank, person.position
+        service_year, mobilization_status, person.branch, person.rank, person.position,
+        officer_type_ii_makeup,
     )
     needs_review_reason = (
         "student_semester_data_missing" if student_semester_missing

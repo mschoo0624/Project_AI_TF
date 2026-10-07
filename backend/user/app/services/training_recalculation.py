@@ -28,6 +28,7 @@ from user.app.services.training import (
     ATTENDED,
     COMPLETED,
     DESIGNATED,
+    EARLY_DISMISSAL_ADVANCES_ROUND,
     EARLY_DISMISSAL_COUNTS_HOURS,
     NON_DESIGNATED,
     PARTIAL_HOLD,
@@ -35,9 +36,11 @@ from user.app.services.training import (
     TYPE_I_TRAINING_NAMES,
     TYPE_II_TRAINING_NAMES,
     UNEXCUSED_ABSENCE,
+    all_training_progress,
     is_officer_reservist,
     is_local_reserve_command_position,
     training_plan,
+    training_record_required_hours,
 )
 
 YEAR_END_MONTH = int(os.getenv("TRAINING_OBLIGATION_YEAR_END_MONTH", "12"))
@@ -282,7 +285,8 @@ def _approved_for_record(
 
 
 def _rounds_for_person(
-    person_id: str, records: list[Education], postponements: list[Postponement], policies: dict[str, dict[str, object]]
+    db: Session, person: Person, records: list[Education], postponements: list[Postponement],
+    policies: dict[str, dict[str, object]], progress: list[dict[str, object]],
 ) -> dict[tuple[int, str], int]:
     advances: dict[tuple[int, str], int] = {}
     approved_deferrals = {
@@ -317,6 +321,30 @@ def _rounds_for_person(
         confirmed = bool(record.confirmed_by)
         advances_round = bool(policy["advances_round"]) and confirmed
         advances_round = advances_round or is_approved_deferral
+        if (
+            EARLY_DISMISSAL_ADVANCES_ROUND
+            and training_type == "동원훈련Ⅱ형"
+            and record.attendance_status == "조기퇴소"
+        ):
+            mobilization_status, _ = _mobilization_status(db, person, record.education_year)
+            year_progress = (
+                progress[record.education_year]
+                if 0 <= record.education_year < len(progress)
+                else None
+            )
+            required_hours = training_record_required_hours(
+                record.training_type,
+                record.education_year,
+                mobilization_status,
+                person.branch,
+                person.rank,
+                person.position,
+                bool(year_progress and year_progress.get("officer_type_ii_makeup")),
+            )
+            advances_round = advances_round or (
+                required_hours is not None
+                and 0 < record.training_hours < required_hours
+            )
         if advances_round:
             advances[round_key] = min(3, max(advances.get(round_key, 1), record.training_round + 1))
         else:
@@ -362,7 +390,8 @@ def recalculate_person(
             TrainingCarryover.imported_hours > 0,
         )
     ).all())
-    rounds = _rounds_for_person(person_id, records, postponements, policies)
+    progress = all_training_progress(db, person)
+    rounds = _rounds_for_person(db, person, records, postponements, policies, progress)
     records_by_year_type: dict[tuple[int, str], list[Education]] = {}
     for record in records:
         key = (record.education_year, _training_type_key(record.training_type))

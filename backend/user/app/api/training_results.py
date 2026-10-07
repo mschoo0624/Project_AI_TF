@@ -22,7 +22,7 @@ from user.app.schemas.training_results import (
     TrainingScheduleUpdate,
     TrainingScheduleVersion,
 )
-from user.app.services.auth import require_approver, require_scheduler, require_viewer
+from user.app.services.auth import get_current_user, require_approver, require_scheduler, require_viewer
 from user.app.services.training_results import (
     ResultBatchValidationError,
     assign_schedule_roster,
@@ -34,13 +34,19 @@ from user.app.services.training_results import (
     enable_demo_early_save,
     person_result_history,
     result_worklists,
-    schedule_assignment_candidates,
+    schedule_assignment_targets,
     schedule_roster,
     move_schedule,
     update_schedule,
 )
 
 router = APIRouter(prefix="/reservists", tags=["training results"])
+
+
+def require_roster_assigner(actor: User = Depends(get_current_user)) -> User:
+    if actor.role not in {"scheduler", "approver"}:
+        raise HTTPException(status_code=403, detail="Scheduler or approver role required")
+    return actor
 
 
 @router.get("/training-schedules", response_model=list[TrainingScheduleRead])
@@ -155,7 +161,7 @@ def assign_training_roster(
     schedule_id: int,
     payload: TrainingRosterAssignment,
     db: Session = Depends(get_db),
-    actor: User = Depends(require_scheduler),
+    actor: User = Depends(require_roster_assigner),
 ) -> dict[str, object]:
     try:
         records = assign_schedule_roster(db, schedule_id, payload, actor)
@@ -186,9 +192,16 @@ def get_training_roster(
 def get_training_assignment_candidates(
     schedule_id: int,
     db: Session = Depends(get_db),
-    _viewer: User = Depends(require_viewer),
-) -> dict[str, list[str]]:
-    return {"military_numbers": schedule_assignment_candidates(db, schedule_id)}
+    actor: User = Depends(get_current_user),
+) -> dict[str, object]:
+    targets = schedule_assignment_targets(db, schedule_id, actor.role)
+    return {
+        "military_numbers": [
+            target["military_number"]
+            for target in targets if target["assignment_error"] is None
+        ],
+        "training_targets": targets,
+    }
 
 
 @router.post("/training-results/bulk-confirm")

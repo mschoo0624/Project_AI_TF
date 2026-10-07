@@ -4,7 +4,7 @@ import sys
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "classifier_agent"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "classifier_agent_old"))
 from ML import extraction
 
 

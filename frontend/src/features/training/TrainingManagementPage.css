@@ -359,6 +359,8 @@
 .training-result-table input[type=checkbox] { width:15px; height:15px; }
 .training-result-table input:not([type=checkbox]),.training-result-table select { min-width:100px; }
 .training-hours-note { color:var(--train-teal); font-size:10px; font-weight:600; }
+.training-row-hours-note { display:block; max-width:190px; margin-top:3px; color:#63766b; font-size:9px; line-height:1.4; }
+.training-row-hours-note.is-warning { color:#a34d28; font-weight:700; }
 .training-override { color:#6b7060; font-size:11px; }
 .training-worklists { border-top-color:#d18b3d; }
 .training-worklists h3 { margin-top:14px; padding:7px 9px; border:0; border-left:3px solid #d18b3d; background:#fff5e8; color:#80531c; }

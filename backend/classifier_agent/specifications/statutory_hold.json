@@ -1,0 +1,228 @@
+{
+  "version": "0.1.0",
+  "status": "draft_for_review",
+  "source_table": 5,
+  "types": [
+    {
+      "id": "statutory.assembly",
+      "label": "국회의원",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "재직 및 임기; 훈련 범위 예외는 3단계에서 처리",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.overseas",
+      "label": "외국 여행·체류",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "travel"
+      ],
+      "extraction_notes": "실제 체류는 공적 출입국 자료 대조",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.international_ship",
+      "label": "국제선 선박 선원",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment",
+        "vessel"
+      ],
+      "extraction_notes": "국제 항로와 승선 직책",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.international_aircrew",
+      "label": "국제선 항공기 조종사·승무원",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "국제선 업무 명시",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.police",
+      "label": "경찰관",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "직종·재직",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.correction",
+      "label": "교도관",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "교정직 및 인정되는 기술·전문 직군 확인",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.firefighter",
+      "label": "소방관",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "직종·재직",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.military_civilian",
+      "label": "군부대 근무 군무원",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "군무원 신분",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.foreign_forces_employee",
+      "label": "주한외국군부대 종업원",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "고용 주체와 부대",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.navigation_aid",
+      "label": "항로표지 공무원",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment",
+        "vessel"
+      ],
+      "extraction_notes": "정비·등대·항로표지선 업무",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.aircraft_maintenance",
+      "label": "항공기 정비사·항공교통관제사·항공무선표지소 근무자",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "직무 및 항공사 정비 수탁 관계",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.coastal_radio",
+      "label": "해안무선국 통신사·정비사",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "기관과 담당 업무",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.civil_defense_head",
+      "label": "민방위대장",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment",
+        "designation"
+      ],
+      "extraction_notes": "임명 사실",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.usfk_agreement",
+      "label": "주한미군 관련 협정 적용 종업원·노무단원·경비원",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment",
+        "designation"
+      ],
+      "extraction_notes": "SOFA/노무단 협정/계약 한국기업 경비원 세부 근거 구별",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.rail_technical",
+      "label": "철도 기관사·차량장비관리원·시설관리원·전기원",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "담당 직무",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.metro_technical",
+      "label": "지하철·도시철도·광역철도 기관사·보선원·철도토목원",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "교통수단 및 직무",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.foreign_news",
+      "label": "외교부 외신업무 공무원",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "외신 업무",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "statutory.fishery_guidance",
+      "label": "어업지도선 승무원",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment",
+        "vessel"
+      ],
+      "extraction_notes": "선박 종류와 승무",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    }
+  ]
+}

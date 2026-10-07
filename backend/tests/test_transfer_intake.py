@@ -131,6 +131,89 @@ def test_officer_type_two_round_accepts_28_hours() -> None:
 	db.close()
 
 
+def test_officer_type_two_repeated_failed_attempts_allow_32_hour_makeup() -> None:
+	payload = TransferIntakeCreate(
+		person=TransferPersonDetails(
+			military_number="26-70000033",
+			name="간부 보충훈련 전입",
+			branch="육군",
+			rank="하사",
+			service_year=1,
+			position="분대장",
+			mobilization_status="동원미지정",
+		),
+		training_records=[
+			TransferTrainingRecord(
+				service_year=1,
+				training_year=2026,
+				training_type="동원훈련Ⅱ형",
+				training_round=1,
+				training_hours=0,
+				attendance_status="무단불참",
+				confirmed_by="확인자",
+			),
+			TransferTrainingRecord(
+				service_year=1,
+				training_year=2026,
+				training_type="동원훈련Ⅱ형",
+				training_round=2,
+				training_hours=0,
+				attendance_status="연기",
+			),
+			TransferTrainingRecord(
+				service_year=1,
+				training_year=2026,
+				training_type="동원훈련Ⅱ형",
+				training_round=3,
+				training_hours=32,
+			),
+		],
+	)
+	db = make_session()
+
+	transfer = submit_transfer_intake(payload, db)
+
+	assert transfer.status == "pending"
+	db.close()
+
+
+def test_single_officer_type_two_failure_does_not_enable_32_hour_makeup() -> None:
+	payload = TransferIntakeCreate(
+		person=TransferPersonDetails(
+			military_number="26-70000034",
+			name="간부 단일 불참 전입",
+			branch="육군",
+			rank="하사",
+			service_year=1,
+			position="분대장",
+			mobilization_status="동원미지정",
+		),
+		training_records=[
+			TransferTrainingRecord(
+				service_year=1,
+				training_year=2026,
+				training_type="동원훈련Ⅱ형",
+				training_round=1,
+				training_hours=0,
+				attendance_status="무단불참",
+				confirmed_by="확인자",
+			),
+			TransferTrainingRecord(
+				service_year=1,
+				training_year=2026,
+				training_type="동원훈련Ⅱ형",
+				training_round=2,
+				training_hours=32,
+			),
+		],
+	)
+	db = make_session()
+
+	with pytest.raises(HTTPException, match="28-hour requirement"):
+		submit_transfer_intake(payload, db)
+	db.close()
+
+
 def test_officer_type_two_carryover_uses_32_hour_target() -> None:
 	payload = TransferIntakeCreate(
 		person=TransferPersonDetails(

@@ -1,0 +1,513 @@
+{
+  "version": "0.1.0",
+  "status": "draft_for_review",
+  "source_table": 6,
+  "types": [
+    {
+      "id": "policy.postal",
+      "label": "우편집배원",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "일반직·상시계약 집배 업무",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.older_cadre",
+      "label": "41세 이상 간부",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "service"
+      ],
+      "extraction_notes": "생년월일·계급은 DB 대조, 해당 연도 기준 나이 계산은 3단계",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.presidential",
+      "label": "대통령실 수행비서·전문통역·경호",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "담당 업무",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.intelligence_records",
+      "label": "국군정보사 특수기록과",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "소속 부서",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.immigration",
+      "label": "출입국관리직",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "심사·검색·보호·체류관리 등 직무",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.veteran",
+      "label": "국가유공자·보훈보상대상자",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "designation",
+        "service"
+      ],
+      "extraction_notes": "상이 등록 유형 및 등급",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.essential_worker",
+      "label": "군동원업체 필수요원",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment",
+        "designation"
+      ],
+      "extraction_notes": "업체 및 당해 연도 선정·심의 근거",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.customs",
+      "label": "세관 조사공무원",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "employment",
+        "designation"
+      ],
+      "extraction_notes": "특별사법경찰관리 지정",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.police_student",
+      "label": "경찰학교 재학생",
+      "source_page": 1,
+      "field_groups": [
+        "identity",
+        "education"
+      ],
+      "extraction_notes": "재학 상태",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.petition_police",
+      "label": "청원경찰",
+      "source_page": 2,
+      "field_groups": [
+        "identity",
+        "employment",
+        "designation"
+      ],
+      "extraction_notes": "청원경찰법 적용",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.juvenile_protection",
+      "label": "보호직 공무원",
+      "source_page": 2,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "소년원 등 대상기관",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.long_illness",
+      "label": "질병 및 심신장애",
+      "source_page": 2,
+      "field_groups": [
+        "identity",
+        "medical"
+      ],
+      "extraction_notes": "명시된 치료 필요기간을 추출; 180일 이상 여부는 3단계",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.custody",
+      "label": "구속수감자 등",
+      "source_page": 2,
+      "field_groups": [
+        "identity",
+        "custody"
+      ],
+      "extraction_notes": "구속·수감·사회봉사·가석방을 분리. 6개월 조건 적용 범위는 규칙 검토 필요",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.basic_livelihood",
+      "label": "기초생활수급자",
+      "source_page": 2,
+      "field_groups": [
+        "identity",
+        "designation"
+      ],
+      "extraction_notes": "수급 등록 사실 및 효력",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.single_parent_low_income",
+      "label": "차상위계층 한부모가족 가장",
+      "source_page": 2,
+      "field_groups": [
+        "identity",
+        "designation",
+        "relationship"
+      ],
+      "extraction_notes": "차상위 자격과 한부모가족 가장 자격 각각 증빙; designation 항목은 복수 문서별 반환",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.female_reservist",
+      "label": "여군 출신 예비군",
+      "source_page": 2,
+      "field_groups": [
+        "identity",
+        "service",
+        "pregnancy",
+        "relationship"
+      ],
+      "extraction_notes": "임신·출산/유산·사산/자녀양육/배우자신분/난임치료는 대체 분기",
+      "branches": [
+        "임신·출산",
+        "유산·사산",
+        "6세 이하 자녀",
+        "배우자 군인·군무원·예비군",
+        "불임 치료"
+      ],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.medical_service_change",
+      "label": "심신질환 병역의무 변경",
+      "source_page": 2,
+      "field_groups": [
+        "identity",
+        "service",
+        "medical"
+      ],
+      "extraction_notes": "보충역 편입 경력·전역 심신등급·정신과 판정 이력은 대체 분기, 관련 지침 별도 필요",
+      "branches": [
+        "현역 전환 보충역 복무 후 예비군",
+        "심신장애 등급에 따른 간부 전역",
+        "정신과 4급 판정 이력"
+      ],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.private_prison",
+      "label": "민영교도소 직원",
+      "source_page": 2,
+      "field_groups": [
+        "identity",
+        "employment",
+        "designation"
+      ],
+      "extraction_notes": "법무부 위탁기관",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.nis",
+      "label": "국가정보원 정보수사요원",
+      "source_page": 3,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "신분 및 직무",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.air_warning",
+      "label": "민방공 경보요원",
+      "source_page": 3,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "중앙·시도 경보 업무",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.judge_prosecutor",
+      "label": "법관·검사",
+      "source_page": 3,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "재직",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.ground_handling",
+      "label": "항공기 지상조업·장비정비사",
+      "source_page": 3,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "유도·견인·전원·급유 등 직무 및 수탁 관계",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.special_guard",
+      "label": "특수경비원",
+      "source_page": 3,
+      "field_groups": [
+        "identity",
+        "employment",
+        "designation"
+      ],
+      "extraction_notes": "국가중요시설 및 특수경비원 신분",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.school_teacher",
+      "label": "각급학교 교사",
+      "source_page": 3,
+      "field_groups": [
+        "identity",
+        "employment",
+        "education"
+      ],
+      "extraction_notes": "학교 인가·종류, 교사 직위, 기간제 계약기간, 순회업무, 제외기관 여부",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.university_professor",
+      "label": "대학교수",
+      "source_page": 3,
+      "field_groups": [
+        "identity",
+        "employment",
+        "education"
+      ],
+      "extraction_notes": "학교 종류 및 직위; 연구전담·겸임·명예·시간·초빙 여부",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.school_student",
+      "label": "각급학교 학생",
+      "source_page": 4,
+      "field_groups": [
+        "identity",
+        "education"
+      ],
+      "extraction_notes": "재학·정규연한·과정·원격 여부·논문만 등록 여부·학위과정",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.hydrographic",
+      "label": "국립해양조사원 해상근무자",
+      "source_page": 4,
+      "field_groups": [
+        "identity",
+        "employment",
+        "vessel"
+      ],
+      "extraction_notes": "해상업무 및 연간 해상근무 기간",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.radio_monitor",
+      "label": "전파감시직",
+      "source_page": 4,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "전파감시 및 통제 업무",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.security_telecom",
+      "label": "국가안보 통신요원",
+      "source_page": 4,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "중앙 통신운용 업무",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.rail_staff",
+      "label": "철도 종사자",
+      "source_page": 4,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "역무·여객·화물·부기관사와 운전취급·차장 구분",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.rail_police",
+      "label": "철도 특별사법경찰관",
+      "source_page": 4,
+      "field_groups": [
+        "identity",
+        "employment",
+        "designation"
+      ],
+      "extraction_notes": "지정 사실",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.fire_candidate",
+      "label": "소방학교 간부후보생",
+      "source_page": 4,
+      "field_groups": [
+        "identity",
+        "education"
+      ],
+      "extraction_notes": "교육생 신분",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.miner",
+      "label": "광부",
+      "source_page": 4,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "갱내 직접 작업 여부; 간접지원과 구별",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.urban_rail_staff",
+      "label": "도시철도·광역철도 특수근무자",
+      "source_page": 5,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "관제·역무·통신·시설·건축·신호·전기와 차장·검수 구분",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.vocational_teacher",
+      "label": "직업훈련 교수·교사",
+      "source_page": 5,
+      "field_groups": [
+        "identity",
+        "employment",
+        "education"
+      ],
+      "extraction_notes": "인가시설 종류와 교수·교사 직위",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.vocational_student",
+      "label": "직업훈련생",
+      "source_page": 5,
+      "field_groups": [
+        "identity",
+        "education"
+      ],
+      "extraction_notes": "교육 기간·시설 인가·학위과정 여부",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.defense_research",
+      "label": "국방과학연구 기술직",
+      "source_page": 5,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "국방과학연구소·국방연구원·국방기술품질원 및 연구·기술직",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.ship_crew",
+      "label": "선박·어선 승선자",
+      "source_page": 5,
+      "field_groups": [
+        "identity",
+        "employment",
+        "vessel"
+      ],
+      "extraction_notes": "톤수별 승무경력증명 또는 승선신고 사실확인; 25톤 경계 문구 검토 필요",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.forest_helicopter",
+      "label": "산불방지 헬기 운용요원",
+      "source_page": 5,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "조종·승무·정비와 통신 구분",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    },
+    {
+      "id": "policy.road_control",
+      "label": "도로공사 교통정보센터·종합상황실",
+      "source_page": 5,
+      "field_groups": [
+        "identity",
+        "employment"
+      ],
+      "extraction_notes": "소속과 담당 업무",
+      "branches": [],
+      "verification_stage": "3단계 고정 규칙 및 DB 조회. 이 항목 목록만으로 승인하지 않음."
+    }
+  ]
+}

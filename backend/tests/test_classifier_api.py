@@ -28,7 +28,7 @@ def make_text_pdf(text: str) -> bytes:
 
 
 def test_nondesignated_training_is_32_hours_for_every_branch(monkeypatch):
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "classifier_agent"))
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "classifier_agent_old"))
     import models
     import rules
 
@@ -46,7 +46,7 @@ def test_nondesignated_training_is_32_hours_for_every_branch(monkeypatch):
     ],
 )
 def test_upload_classifies_only_supported_reason_text(monkeypatch, tmp_path, doc_text, expected_input):
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "classifier_agent"))
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "classifier_agent_old"))
     import API
 
     monkeypatch.setattr(API.submissions, "UPLOAD_DIR", tmp_path)
@@ -68,7 +68,7 @@ def test_upload_classifies_only_supported_reason_text(monkeypatch, tmp_path, doc
 
 
 def test_upload_extracts_text_from_real_pdf_attachment(monkeypatch, tmp_path):
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "classifier_agent"))
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "classifier_agent_old"))
     import API
 
     monkeypatch.setattr(API.submissions, "UPLOAD_DIR", tmp_path)

@@ -1,5 +1,16 @@
+<<<<<<< HEAD
 ## Security Notice
 Authentication and role enforcement are temporarily disabled across API workflows. Personnel and training data, exports, and write operations are accessible without a token. Do not expose this service to untrusted networks.
+=======
+## Model packages
+
+- `prediction_agent/`: dashboard population and attendance prediction, including datasets and caches.
+- `classifier_agent_old/`: archived legacy PDF extraction/classification server (8001).
+- `classifier_agent/`: Qwen PDF extraction, rule verification and persisted document review API (8003), connected to the UI. The business API remains on 8002.
+
+These packages do not import each other. The dashboard API uses `prediction_agent.cache`.
+See [prediction setup](prediction_agent/README.md), [existing classifier setup](classifier_agent_old/README.md), and [new classifier workspace](classifier_agent/README.md).
+>>>>>>> origin/frontend
 
 ## Installation Steps
 1. sudo apt update

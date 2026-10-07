@@ -1,5 +1,8 @@
-# Operational records and PDFs (keep these out of source control)
-ML/uploads/
-ML/submissions.jsonl
 __pycache__/
+data/
 *.py[cod]
+.models/
+.hf_modules/
+.venv*/
+evaluation/runs/
+evaluation/smoke-result.json

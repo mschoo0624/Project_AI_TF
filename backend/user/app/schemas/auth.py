@@ -29,7 +29,7 @@ class PasswordResetRequest(BaseModel):
 
 
 class UserRead(BaseModel):
-    id: int
+    id: int | None = None
     username: str
     role: str
     is_active: bool = True

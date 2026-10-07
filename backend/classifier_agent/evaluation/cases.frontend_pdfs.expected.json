@@ -1,0 +1,1111 @@
+{
+  "version": 1,
+  "origin": "existing_repository_demo_pdfs",
+  "synthetic": true,
+  "expected_source": "PDF 텍스트, 2개 렌더링 확인, frontend/src/features/review/archive/generate_pdfs.py의 BODY 및 공통값 대조. 파일을 새로 생성하지 않음.",
+  "notes": [
+    "시험 대상 PDF는 16개 모두 더미 표시가 있음.",
+    "신청 유형은 평가자가 고정 입력으로 지정하며 모델이 분류하는 시험이 아님.",
+    "공통 인적정보와 유형별 핵심항목을 평가하며 전체 필드 완전성 시험은 아님.",
+    "발급일과 사건일의 모순은 추출 단계에서 보정하지 않음.",
+    "일자 없는 연월은 ISO 날짜를 지어내지 않고 null로 두되 원문 근거를 보존.",
+    "사망진단서 OOO는 원문 문자열 그대로 추출. 실제 신원으로 검증된 이름이라는 뜻은 아님.",
+    "농어업 등록이라는 제목만으로 특정 업종·후계자 지정 상태를 추측하지 않음.",
+    "대회 제목으로 행사 종류는 알 수 있으나 구체적 참가자 확정 사실은 본문에 없음."
+  ],
+  "cases": [
+    {
+      "id": "attendance",
+      "filename": "attendance.pdf",
+      "application_type": "postponement.distance_attendance",
+      "application_type_note": "출석수업 신청으로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "school_name": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "event_start": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "event_end": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+      ]
+    },
+    {
+      "id": "boarding",
+      "filename": "boarding.pdf",
+      "application_type": "policy.ship_crew",
+      "application_type_note": "선박 승선 보류 신청으로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "vessel_name": {
+          "value": "HANARO No.7",
+          "accepted_values": [
+            "HANARO No.7"
+          ],
+          "evidence_must_include": [
+            "HANARO No.7"
+          ]
+        },
+        "crew_role": {
+          "value": "3등항해사",
+          "accepted_values": [
+            "3등항해사"
+          ],
+          "evidence_must_include": [
+            "3등항해사"
+          ]
+        },
+        "onboard_start": {
+          "value": "2026-03-02",
+          "accepted_values": [
+            "2026-03-02"
+          ],
+          "evidence_must_include": [
+            "2026-03-02"
+          ]
+        },
+        "onboard_end": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "vessel_tonnage": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+      ]
+    },
+    {
+      "id": "business",
+      "filename": "business.pdf",
+      "application_type": "postponement.work",
+      "application_type_note": "주요업무 수행 신청으로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "work_description": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "work_start": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "work_end": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+      ]
+    },
+    {
+      "id": "competition",
+      "filename": "competition.pdf",
+      "application_type": "postponement.work",
+      "application_type_note": "대회 참가 분기로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "event_kind": {
+          "value": "대회",
+          "accepted_values": [
+            "대회",
+            "대회 참가"
+          ],
+          "evidence_must_include": [
+            "대회참가확인서"
+          ]
+        },
+        "event_start": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "event_end": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "event_organizer": {
+          "value": null,
+          "accepted_values": [null],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+      ]
+    },
+    {
+      "id": "death",
+      "filename": "death.pdf",
+      "application_type": "postponement.family",
+      "application_type_note": "가족 사망 분기로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "related_person_name": {
+          "value": "OOO",
+          "accepted_values": [
+            "OOO"
+          ],
+          "evidence_must_include": [
+            "OOO"
+          ]
+        },
+        "relationship": {
+          "value": "부친",
+          "accepted_values": [
+            "부친",
+            "부",
+            "아버지"
+          ],
+          "evidence_must_include": [
+            "관계 부"
+          ]
+        },
+        "death_date": {
+          "value": "2026-05-18",
+          "accepted_values": [
+            "2026-05-18"
+          ],
+          "evidence_must_include": [
+            "2026-05-18"
+          ]
+        },
+        "other_caregiver_available": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "발급일이 사망일보다 앞선 더미 데이터. 값을 고치지 않고 원문대로 추출."
+      ]
+    },
+    {
+      "id": "disaster",
+      "filename": "disaster.pdf",
+      "application_type": "postponement.disaster",
+      "application_type_note": "재난 신청으로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "disaster_kind": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "disaster_date": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "recovery_start": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "recovery_end": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+      ]
+    },
+    {
+      "id": "disembark",
+      "filename": "disembark.pdf",
+      "application_type": "policy.ship_crew",
+      "application_type_note": "선박 승선 보류 신청으로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "vessel_name": {
+          "value": "HANARO No.7",
+          "accepted_values": [
+            "HANARO No.7"
+          ],
+          "evidence_must_include": [
+            "HANARO No.7"
+          ]
+        },
+        "onboard_start": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "onboard_end": {
+          "value": "2026-04-01",
+          "accepted_values": [
+            "2026-04-01"
+          ],
+          "evidence_must_include": [
+            "2026-04-01"
+          ]
+        },
+        "vessel_tonnage": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+      ]
+    },
+    {
+      "id": "employment",
+      "filename": "employment.pdf",
+      "application_type": "statutory.police",
+      "application_type_note": "경찰관 법규보류 신청으로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "employer": {
+          "value": "OO경찰서",
+          "accepted_values": [
+            "OO경찰서"
+          ],
+          "evidence_must_include": [
+            "OO경찰서"
+          ]
+        },
+        "job_title": {
+          "value": "경위",
+          "accepted_values": [
+            "경위"
+          ],
+          "evidence_must_include": [
+            "경위"
+          ]
+        },
+        "current_employment": {
+          "value": true,
+          "accepted_values": [
+            true
+          ],
+          "evidence_must_include": [
+            "2019-03 ~ 현재"
+          ]
+        },
+        "employment_start": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": [
+            "2019-03"
+          ]
+        },
+        "employment_end": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+      ]
+    },
+    {
+      "id": "enrollment",
+      "filename": "enrollment.pdf",
+      "application_type": "policy.school_student",
+      "application_type_note": "각급학교 학생 신청으로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "school_name": {
+          "value": "OO대학교",
+          "accepted_values": [
+            "OO대학교"
+          ],
+          "evidence_must_include": [
+            "OO대학교"
+          ]
+        },
+        "academic_status": {
+          "value": "재학",
+          "accepted_values": [
+            "재학",
+            "재학중",
+            "재학 중"
+          ],
+          "evidence_must_include": [
+            "재학중"
+          ]
+        },
+        "enrollment_start": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": [
+            "2024-03"
+          ]
+        },
+        "enrollment_end": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "degree_course": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+      ]
+    },
+    {
+      "id": "exam",
+      "filename": "exam.pdf",
+      "application_type": "postponement.exam",
+      "application_type_note": "시험 응시 신청으로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "exam_name": {
+          "value": "2026년도 정보처리기사 실기",
+          "accepted_values": [
+            "2026년도 정보처리기사 실기"
+          ],
+          "evidence_must_include": [
+            "2026년도 정보처리기사 실기"
+          ]
+        },
+        "registration_date": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "exam_date": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "result_date": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+      ]
+    },
+    {
+      "id": "exit_entry",
+      "filename": "exit_entry.pdf",
+      "application_type": "postponement.overseas",
+      "application_type_note": "출국 연기 신청으로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "departure_date": {
+          "value": "2025-03-18",
+          "accepted_values": [
+            "2025-03-18"
+          ],
+          "evidence_must_include": [
+            "2025-03-18"
+          ]
+        },
+        "return_date": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "travel_status": {
+          "value": "미귀국",
+          "accepted_values": [
+            "미귀국",
+            "국외 체류 중",
+            "국외 체류",
+            "미귀국 상태"
+          ],
+          "evidence_must_include": [
+            "미귀국"
+          ]
+        }
+      },
+      "review_notes": [
+        "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+      ]
+    },
+    {
+      "id": "exit_plan",
+      "filename": "exit_plan.pdf",
+      "application_type": "postponement.overseas",
+      "application_type_note": "출국 예정 연기 신청으로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "departure_date": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "return_date": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "overseas_stay_period": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+      ]
+    },
+    {
+      "id": "farming",
+      "filename": "farming.pdf",
+      "application_type": "postponement.agriculture",
+      "application_type_note": "농어업 연기 신청으로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "work_impact": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "designation_date": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "busy_start": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "busy_end": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+      ]
+    },
+    {
+      "id": "medical",
+      "filename": "medical.pdf",
+      "application_type": "postponement.illness",
+      "application_type_note": "질병 치료 연기 신청으로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "diagnosis": {
+          "value": "요추 추간판탈출증",
+          "accepted_values": [
+            "요추 추간판탈출증"
+          ],
+          "evidence_must_include": [
+            "요추 추간판탈출증"
+          ]
+        },
+        "treatment_duration": {
+          "value": "약 4주간",
+          "accepted_values": [
+            "약 4주간",
+            "약 4주",
+            "4주",
+            "4주간"
+          ],
+          "evidence_must_include": [
+            "약 4주간"
+          ]
+        },
+        "treatment_start": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "treatment_end": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "inpatient_status": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "발급일이 진료일보다 앞선 더미 데이터. 진료일은 치료 시작일과 동일하지 않음."
+      ]
+    },
+    {
+      "id": "personal_statement",
+      "filename": "personal_statement.pdf",
+      "application_type": "postponement.work",
+      "application_type_note": "주요업무/기타 불가피 사유 신청으로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "work_description": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "work_start": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "work_end": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+      ]
+    },
+    {
+      "id": "wedding",
+      "filename": "wedding.pdf",
+      "application_type": "postponement.family_event",
+      "application_type_note": "본인 결혼 분기로 가정",
+      "expected": {
+        "subject_name": {
+          "value": "홍길동",
+          "accepted_values": [
+            "홍길동"
+          ],
+          "evidence_must_include": [
+            "홍길동"
+          ]
+        },
+        "subject_service_number": {
+          "value": "22-76010001",
+          "accepted_values": [
+            "22-76010001"
+          ],
+          "evidence_must_include": [
+            "22-76010001"
+          ]
+        },
+        "issued_on": {
+          "value": "2026-04-19",
+          "accepted_values": [
+            "2026-04-19"
+          ],
+          "evidence_must_include": [
+            "2026년 04월 19일"
+          ]
+        },
+        "event_date": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "related_person_name": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        },
+        "relationship": {
+          "value": null,
+          "accepted_values": [
+            null
+          ],
+          "evidence_must_include": []
+        }
+      },
+      "review_notes": [
+        "신청 유형은 PDF와 동반된 사용자 입력이 없어 평가자가 명시한 가정이다."
+      ]
+    }
+  ]
+}

@@ -1,4 +1,3 @@
-"""Validated profile editing, including atomic military-number changes."""
 import re
 
 from sqlalchemy import delete, update

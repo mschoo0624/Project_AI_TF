@@ -140,11 +140,11 @@ def who_am_i(user: User = Depends(get_current_user)) -> User:
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
-    user: User = Depends(get_current_user),
     credentials=Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> None:
-    del user
+    if credentials is None:
+        return
     session_hash = __import__("hashlib").sha256(
         credentials.credentials.encode("ascii", errors="ignore")
     ).hexdigest()

@@ -23,6 +23,7 @@ from user.app.models.training_schedule import (
     TrainingSchedule,
     TrainingSession,
 )
+from user.app.models.training_recalculation import TrainingRoundState
 from user.app.models.user import User
 from user.app.schemas.training_results import (
     TrainingResultBatchConfirm,
@@ -33,8 +34,10 @@ from user.app.schemas.training_results import (
 from user.app.services.training import (
     ATTENDANCE_HOURS_REQUIRED,
     ATTENDANCE_ZERO_HOURS,
+    EARLY_DISMISSAL_ADVANCES_ROUND,
     EARLY_DISMISSAL_COUNTS_HOURS,
     ROUND_SCHEDULED,
+    SMALL_REMAINDER_REVIEW_HOURS,
     TYPE_II_TRAINING_NAMES,
     UNEXCUSED_ABSENCE,
     OVERDUE_GRACE_DAYS,
@@ -154,7 +157,9 @@ def _validate_schedule_round(training_type: str, training_round: int) -> None:
         )
 
 
-def _required_round_hours(db: Session, person: Person, record: Education) -> int | None:
+def _required_round_hours(
+    db: Session, person: Person, record: Education, officer_type_ii_makeup: bool = False
+) -> int | None:
     return training_record_required_hours(
         record.training_type,
         record.education_year,
@@ -162,7 +167,24 @@ def _required_round_hours(db: Session, person: Person, record: Education) -> int
         person.branch,
         person.rank,
         person.position,
+        officer_type_ii_makeup,
     )
+
+
+def _remaining_result_hours(
+    record: Education, annual_progress: dict[str, object] | None
+) -> int | None:
+    if annual_progress is None:
+        return None
+    required = int(annual_progress["required_hours"])
+    completed = int(annual_progress["completed_hours"])
+    current_hours = (
+        record.training_hours
+        if record.attendance_status in ATTENDANCE_HOURS_REQUIRED
+        and record.source_kind != "estimated"
+        else 0
+    )
+    return max(required - max(completed - current_hours, 0), 0)
 
 
 def _linked_approved_postponement(db: Session, record: Education, expected_types: set[str]) -> bool:
@@ -421,8 +443,146 @@ def _advance_schedule_version(
     db.refresh(schedule, attribute_names=["version"])
 
 
-def _schedule_roster_person_error(
+def _schedule_person_training_round(
     db: Session, schedule: TrainingSchedule, person: Person
+) -> int:
+    if "".join(schedule.training_type.split()) not in TYPE_II_TRAINING_NAMES:
+        return 1
+
+    saved_round: int | None = None
+    if schedule.service_year == person.service_year:
+        saved_round = db.scalar(select(TrainingRoundState.current_round).where(
+            TrainingRoundState.person_id == person.military_number,
+            TrainingRoundState.training_type == "동원훈련Ⅱ형",
+        ))
+        if saved_round is not None:
+            saved_round = max(1, min(3, saved_round))
+
+    year_records = db.scalars(select(Education).where(
+        Education.person_id == person.military_number,
+        Education.education_year == schedule.service_year,
+    )).all()
+    progress = all_training_progress(db, person)
+    year_progress = (
+        progress[schedule.service_year]
+        if schedule.service_year < len(progress)
+        else None
+    )
+    required_hours = training_record_required_hours(
+        schedule.training_type,
+        schedule.service_year,
+        mobilization_status_for_year(db, person, schedule.service_year),
+        person.branch,
+        person.rank,
+        person.position,
+        bool(year_progress and year_progress.get("officer_type_ii_makeup")),
+    )
+    approved_deferral_ids = {
+        record_id for record_id in db.scalars(select(Postponement.education_record_id).where(
+            Postponement.person_id == person.military_number,
+            Postponement.status == "approved",
+            Postponement.type.in_(DELAY_TYPES),
+            Postponement.education_record_id.is_not(None),
+        )).all() if record_id is not None
+    }
+    current_round = 1
+    for record in year_records:
+        if "".join(record.training_type.split()) not in TYPE_II_TRAINING_NAMES:
+            continue
+        advances_round = (
+            record.attendance_status in UNEXCUSED_ABSENCE and bool(record.confirmed_by)
+        ) or record.id in approved_deferral_ids
+        advances_round = advances_round or (
+            EARLY_DISMISSAL_ADVANCES_ROUND
+            and record.attendance_status == "조기퇴소"
+            and required_hours is not None
+            and 0 < record.training_hours < required_hours
+        )
+        record_round = min(3, record.training_round + int(advances_round))
+        current_round = max(current_round, record_round)
+    return max(current_round, saved_round or 1)
+
+
+def _unassigned_pending_round_record(
+    year_records: list[Education],
+    training_type: str,
+    training_round: int,
+) -> Education | None:
+    normalized_type = "".join(training_type.split())
+    if normalized_type not in TYPE_II_TRAINING_NAMES:
+        return None
+    matching = [
+        record for record in year_records
+        if (
+            "".join(record.training_type.split()) == normalized_type
+            or (
+                normalized_type in TYPE_II_TRAINING_NAMES
+                and "".join(record.training_type.split()) in TYPE_II_TRAINING_NAMES
+            )
+        )
+        and record.training_round == training_round
+    ]
+    if len(matching) != 1:
+        return None
+    record = matching[0]
+    if (
+        record.schedule_id is None
+        and record.attendance_status in ROUND_SCHEDULED
+        and record.training_hours == 0
+        and not record.confirmed_by
+        and record.confirmed_at is None
+    ):
+        return record
+    return None
+
+
+def _small_remainder_review_case(
+    db: Session, person: Person, record: Education
+) -> dict[str, object] | None:
+    if (
+        not EARLY_DISMISSAL_ADVANCES_ROUND
+        or SMALL_REMAINDER_REVIEW_HOURS == 0
+        or "".join(record.training_type.split()) not in TYPE_II_TRAINING_NAMES
+        or record.attendance_status != "조기퇴소"
+        or record.training_hours <= 0
+    ):
+        return None
+    progress = all_training_progress(db, person)
+    year_progress = (
+        progress[record.education_year]
+        if record.education_year < len(progress)
+        else None
+    )
+    if year_progress is None:
+        return None
+    required_hours = training_record_required_hours(
+        record.training_type,
+        record.education_year,
+        mobilization_status_for_year(db, person, record.education_year),
+        person.branch,
+        person.rank,
+        person.position,
+        bool(year_progress.get("officer_type_ii_makeup")),
+    )
+    if required_hours is None or record.training_hours >= required_hours:
+        return None
+    remaining_hours = required_hours - record.training_hours
+    if not 0 < remaining_hours <= SMALL_REMAINDER_REVIEW_HOURS:
+        return None
+    return {
+        "education_id": record.id,
+        "training_round": record.training_round,
+        "counted_hours": record.training_hours,
+        "required_hours": required_hours,
+        "remaining_hours": remaining_hours,
+        "threshold_hours": SMALL_REMAINDER_REVIEW_HOURS,
+    }
+
+
+def _schedule_roster_person_error(
+    db: Session, schedule: TrainingSchedule, person: Person,
+    training_round: int | None = None,
+    actor_role: str = "scheduler",
 ) -> str | None:
     if person.service_year is not None and schedule.service_year > person.service_year:
         return "Service year is in the future"
@@ -459,10 +619,51 @@ def _schedule_roster_person_error(
             Postponement.education_record_id.is_not(None),
         )).all() if record_id is not None
     }
+    expected_round = _schedule_person_training_round(
+        db, schedule, person
+    )
+    assigned_round = training_round if training_round is not None else schedule.training_round
+    if "".join(schedule.training_type.split()) in TYPE_II_TRAINING_NAMES:
+        if assigned_round != expected_round:
+            if assigned_round < expected_round:
+                prior_attempt = next((
+                    record for record in year_records
+                    if "".join(record.training_type.split()) in TYPE_II_TRAINING_NAMES
+                    and record.training_round == assigned_round
+                    and record.attendance_status == "조기퇴소"
+                    and required_hours > record.training_hours
+                ), None)
+                if prior_attempt is not None:
+                    remaining = max(required_hours - prior_attempt.training_hours, 0)
+                    return f"{assigned_round}차 조기퇴소 (잔여 {remaining}시간)"
+            return f"이 대상자는 {expected_round}차 훈련 대상이므로 {assigned_round}차 일정에 부과할 수 없습니다."
+        previous_round_record = next((
+            record for record in year_records
+            if "".join(record.training_type.split()) in TYPE_II_TRAINING_NAMES
+            and record.training_round == assigned_round - 1
+        ), None)
+        review_case = (
+            _small_remainder_review_case(db, person, previous_round_record)
+            if previous_round_record is not None
+            else None
+        )
+        if review_case is not None and actor_role != "approver":
+            return (
+                "승인자 검토 필요: 잔여 "
+                f"{review_case['remaining_hours']}시간 "
+                f"(기준 {review_case['threshold_hours']}시간 이하)"
+            )
+    pending_record = _unassigned_pending_round_record(
+        year_records, schedule.training_type, assigned_round
+    )
+    sequence_records = [
+        record for record in year_records
+        if pending_record is None or record.id != pending_record.id
+    ]
     return training_round_sequence_error(
-        year_records,
+        sequence_records,
         schedule.training_type,
-        schedule.training_round,
+        assigned_round,
         "scheduled",
         0,
         required_hours,
@@ -493,27 +694,70 @@ def assign_schedule_roster(
         raise HTTPException(status_code=409, detail="Schedule has no sessions")
 
     records: list[Education] = []
+    before_snapshots: dict[int, str] = {}
+    small_remainder_reviews: dict[str, dict[str, object]] = {}
     for person_id in payload.person_ids:
         person = people.get(person_id)
         if person is None:
             errors.append({"person_id": person_id, "error": "Reservist not found"})
             continue
-        eligibility_error = _schedule_roster_person_error(db, schedule, person)
+        training_round = (
+            schedule.training_round
+            if "".join(schedule.training_type.split()) in TYPE_II_TRAINING_NAMES
+            else 1
+        )
+        eligibility_error = _schedule_roster_person_error(
+            db, schedule, person, training_round, actor.role
+        )
         if eligibility_error:
             errors.append({"person_id": person_id, "error": eligibility_error})
             continue
-        records.append(Education(
-            person_id=person_id,
-            education_year=schedule.service_year,
-            training_year=first_session.session_date.year,
-            scheduled_date=first_session.session_date,
-            schedule_id=schedule.id,
-            training_type=schedule.training_type,
-            training_round=schedule.training_round,
-            attendance_status="scheduled",
-            training_hours=0,
-            source_kind="manual",
-        ))
+        year_records = db.scalars(select(Education).where(
+            Education.person_id == person_id,
+            Education.education_year == schedule.service_year,
+        )).all()
+        pending_record = _unassigned_pending_round_record(
+            year_records, schedule.training_type, training_round
+        )
+        if pending_record is not None:
+            before_snapshots[pending_record.id] = json.dumps(
+                _record_snapshot(pending_record), ensure_ascii=False, sort_keys=True
+            )
+            pending_record.training_year = first_session.session_date.year
+            pending_record.scheduled_date = first_session.session_date
+            pending_record.schedule_id = schedule.id
+            pending_record.training_type = schedule.training_type
+            pending_record.training_round = training_round
+            pending_record.attendance_status = "scheduled"
+            pending_record.training_hours = 0
+            pending_record.source_kind = "manual"
+            pending_record.version += 1
+            records.append(pending_record)
+        else:
+            records.append(Education(
+                person_id=person_id,
+                education_year=schedule.service_year,
+                training_year=first_session.session_date.year,
+                scheduled_date=first_session.session_date,
+                schedule_id=schedule.id,
+                training_type=schedule.training_type,
+                training_round=training_round,
+                attendance_status="scheduled",
+                training_hours=0,
+                source_kind="manual",
+            ))
+        previous_round_record = next((
+            record for record in year_records
+            if "".join(record.training_type.split()) in TYPE_II_TRAINING_NAMES
+            and record.training_round == training_round - 1
+        ), None)
+        review_case = (
+            _small_remainder_review_case(db, person, previous_round_record)
+            if actor.role == "approver" and previous_round_record is not None
+            else None
+        )
+        if review_case is not None:
+            small_remainder_reviews[person_id] = review_case
 
     if errors:
         raise HTTPException(status_code=422, detail={"errors": errors})
@@ -535,45 +779,92 @@ def assign_schedule_roster(
             record_id=record.id,
             user_id=actor.id,
             actor_label=actor.username,
+            before_data=before_snapshots.get(record.id),
             after_data=json.dumps(_record_snapshot(record), ensure_ascii=False),
             created_at=_now(),
         ))
+        review_case = small_remainder_reviews.get(record.person_id)
+        if review_case is not None:
+            db.add(AuditLog(
+                action="training_schedule.small_remainder_review",
+                table_name="education",
+                record_id=int(review_case["education_id"]),
+                user_id=actor.id,
+                actor_label=actor.username,
+                before_data=json.dumps({
+                    "remaining_hours": review_case["remaining_hours"],
+                    "threshold_hours": review_case["threshold_hours"],
+                }, ensure_ascii=False, sort_keys=True),
+                after_data=json.dumps({
+                    "decision": "approved_assignment",
+                    "assigned_education_id": record.id,
+                    "schedule_id": schedule.id,
+                    "training_round": record.training_round,
+                    "counted_hours": review_case["counted_hours"],
+                    "required_hours": review_case["required_hours"],
+                    "remaining_hours": review_case["remaining_hours"],
+                    "threshold_hours": review_case["threshold_hours"],
+                    "policy_verified": False,
+                }, ensure_ascii=False, sort_keys=True),
+                created_at=_now(),
+            ))
     return records
 
 
-def schedule_assignment_candidates(db: Session, schedule_id: int) -> list[str]:
+def schedule_assignment_targets(
+    db: Session, schedule_id: int, actor_role: str = "scheduler"
+) -> list[dict[str, object]]:
     schedule = db.get(TrainingSchedule, schedule_id)
     if schedule is None:
         raise HTTPException(status_code=404, detail="Training schedule not found")
-    if (
-        schedule.status != "scheduled"
-        or schedule.demo_early_save_enabled
-        or schedule.demo_early_save_used
-        or not schedule.sessions
-    ):
-        return []
 
-    assigned_ids = set(db.scalars(
-        select(Education.person_id).where(Education.schedule_id == schedule_id)
-    ).all())
     people = db.scalars(
         select(Person)
         .where(Person.service_year == schedule.service_year)
         .order_by(Person.name, Person.military_number)
     ).all()
-    return [
-        person.military_number
-        for person in people
-        if person.military_number not in assigned_ids
-        and training_plan_has_type(
+    targets: list[dict[str, object]] = []
+    for person in people:
+        if not training_plan_has_type(
             schedule.training_type,
             schedule.service_year,
             mobilization_status_for_year(db, person, schedule.service_year),
             person.branch,
             person.rank,
             person.position,
+        ):
+            continue
+        training_round = _schedule_person_training_round(db, schedule, person)
+        scheduled_round = (
+            schedule.training_round
+            if "".join(schedule.training_type.split()) in TYPE_II_TRAINING_NAMES
+            else 1
         )
-        and _schedule_roster_person_error(db, schedule, person) is None
+        if schedule.status != "scheduled":
+            error = "Schedule is not open for roster assignment"
+        elif schedule.demo_early_save_enabled or schedule.demo_early_save_used:
+            error = "Roster is locked for this demo result entry"
+        elif not schedule.sessions:
+            error = "Schedule has no sessions"
+        else:
+            error = _schedule_roster_person_error(
+                db, schedule, person, scheduled_round, actor_role
+            )
+        targets.append({
+            "military_number": person.military_number,
+            "training_round": training_round,
+            "assignment_error": error,
+        })
+    return targets
+
+
+def schedule_assignment_candidates(
+    db: Session, schedule_id: int, actor_role: str = "scheduler"
+) -> list[str]:
+    return [
+        str(target["military_number"])
+        for target in schedule_assignment_targets(db, schedule_id, actor_role)
+        if target["assignment_error"] is None
     ]
 
 
@@ -597,11 +888,23 @@ def schedule_roster(
     counts = {"attended": 0, "completed": 0, "absent": 0, "missing": 0, "deferred": 0}
     for record in rows:
         person = db.get(Person, record.person_id)
+        progress = all_training_progress(db, person) if person else []
+        annual_progress = (
+            progress[record.education_year]
+            if 0 <= record.education_year < len(progress)
+            else None
+        )
+        officer_type_ii_makeup = bool(
+            annual_progress and annual_progress.get("officer_type_ii_makeup")
+        )
+        required_round_hours = (
+            _required_round_hours(db, person, record, officer_type_ii_makeup)
+            if person else None
+        )
         status_value = record.attendance_status
         displayed_status = "결과 미입력" if status_value in ROUND_SCHEDULED and missing_due else status_value
         is_completed = training_round_satisfied(
-            status_value, record.training_hours,
-            _required_round_hours(db, person, record) if person else None,
+            status_value, record.training_hours, required_round_hours,
         )
         if status_value in {"참석", "attended"}:
             counts["attended"] += 1
@@ -624,7 +927,8 @@ def schedule_roster(
             "attendance_status": status_value,
             "result_status": displayed_status,
             "training_hours": record.training_hours,
-            "required_hours": _required_round_hours(db, person, record) if person else None,
+            "required_hours": required_round_hours,
+            "remaining_hours": _remaining_result_hours(record, annual_progress),
             "confirmed_by": record.confirmed_by,
             "notes": record.notes,
             "source_kind": record.source_kind,
@@ -668,7 +972,7 @@ def result_worklists(db: Session, today: date | None = None) -> dict[str, list[d
     scheduler_confirmable: list[dict[str, Any]] = []
     approver_required: list[dict[str, Any]] = []
     for record in records:
-        schedule = db.get(TrainingSchedule, record.schedule_id)
+        schedule = db.get(TrainingSchedule, record.schedule_id) if record.schedule_id else None
         person = db.get(Person, record.person_id)
         if schedule is None and record.schedule_id is not None:
             continue
@@ -727,12 +1031,57 @@ def result_worklists(db: Session, today: date | None = None) -> dict[str, list[d
             "actor": audit.actor_label,
             "created_at": audit.created_at.isoformat(),
         })
+    small_remainder_reviews: list[dict[str, Any]] = []
+    if EARLY_DISMISSAL_ADVANCES_ROUND and SMALL_REMAINDER_REVIEW_HOURS > 0:
+        reviewed_record_ids = {
+            record_id for record_id in db.scalars(select(AuditLog.record_id).where(
+                AuditLog.table_name == "education",
+                AuditLog.action == "training_schedule.small_remainder_review",
+                AuditLog.record_id.is_not(None),
+            )).all() if record_id is not None
+        }
+        partial_rows = db.scalars(select(Education).where(
+            Education.attendance_status == "조기퇴소",
+            Education.training_type.in_(TYPE_II_TRAINING_NAMES),
+            Education.training_round < 3,
+        ).order_by(Education.education_year, Education.training_year, Education.id)).all()
+        for record in partial_rows:
+            if record.id in reviewed_record_ids:
+                continue
+            person = db.get(Person, record.person_id)
+            if person is None:
+                continue
+            review_case = _small_remainder_review_case(db, person, record)
+            if review_case is None:
+                continue
+            source_schedule = db.get(TrainingSchedule, record.schedule_id) if record.schedule_id else None
+            counted_hours = int(review_case["counted_hours"])
+            required_hours = int(review_case["required_hours"])
+            remaining_hours = int(review_case["remaining_hours"])
+            threshold_hours = int(review_case["threshold_hours"])
+            small_remainder_reviews.append({
+                "education_id": record.id,
+                "military_number": record.person_id,
+                "name": person.name,
+                "schedule_title": source_schedule.title if source_schedule else "기존 훈련 기록",
+                "training_round": record.training_round,
+                "next_round": record.training_round + 1,
+                "counted_hours": counted_hours,
+                "required_hours": required_hours,
+                "remaining_hours": remaining_hours,
+                "threshold_hours": threshold_hours,
+                "reason": (
+                    f"조기퇴소 {counted_hours}/{required_hours}시간 인정 · "
+                    f"잔여 {remaining_hours}시간 (검토 기준 {threshold_hours}시간 이하, 정책 미검증)"
+                ),
+            })
     return {
         "missing_results": missing,
         "import_review": [],
         "absences_scheduler_can_confirm": scheduler_confirmable,
         "absences_needing_approver": approver_required,
         "late_deferral_review": late_deferral_review,
+        "small_remainder_reviews": small_remainder_reviews,
     }
 
 
@@ -817,6 +1166,24 @@ def _entry_errors(
     counted = canonical in {"이수", "참석"} or (
         canonical == "조기퇴소" and EARLY_DISMISSAL_COUNTS_HOURS
     )
+    progress = all_training_progress(db, person) if counted else []
+    annual_progress = (
+        progress[record.education_year]
+        if 0 <= record.education_year < len(progress)
+        else None
+    )
+    officer_type_ii_makeup = bool(
+        annual_progress and annual_progress.get("officer_type_ii_makeup")
+    )
+    if canonical == "이수":
+        required_round_hours = _required_round_hours(
+            db, person, record, officer_type_ii_makeup
+        )
+        if required_round_hours is not None and entry.training_hours < required_round_hours:
+            errors.append(
+                f"이수로 기록하려면 최소 {required_round_hours}시간이 필요합니다. "
+                "부분 참석은 참석 또는 조기퇴소로 기록하세요."
+            )
     if canonical in {"연기", "보류"}:
         linked_type = DELAY_TYPES if canonical == "연기" else HOLD_TYPES
         if not _linked_approved_postponement(db, record, linked_type):
@@ -860,18 +1227,17 @@ def _entry_errors(
         errors.append("확정된 무단불참의 취소/정정은 approver 권한이 필요합니다.")
 
     if counted:
-        progress = all_training_progress(db, person)
-        if record.education_year >= len(progress):
+        if annual_progress is None:
             errors.append("해당 복무연도의 훈련 부과 정보를 찾을 수 없습니다.")
         else:
-            required_annual = int(progress[record.education_year]["required_hours"])
+            required_annual = int(annual_progress["required_hours"])
             current_counted = (
                 record.training_hours
                 if record.attendance_status in ATTENDANCE_HOURS_REQUIRED
                 and record.source_kind != "estimated"
                 else 0
             )
-            other_hours = max(int(progress[record.education_year]["completed_hours"]) - current_counted, 0)
+            other_hours = max(int(annual_progress["completed_hours"]) - current_counted, 0)
             remaining = max(required_annual - other_hours, 0)
             if entry.training_hours > remaining:
                 if not entry.override_allowance:

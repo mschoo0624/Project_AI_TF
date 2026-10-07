@@ -1,34 +1,108 @@
-# AITF Classifier 독립 서버
+# Qwen 신청 문서 정보 추출
 
-이 디렉터리는 `Classifier(1).zip`에서 AITF의 **서류 AI 판정**에 필요한 FastAPI, PDF 추출, 사유 분류, 서류 제출 저장소 및 판정 규칙 원본을 가져온 것입니다. `models.py`의 문법 오류 `None.` 한 곳만 `None`으로 수정했습니다. AITF의 기존 UI, DB, API는 바꾸지 않았습니다.
+전자 PDF를 pdfplumber로 읽고, 신청 유형별 명세에 지정된 항목을 로컬
+`qwen3:4b-instruct`로 추출한다. 모델 학습·외부 추론 서비스는 사용하지 않는다.
+기준 목록은 [specifications/README.md](specifications/README.md)를 참고한다.
 
-## Windows PowerShell 실행 (AITF 프로젝트 최상위에서)
+## 설치 및 실행
+
+Python 3.10 이상, Ollama가 필요하다. 프로젝트 루트에서:
 
 ```powershell
-.\backend\.venv\Scripts\python.exe -m pip install -r .\backend\classifier_agent\requirements.txt
-ollama pull qwen2.5:1.5b
-cd .\backend\classifier_agent
-..\.venv\Scripts\python.exe -m uvicorn API:app --host 127.0.0.1 --port 8001
+python -m venv backend/.venv
+backend/.venv/Scripts/python.exe -m pip install -r backend/classifier_agent/requirements.txt
+ollama pull qwen3:4b-instruct
+# Ollama 앱/서버가 실행 중이어야 한다. 미실행 환경은 별도 터미널에서 ollama serve.
+backend/.venv/Scripts/python.exe -m uvicorn backend.classifier_agent.API:app --host 127.0.0.1 --port 8003
 ```
 
-백엔드의 가상환경이 없으면 먼저 `python -m venv .\backend\.venv`로 생성하고 AITF의 `backend/requirements.txt`도 설치하세요. Ollama 앱 자체가 실행 중이어야 하며, 모델 다운로드와 Python 패키지 설치는 별도입니다. `http://127.0.0.1:8001/docs` 또는 `http://127.0.0.1:8001/submissions`로 시작 여부를 확인합니다. `/submissions`가 `[]`를 반환한다면 빈 목록이 정상입니다.
+기존 가상환경이 있으면 생성은 생략한다. Linux/macOS는 `Scripts/python.exe` 대신
+`bin/python`을 사용한다. 모델은 Ollama 저장소에 설치되며 Git에 포함하지 않는다.
+환경 변수 `OLLAMA_URL` 기본값은 `http://127.0.0.1:11434`,
+`CLASSIFIER_MODEL` 기본값은 `qwen3:4b-instruct`다. Qwen 계열만 지원한다.
+환경 변수를 사용하려면 서버를 시작하는 프로세스에 설정한다(.env 자동 로딩 없음).
 
-AITF는 별도 터미널에서 `backend` 폴더에서 8002 포트로, Vite는 `frontend` 폴더에서 실행합니다. 기존 `frontend/vite.config.ts`의 `/classifier-api` 프록시와 `backend/user/app/services/classifier_client.py`는 모두 8001번 포트를 사용하므로 **현재 AITF 파일에 추가 수정 없이 연결**됩니다.
+## API
 
-## 이식 범위와 제한
+- `GET /application-types`: 신청 유형 ID·라벨·명세 목록.
+- `POST /extract-pdf`: multipart `file`(전자 PDF, 최대 20MB), `application_type`(목록의 ID),
+  선택값 `applicant_name`(여러 인물 중 신청자 지정).
+- 대화형 API 문서: `http://127.0.0.1:8003/docs`.
+- 잘못된 유형/PDF는 422, 용량 초과는 413, 처리 중 요청은 429, 모델 실패는 503.
+- 한 프로세스에서 한 문서씩 처리한다. 각 요청의 임시 PDF는 종료 시 제거한다.
+  기본 localhost 실행용이며 외부 공개 서비스의 인증은 포함하지 않는다.
 
-- `API.py`, `ML/extraction.py`, `ML/reason_classifier.py`, `ML/submissions.py`: 8001번 서버 기능.
-- `ML/reason_classifier.joblib`: 원본의 학습된 분류 모델. `ML/reason_examples.jsonl`: 재학습용 원본 예제. 신뢰할 수 있는 원본 파일에서만 joblib 모델을 로드해야 합니다.
-- `models.py`, `rules.py`, `assess.py`: 원본 규칙 판정 엔진을 보존했지만 현재 서류 업로드/승인 API에서는 **호출하지 않습니다.** 별도 DB 연동과 규칙 검증이 필요합니다.
-- 기존 Classifier의 `ML/submissions.jsonl`과 `ML/uploads/`은 사용자 제출 자료를 복사하지 않기 위해 **옮기지 않았습니다.** 이 서버를 처음 실행하면 신규 저장소가 생성됩니다. 기존 제출 이력을 이전하려면 별도 마이그레이션이 필요합니다.
-- Ollama 모델 가중치 및 Python 가상환경은 이 ZIP에 포함하지 않습니다. API는 인식된 텍스트를 기반으로 추출하므로 이미지 전용 스캔 PDF의 OCR은 별도 준비가 필요합니다.
-- AITF의 `보류/연기자 명부`와 `검토함`은 아직 `frontend/public/data.json` 및 스텁 승인 함수에 연결되어 있습니다. **서류 AI 판정 서브탭**만 현재 Classifier 서버에 연결됩니다. AITF DB의 기존 인원·훈련 판정 상태를 자동 갱신하지 않습니다.
-- 이 버전은 로컬 개발용 구성입니다. 실명/군번 및 PDF를 다루는 서버의 인증·접근제어, 파일 검증, 저장소 동시성·일관성은 운영 배포 전에 보강해야 합니다.\
+CLI도 같은 구현을 사용한다:
 
-python -m venv .\backend\.venv
-.\backend\.venv\Scripts\python.exe -m pip install -r .\backend\classifier_agent\requirements.txt
+```powershell
+backend/.venv/Scripts/python.exe -m backend.classifier_agent.extraction frontend/public/pdfs/medical.pdf --application-type postponement.illness -o extraction-result.json
+```
 
-ollama pull qwen2.5:1.5b
+출력 파일은 덮어쓰지 않는다. 종료 코드 0은 추출 완료, 2는 확인 필요, 1은 실행 오류다.
+단순 PDF 텍스트·표·좌표만 필요한 경우 기존 `pdf_extract` 모듈을 계속 사용할 수 있다.
 
-cd .\backend\classifier_agent
-..\ .venv\Scripts\python.exe -m uvicorn API:app --host 127.0.0.1 --port 8001
+## 반환 계약과 검증
+
+`fields`의 각 항목에 `value`, `status`, `evidence`, `candidates`, `errors`를 반환한다.
+미기재는 `missing`과 null이며 false로 바꾸지 않는다. 명시적 부정은 `explicit_negative`다.
+여러 페이지의 서로 다른 값은 `conflicting`으로 표시하고 모든 후보를 남긴다.
+부분 날짜 등 근거만 있는 항목은 `unresolved`로 보존한다.
+자료형/원문 인용/날짜 정밀도 검사 실패는 `invalid`이며 확정값을 null로 차단한다.
+
+근거는 PDF SHA-256 식별자·페이지·원문 인용을 포함한다. 근거 좌표는 추측하지 않아
+bbox/table/row/column은 null이다. 원래 단어·표 좌표는 응답 `pdf`에 따로 보존된다.
+`model_responses`에는 검토용 원문 응답이 있다. 개인정보가 포함될 수 있으므로
+응답은 자동 파일 저장/로그 출력하지 않는다.
+
+신청 유형의 모든 field_groups를 사용한다. 분기는 아직 별도 필터링하지 않으며
+미기재 항목 전체를 승인 필수 요건으로 취급하지 않는다. 페이지별 최대 6000자,
+4개 항목씩 독립 요청하고 이전 대화를 전달하지 않는다. 지시문을 합친 입력도 UTF-8
+6500바이트로 제한해 문맥 공간을 확보한다. 초과 페이지는 조용히 자르지 않고
+오류로 반환한다. 긴 문서/항목이 많은 유형은 여러 번 추론하므로 오래 걸릴 수 있다.
+스캔·빈 페이지가 섞이면 `needs_review`다. 인용 일치는 의미적 정확성을 보장하지 않는다.
+같은 페이지에서 복수 인물·상충 정보가 있으면 모델이 놓칠 수 있어 담당자 검토가 필요하다.
+
+추출 API는 **1단계 읽기와 2단계 추출**이며 `eligibility_decision`은 항상 null이다.
+**3단계 검증**은 별도 `/verify` API에서 수행한다. [검증 API 안내](VERIFICATION.md)를 참고한다.
+문서 진위는 자동 판정하지 않는다. 프런트엔드의 서류 AI 판정·검토함·명부는 새 제출 저장소를 사용한다.
+담당자 승인·반려는 업무 백엔드와 새 제출 저장소에 반영하며 검증 결과와 별도로 보존한다.
+구형 `classifier_agent_old`(8001)는 과거 코드·기록 보관용이며 새 화면은 8003을 사용한다.
+
+## 제출·프런트엔드 연결
+
+- 업무 백엔드 8002, 새 Qwen API 8003, Ollama 11434를 실행한다.
+- Vite `/api` → 8002, `/classifier-api` → 8003. 운영 배포에서도 같은 역방향 프록시가 필요하다.
+- `POST /submissions`: multipart file/application_type/military_number/applicant_name. 원본 PDF와 새 추출 결과를 저장한다.
+- `GET /submissions`, `GET /submissions/{id}`, `GET /submissions/{id}/pdf`: 목록·상세·원본 조회.
+- `POST /submissions/{id}/verify`: 저장된 추출 결과를 검증하며 결과와 확인 정보를 저장한다.
+  화면은 DB 본인 정보를 사용하는 업무 백엔드 `/postponements/verify`를 통해 호출한다.
+- 승인·반려는 업무 백엔드 `/postponements/{id}/approve|reject`에서 처리한다.
+  검증 결과가 부족/검토 필요여도 담당자가 최종 판단할 수 있다.
+- `POST /submissions/{id}/request-confirmation`: 확인요청 의견 저장. 외부 알림 발송은 하지 않는다.
+- 저장 위치: `classifier_agent/data/`의 SQLite 및 PDF. `CLASSIFIER_DATA_DIR`로 변경 가능하며 Git에서 제외된다.
+  `/extract-pdf`는 기존처럼 임시 처리이며 `/submissions`만 영구 저장한다.
+
+과거 제출 건은 신청 유형을 담당자가 지정해 새 엔진으로 재처리한다. 기존 분석값·승인 상태를
+새 결과로 복사하지 않는다. 원본 기록은 보존하고 새 기록은 검토대기로 등록한다.
+동일 과거 ID의 중복 실행은 기존 재처리 결과를 반환한다.
+
+```powershell
+backend/.venv/Scripts/python.exe -m backend.classifier_agent.reprocess_legacy --submission-id 과거ID --application-type postponement.illness
+```
+
+스캔본은 OCR을 하지 않으므로 읽기 불가 상태로 저장되며 Qwen 추론은 수행하지 않는다.
+3단계에서는 읽을 수 있는 근거가 전혀 없으면 ‘근거 부족’으로 판정한다.
+
+## 검증
+
+```powershell
+backend/.venv/Scripts/python.exe -m pytest backend/tests/test_qwen_extraction.py backend/tests/test_pdf_extract.py -q
+```
+
+[Qwen 평가 실행기](evaluation/README.md)는 운영 구현과 분리된 고정 입력 평가용이다.
+
+2026-10-06 연동 확인: 기존 시연용 `medical.pdf`를 질병 유형 22개 항목으로
+6회 호출했다. 성명·군번·병명·치료기간 등을 추출했으며 원문에 없는 인용은
+`invalid`로 차단하고 전체 결과를 `needs_review`로 반환했다.
+이는 연결 및 방어 검증 확인이며 22개 항목 전체의 정확도 평가가 아니다.
+추출/API 자동 테스트 9개와 평가기 테스트 5개가 통과했다.

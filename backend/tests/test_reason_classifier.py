@@ -1,6 +1,6 @@
 import pytest
 
-from classifier_agent.ML import reason_classifier
+from classifier_agent_old.ML import reason_classifier
 
 
 def test_evaluate_scores_only_unique_texts(monkeypatch):

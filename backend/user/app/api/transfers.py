@@ -32,6 +32,7 @@ from user.app.services.training import (
 	is_local_reserve_command_position,
 	is_officer_reservist,
 	target_training_hours,
+	training_plan_has_type,
 )
 from user.app.services.training_recalculation import recalculate_person
 
@@ -56,12 +57,39 @@ def _validate_training_hours(payload: TransferIntakeCreate) -> None:
 
 	carryover = 0
 	for service_year in range(1, payload.person.service_year + 1):
+		person = payload.person
+		has_type_ii = training_plan_has_type(
+			"동원훈련Ⅱ형",
+			service_year,
+			person.mobilization_status,
+			person.branch,
+			person.rank,
+			person.position,
+		)
+		prior_failed_attempts = sum(
+			record.service_year == service_year
+			and "".join(record.training_type.split()) in TYPE_II_TRAINING_NAMES
+			and (
+			    (
+			        record.attendance_status in {"무단불참", "무단_불참", "unexcused_absence"}
+			        and bool(record.confirmed_by and record.confirmed_by.strip())
+			    )
+			    or record.attendance_status in {"연기", "postponed"}
+			)
+			for record in payload.training_records
+		)
+		officer_type_ii_makeup = (
+			is_officer_reservist(person.rank)
+			and has_type_ii
+			and (carryover > 0 or prior_failed_attempts >= 2)
+		)
 		target = target_training_hours(
 			service_year,
-			payload.person.mobilization_status,
-			payload.person.branch,
-			payload.person.rank,
-			payload.person.position,
+			person.mobilization_status,
+			person.branch,
+			person.rank,
+			person.position,
+			officer_type_ii_makeup,
 		)
 		required = target + carryover
 		hours = totals.get(service_year, 0)

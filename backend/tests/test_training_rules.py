@@ -275,7 +275,7 @@ def test_officer_type_ii_target_stays_at_28_after_deferral() -> None:
     db.close()
 
 
-def test_officer_type_ii_target_stays_at_28_with_carryover() -> None:
+def test_officer_type_ii_makeup_target_uses_32_hours_with_carryover() -> None:
     db = make_session()
     person = Person(
         military_number="26-70099003",
@@ -291,10 +291,63 @@ def test_officer_type_ii_target_stays_at_28_with_carryover() -> None:
     db.commit()
 
     progress = training_progress(db, person, 3, carryover_hours=8)
-    assert progress["officer_type_ii_makeup"] is False
-    assert progress["target_hours"] == 28
-    assert progress["required_hours"] == 36
+    assert progress["officer_type_ii_makeup"] is True
+    assert progress["target_hours"] == 32
+    assert progress["required_hours"] == 40
+    assert progress["training_plan"] == [{"name": "동원훈련Ⅱ형", "hours": 32}]
 
+    db.close()
+
+
+def test_officer_type_ii_makeup_target_uses_32_after_repeated_absence_and_deferral() -> None:
+    db = make_session()
+    person = Person(
+        military_number="26-70099004",
+        name="간부 보충훈련 시험",
+        branch="육군",
+        rank="하사",
+        service_year=3,
+        position="분대장",
+        mobilization_status="동원미지정",
+        status="active",
+    )
+    absence = Education(
+        person_id=person.military_number,
+        education_year=3,
+        training_year=2026,
+        training_type="동원훈련Ⅱ형",
+        training_round=1,
+        attendance_status="무단불참",
+        training_hours=0,
+        confirmed_by="approver",
+    )
+    deferral = Education(
+        person_id=person.military_number,
+        education_year=3,
+        training_year=2026,
+        training_type="동원훈련Ⅱ형",
+        training_round=2,
+        attendance_status="연기",
+        training_hours=0,
+    )
+    db.add_all([person, absence, deferral])
+    db.flush()
+    db.add(Postponement(
+        person_id=person.military_number,
+        type="delay",
+        reason="approved deferral",
+        status="approved",
+        training_year=2026,
+        education_record_id=deferral.id,
+    ))
+    db.flush()
+
+    progress = training_progress(db, person, 3)
+
+    assert progress["officer_type_ii_makeup"] is True
+    assert progress["target_hours"] == 32
+    assert progress["required_hours"] == 32
+    assert progress["training_plan"] == [{"name": "동원훈련Ⅱ형", "hours": 32}]
     db.close()
 
 
