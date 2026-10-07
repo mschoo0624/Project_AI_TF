@@ -4,6 +4,7 @@ import './App.css'
 import ministryLogo from './assets/마크 국영문서체 조합형(가로).png'
 import { forecastThreshold } from './forecastThreshold'
 import ResourceManagement from './features/resource/ResourceManagement'
+import TrainingManagementPage from './features/training/TrainingManagementPage'
 import { resourceTabs } from './features/resource/resourceTabs'
 import type { ResourceTabId } from './features/resource/resourceTabs'
 import WorkLogManagement from './features/worklog/WorkLogManagement'
@@ -16,6 +17,7 @@ import type { CopilotView } from './features/resource/ResourceManagement'
 const featurePages = [
   { id: 'reserve', label: '부대관리', Component: EmptyReservePage },
   { id: 'resource', label: '자원관리', Component: ResourceManagement },
+  { id: 'training', label: '교육훈련', Component: TrainingManagementPage },
   { id: 'worklog', label: '업무일지', Component: WorkLogManagement },
 ] as const
 
@@ -190,9 +192,9 @@ function App() {
           return <div key={page.id} className="side-menu-group">
             <div className={`side-menu-row ${activePage === page.id ? 'active' : ''}`}>
               <button type="button" className="side-button" onClick={() => navigate(page.id)}>{page.label}</button>
-              <button type="button" className="side-menu-toggle" aria-label={`${page.label} 하위 메뉴 ${expanded ? '접기' : '펼치기'}`}
-                aria-expanded={expanded} aria-controls={hasSubmenus ? `submenu-${page.id}` : undefined}
-                onClick={() => setExpandedMenus(current => { const next = new Set(current); if (next.has(page.id)) next.delete(page.id); else next.add(page.id); return next })}>{expanded ? '▲' : '▼'}</button>
+              {hasSubmenus && <button type="button" className="side-menu-toggle" aria-label={`${page.label} 하위 메뉴 ${expanded ? '접기' : '펼치기'}`}
+                aria-expanded={expanded} aria-controls={`submenu-${page.id}`}
+                onClick={() => setExpandedMenus(current => { const next = new Set(current); if (next.has(page.id)) next.delete(page.id); else next.add(page.id); return next })}>{expanded ? '▲' : '▼'}</button>}
             </div>
             {hasSubmenus && <div id={`submenu-${page.id}`} className="side-submenu" hidden={!expanded}>
               {page.id === 'resource' ? resourceTabs.map(tab => <button key={tab.id} type="button"
@@ -211,6 +213,7 @@ function App() {
             : activePage === 'resource' ? <ResourceManagement selectedTab={resourceLanding} onTabChange={setResourceLanding}
               copilotView={copilotView} dataRevision={dataRevision}
               onClearCopilotFilter={() => setCopilotView(current => current && { ...current, filter: null })} />
+            : activePage === 'training' ? <TrainingManagementPage onDataChanged={() => setDataRevision(value => value + 1)} />
             : ActiveComponent ? <ActiveComponent key={activePage} /> : null}
         </div>
       </main>

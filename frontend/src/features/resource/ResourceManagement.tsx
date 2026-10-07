@@ -4,7 +4,6 @@ import ReviewManagement from '../review/ReviewManagement'
 import ResourceRosterPage from './ResourceRosterPage'
 import OrganizationPage from './OrganizationPage'
 import TransferIntakePage from './TransferIntakePage'
-import TrainingManagementPage from '../training/TrainingManagementPage'
 import { resourceTabs } from './resourceTabs'
 import type { ResourceTabId } from './resourceTabs'
 
@@ -151,9 +150,6 @@ export default function ResourceManagement(
       <ReviewManagement />
     </div>
     <div className="rm-tab-pane rm-empty-pane" hidden={activeTab !== 'travel'} aria-label="출국자/귀국자 빈 화면" />
-    <div className="rm-tab-pane" hidden={activeTab !== 'training'}>
-      <TrainingManagementPage onDataChanged={refreshResourceData} />
-    </div>
     <div id="resource-prosecution" className="rm-tab-pane" hidden={activeTab !== 'prosecution'}>
       <ProsecutionTargets revision={revision} />
     </div>

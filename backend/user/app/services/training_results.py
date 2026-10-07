@@ -141,8 +141,6 @@ def _validated_sessions(sessions) -> list:
         raise HTTPException(status_code=422, detail="Session dates must be in chronological order")
     if len({item.session_date.year for item in ordered}) != 1:
         raise HTTPException(status_code=422, detail="A training event must stay within one calendar year")
-    if any(item.session_date < date.today() for item in ordered):
-        raise HTTPException(status_code=422, detail="Sessions cannot be moved into the past")
     return ordered
 
 
@@ -411,6 +409,55 @@ def _advance_schedule_version(
     db.refresh(schedule, attribute_names=["version"])
 
 
+def _schedule_roster_person_error(
+    db: Session, schedule: TrainingSchedule, person: Person
+) -> str | None:
+    if person.service_year is not None and schedule.service_year > person.service_year:
+        return "Service year is in the future"
+    if db.scalar(select(Education.id).where(
+        Education.person_id == person.military_number,
+        Education.schedule_id == schedule.id,
+    ).limit(1)) is not None:
+        return "Person is already on this roster"
+
+    year_records = db.scalars(select(Education).where(
+        Education.person_id == person.military_number,
+        Education.education_year == schedule.service_year,
+    )).all()
+    progress = all_training_progress(db, person)
+    if schedule.service_year >= len(progress):
+        return "Service year has no training plan"
+    year_progress = progress[schedule.service_year]
+    if int(year_progress["required_hours"]) <= 0:
+        return "Service year has no training requirement"
+    required_hours = training_record_required_hours(
+        schedule.training_type,
+        schedule.service_year,
+        mobilization_status_for_year(db, person, schedule.service_year),
+        person.branch,
+        person.rank,
+        person.position,
+        bool(year_progress.get("officer_type_ii_makeup")),
+    )
+    approved_deferral_ids = {
+        record_id for record_id in db.scalars(select(Postponement.education_record_id).where(
+            Postponement.person_id == person.military_number,
+            Postponement.status == "approved",
+            Postponement.type.in_(DELAY_TYPES),
+            Postponement.education_record_id.is_not(None),
+        )).all() if record_id is not None
+    }
+    return training_round_sequence_error(
+        year_records,
+        schedule.training_type,
+        schedule.training_round,
+        "scheduled",
+        0,
+        required_hours,
+        approved_deferral_record_ids=approved_deferral_ids,
+    )
+
+
 def assign_schedule_roster(
     db: Session, schedule_id: int, payload: TrainingRosterAssignment, actor: User
 ) -> list[Education]:
@@ -439,56 +486,9 @@ def assign_schedule_roster(
         if person is None:
             errors.append({"person_id": person_id, "error": "Reservist not found"})
             continue
-        if person.service_year is not None and schedule.service_year > person.service_year:
-            errors.append({"person_id": person_id, "error": "Service year is in the future"})
-            continue
-        if db.scalar(select(Education.id).where(
-            Education.person_id == person_id,
-            Education.schedule_id == schedule_id,
-        ).limit(1)) is not None:
-            errors.append({"person_id": person_id, "error": "Person is already on this roster"})
-            continue
-
-        year_records = db.scalars(select(Education).where(
-            Education.person_id == person_id,
-            Education.education_year == schedule.service_year,
-        )).all()
-        progress = all_training_progress(db, person)
-        if schedule.service_year >= len(progress):
-            errors.append({"person_id": person_id, "error": "Service year has no training plan"})
-            continue
-        year_progress = progress[schedule.service_year]
-        if int(year_progress["required_hours"]) <= 0:
-            errors.append({"person_id": person_id, "error": "Service year has no training requirement"})
-            continue
-        required_hours = training_record_required_hours(
-            schedule.training_type,
-            schedule.service_year,
-            mobilization_status_for_year(db, person, schedule.service_year),
-            person.branch,
-            person.rank,
-            person.position,
-            bool(year_progress.get("officer_type_ii_makeup")),
-        )
-        approved_deferral_ids = {
-            record_id for record_id in db.scalars(select(Postponement.education_record_id).where(
-                Postponement.person_id == person_id,
-                Postponement.status == "approved",
-                Postponement.type.in_(DELAY_TYPES),
-                Postponement.education_record_id.is_not(None),
-            )).all() if record_id is not None
-        }
-        sequence_error = training_round_sequence_error(
-            year_records,
-            schedule.training_type,
-            schedule.training_round,
-            "scheduled",
-            0,
-            required_hours,
-            approved_deferral_record_ids=approved_deferral_ids,
-        )
-        if sequence_error:
-            errors.append({"person_id": person_id, "error": sequence_error})
+        eligibility_error = _schedule_roster_person_error(db, schedule, person)
+        if eligibility_error:
+            errors.append({"person_id": person_id, "error": eligibility_error})
             continue
         records.append(Education(
             person_id=person_id,
@@ -508,7 +508,15 @@ def assign_schedule_roster(
     db.add_all(records)
     db.flush()
     for record in records:
-        db.add(TrainingNotification(education_id=record.id, status="pending"))
+        notification = db.get(TrainingNotification, record.id)
+        if notification is None:
+            db.add(TrainingNotification(education_id=record.id, status="pending"))
+        else:
+            notification.status = "pending"
+            notification.issued_at = None
+            notification.last_attempt_at = None
+            notification.retries = 0
+            notification.updated_at = _now()
         db.add(AuditLog(
             action="training_schedule.assign",
             table_name="education",
@@ -553,6 +561,7 @@ def schedule_assignment_candidates(db: Session, schedule_id: int) -> list[str]:
             person.rank,
             person.position,
         )
+        and _schedule_roster_person_error(db, schedule, person) is None
     ]
 
 

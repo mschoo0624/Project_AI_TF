@@ -2,6 +2,20 @@
    Rows with other notes, including transferred-history records, are preserved. */
 PRAGMA foreign_keys = ON;
 
+DELETE FROM training_notification
+WHERE education_id NOT IN (SELECT id FROM education);
+DELETE FROM training_notification
+WHERE education_id IN (
+    SELECT id
+    FROM education
+    WHERE person_id LIKE '26-7200%'
+      AND notes IN (
+          '무단불참 이월 훈련 기록',
+          '부분 이수 후 잔여시간 이월 기록',
+          '훈련시간 전부 이수 기록'
+      )
+);
+
 DELETE FROM education
 WHERE person_id LIKE '26-7200%'
   AND notes IN (
