@@ -8,9 +8,10 @@ from user.app.models.education import Education
 from user.app.models.annual_status import AnnualStatus
 from user.app.models.postpoment import Postponement
 from user.app.api.dashboard import dashboard_summary
+from user.app.api.reservists import list_prosecution_targets, list_training_review_targets
 from user.app.services.training import all_training_progress
 from user.app.services.dashboard import daily_counts, composition_counts
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 
 def test_summary_uses_unique_people_and_current_service_year():
@@ -27,8 +28,8 @@ def test_summary_uses_unique_people_and_current_service_year():
         db.add(AnnualStatus(person_id='4', service_year=1, mobilization_status='동원미지정'))
         db.add_all([
             Education(person_id='0', education_year=1, training_hours=28, attendance_status='completed'),
-            Education(person_id='1', education_year=1, training_hours=0, attendance_status='unexcused_absence', training_round=1),
-            Education(person_id='1', education_year=1, training_hours=0, attendance_status='unexcused_absence', training_round=3),
+            Education(person_id='1', education_year=1, training_hours=0, attendance_status='unexcused_absence', training_round=1, confirmed_by='unit-test'),
+            Education(person_id='1', education_year=1, training_hours=0, attendance_status='unexcused_absence', training_round=3, confirmed_by='unit-test'),
             Education(person_id='4', education_year=2, training_hours=8, attendance_status='completed'),
             Postponement(person_id='2', reason='test', training_year=1, status='approved'),
             Postponement(person_id='2', reason='duplicate', training_year=1, status='approved'),
@@ -39,9 +40,9 @@ def test_summary_uses_unique_people_and_current_service_year():
         result = dashboard_summary(db)
         assert result['total_people'] == 6
         assert result['held_or_delayed'] == 2
-        assert result['prosecution_people'] == 0
+        assert result['prosecution_people'] == 1
         assert result['absent_people'] == 1
-        assert result['training_targets'] == 5
+        assert result['training_targets'] == 4
         assert result['training_completed'] == 1
         # The dashboard must agree with the detailed training page, including carryover.
         progress = [all_training_progress(db, person)[person.service_year] for person in people]
@@ -59,6 +60,124 @@ def test_empty_database_summary():
             assert summary[key] == 0
         assert summary['composition']['positions'] == []
         assert sum(summary['composition']['service_years'].values()) == 0
+
+
+def test_training_review_list_includes_missing_record_and_excludes_approved_postponement():
+    engine = create_engine('sqlite://')
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        db.add_all([
+            Person(military_number='review', name='미이수', branch='육군', rank='병장',
+                     service_year=1, position='소총수', mobilization_status='동원미지정', status='active'),
+            Person(military_number='postponed', name='연기', branch='육군', rank='병장',
+                     service_year=1, position='소총수', mobilization_status='동원미지정', status='active'),
+        ])
+        db.add(Postponement(
+            person_id='postponed', reason='훈련 연기',
+            training_year=date.today().year, status='approved',
+        ))
+        db.commit()
+
+        targets = list_training_review_targets(db)
+
+        assert len(targets) == 2
+        assert {target['military_number'] for target in targets} == {'review', 'postponed'}
+        assert all(target['review_years'] == [1] for target in targets)
+        assert all(target['remaining_hours'] == 32 for target in targets)
+
+
+def test_training_review_list_excludes_future_scheduled_session():
+    engine = create_engine('sqlite://')
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        person = Person(
+            military_number='future-session', name='훈련 예정', branch='육군', rank='병장',
+            service_year=1, position='소총수', mobilization_status='동원미지정', status='active',
+        )
+        db.add(person)
+        db.add(Education(
+            person_id=person.military_number,
+            education_year=1,
+            training_year=date.today().year,
+            scheduled_date=date.today() + timedelta(days=1),
+            training_type='동원훈련Ⅱ형',
+            training_round=1,
+            attendance_status='scheduled',
+            training_hours=0,
+        ))
+        db.commit()
+
+        assert list_training_review_targets(db) == []
+
+
+def test_no_show_without_confirmer_metadata_stays_in_review_not_prosecution():
+    engine = create_engine('sqlite://')
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        person = Person(
+            military_number='unconfirmed-no-show', name='확인자 미등록', branch='육군', rank='병장',
+            service_year=3, position='소총수', mobilization_status='동원지정', status='active',
+        )
+        db.add(person)
+        db.add(Education(
+            person_id=person.military_number,
+            education_year=3,
+            training_year=date.today().year,
+            training_type='동원훈련Ⅰ형',
+            training_round=1,
+            attendance_status='무단불참',
+            training_hours=0,
+        ))
+        db.commit()
+
+        progress = all_training_progress(db, person)[3]
+        review = list_training_review_targets(db)
+
+        assert progress['absence_recorded'] is False
+        assert progress['prosecution_risk'] is False
+        assert any('확인자 정보 누락' in hint for hint in progress['review_hints'])
+        person_review = next(row for row in review if row['military_number'] == person.military_number)
+        assert any(row['reason'] == 'confirming_user_metadata_missing' for row in person_review['review_rows'])
+        assert all(row['military_number'] != person.military_number for row in list_prosecution_targets(db))
+
+
+def test_training_review_hours_do_not_double_count_carryover():
+    engine = create_engine('sqlite://')
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        db.add(Person(
+            military_number='carryover-review', name='이월 검토', branch='육군', rank='병장',
+            service_year=2, position='소총수', mobilization_status='동원미지정', status='active',
+        ))
+        db.commit()
+
+        target = list_training_review_targets(db)[0]
+
+        assert target['review_years'] == [1, 2]
+        assert target['remaining_hours'] == 64
+
+
+def test_dashboard_completes_officer_type_two_at_28_hours():
+    engine = create_engine('sqlite://')
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        person = Person(
+            military_number='officer-makeup', name='간부 보충훈련', branch='육군',
+            rank='하사', service_year=1, position='분대장',
+            mobilization_status='동원미지정', status='active',
+        )
+        db.add(person)
+        db.add(Education(
+                person_id=person.military_number, education_year=1, training_year=2026,
+                training_type='동원훈련Ⅱ형', training_round=2,
+                attendance_status='completed', training_hours=28,
+            ))
+        db.commit()
+
+        result = dashboard_summary(db)
+
+        assert result['training_targets'] == 1
+        assert result['training_completed'] == 1
 
 
 def test_composition_counts_existing_fields_and_refreshes_after_edit():

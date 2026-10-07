@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from user.app.database import Base
@@ -18,6 +18,13 @@ class Postponement(Base):
     status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)
     category: Mapped[str | None] = mapped_column(String(50), nullable=True)
     training_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    education_record_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    credited_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    resolution_reported_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    hold_ended_recalculated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    decided_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     source_file: Mapped[str | None] = mapped_column(String(255), nullable=True)
     classifier_submission_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

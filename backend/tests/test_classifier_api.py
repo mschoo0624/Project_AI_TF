@@ -27,6 +27,16 @@ def make_text_pdf(text: str) -> bytes:
     return buffer.getvalue()
 
 
+def test_nondesignated_training_is_32_hours_for_every_branch(monkeypatch):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "classifier_agent"))
+    import models
+    import rules
+
+    for branch in models.Branch:
+        expected_hours = 28.0 if branch == models.Branch.AIR_FORCE else 32.0
+        assert rules.base_training(3, False, branch) == (models.TrainingType.NON_DESIGNATED, expected_hours)
+
+
 @pytest.mark.parametrize(
     ("doc_text", "expected_input"),
     [

@@ -16,7 +16,7 @@ import uvicorn
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--port", type=int, default=8005)
     ap.add_argument("--no-browser", action="store_true")
     args = ap.parse_args()
 

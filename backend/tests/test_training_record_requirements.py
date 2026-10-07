@@ -9,7 +9,7 @@ from user.app.services.training import training_record_required_hours
     ("학생예비군", "육군", 8),
     ("동원훈련Ⅰ형", "육군", 28),
     ("동원훈련Ⅱ형", "육군", 32),
-    ("동원훈련Ⅱ형", "해군", 28),
+    ("동원훈련Ⅱ형", "해군", 32),
     ("동원훈련Ⅱ형", "공군", 28),
     ("훈련", "육군", 28),
     ("알 수 없는 훈련", "육군", None),
@@ -20,3 +20,14 @@ def test_record_requirement_uses_training_name(name, branch, expected):
 
 def test_generic_record_with_multiple_components_is_not_guessed():
     assert training_record_required_hours("훈련", 5, "동원지정", "육군", "병장") is None
+
+
+def test_officer_type_two_record_requires_28_hours():
+    assert training_record_required_hours("동원훈련Ⅱ형", 2, "동원미지정", "육군", "하사") == 28
+
+
+def test_officer_type_two_record_remains_28_hours_with_makeup_flag():
+    assert training_record_required_hours(
+        "동원훈련Ⅱ형", 2, "동원미지정", "육군", "하사",
+        officer_type_ii_makeup=True,
+    ) == 28

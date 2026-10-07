@@ -1,5 +1,7 @@
 """Person request and response schemas."""
 
+from datetime import date
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 class PersonBase(BaseModel):
@@ -10,7 +12,9 @@ class PersonBase(BaseModel):
 	specialty: str | None = None
 	origin_type: str | None = None
 	registration_type: str | None = None
-	service_year: int = Field(ge=0, le=8)
+	service_year: int = Field(ge=0, le=99)
+	discharge_date: date | None = None
+	callup_release_date: date | None = None
 	position: str
 	mobilization_status: str = "해당없음"
 	status: str = "active"
@@ -50,7 +54,9 @@ class PersonUpdate(BaseModel):
 	unit: str | None = None
 	specialty: str | None = None
 	origin_type: str | None = None
-	service_year: int | None = Field(default=None, ge=0, le=8)
+	service_year: int | None = Field(default=None, ge=0, le=99)
+	discharge_date: date | None = None
+	callup_release_date: date | None = None
 	position: str | None = None
 	mobilization_status: str | None = None
 	status: str | None = None
@@ -66,6 +72,8 @@ class PersonProfileUpdate(BaseModel):
 	mobilization_status: str
 	position: str
 	specialty: str
+	discharge_date: date | None = None
+	callup_release_date: date | None = None
 
 class PersonRead(PersonBase):
 	model_config = ConfigDict(from_attributes=True)

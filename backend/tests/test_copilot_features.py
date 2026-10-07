@@ -99,7 +99,7 @@ def test_release_zero_year_then_apply_records_change() -> None:
 	assert db.get(Person, "0-1").squad_id is None
 	assert db.get(Person, "0-1").mobilization_status == "동원미지정"
 	assert db.get(Person, "5-1").squad_id == 1
-	log = db.scalars(select(AuditLog)).one()
+	log = db.scalars(select(AuditLog).where(AuditLog.trace_id.is_not(None))).one()  # 권한 감사 기록(organization.*)은 따로 남는다
 	assert (log.action, log.source, log.trace_id, log.summary) == ("release", "copilot", response.trace_id, "편성 해제 2명")
 
 

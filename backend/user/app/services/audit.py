@@ -45,6 +45,6 @@ def record_change(db: Session, action: str, summary: str, detail: object = None,
 
 def recent_changes(db: Session, limit: int = 10) -> list[AuditLog]:
 	return list(db.scalars(
-		select(AuditLog).where(AuditLog.created_at.is_not(None))
+		select(AuditLog).where(AuditLog.summary.is_not(None))  # 권한 감사 기록(before/after_data)은 빼고 편성 변경만
 		.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(limit)
 	).all())

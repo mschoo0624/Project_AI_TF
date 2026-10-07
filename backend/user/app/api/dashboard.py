@@ -18,6 +18,7 @@ from prediction.cache import get_attendance_cache, get_prediction_cache
 from user.app.database import get_db
 from user.app.models.person import Person
 from user.app.models.squad import Squad
+from user.app.services.auth import require_viewer
 from user.app.services.dashboard import dashboard_counts, daily_counts, composition_counts
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -28,7 +29,7 @@ def grouped_counts(db: Session, field: object) -> dict[str, int]:
 	return {str(key): count for key, count in rows if key is not None}
 
 
-@router.get("/summary")
+@router.get("/summary", dependencies=[Depends(require_viewer)])
 def dashboard_summary(db: Session = Depends(get_db)) -> dict[str, object]:
 	active_people = db.scalar(
 		select(func.count()).select_from(Person).where(Person.status == "active")
@@ -65,6 +66,6 @@ def dashboard_attendance_forecast() -> dict[str, object]:
 	return get_attendance_cache()
 
 
-@router.get("/daily")
+@router.get("/daily", dependencies=[Depends(require_viewer)])
 def dashboard_daily(day: date | None = None, db: Session = Depends(get_db)) -> dict[str, object]:
     return daily_counts(db, day or datetime.now(timezone(timedelta(hours=9))).date())

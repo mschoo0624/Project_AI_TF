@@ -1,12 +1,15 @@
 """Editable unit hierarchy and scoped, non-destructive vacancy filling."""
 from __future__ import annotations
 
+import json
 from datetime import date
+from datetime import datetime, timezone
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from user.app.models.assignment import Assignment
+from user.app.models.audit_log import AuditLog
 from user.app.models.organization import OrganizationNode
 from user.app.models.person import Person
 from user.app.models.squad import Squad
@@ -23,6 +26,28 @@ ALLOWED_CHILDREN = {
     "platoon": {"squad"},
     "squad": set(),
 }
+
+
+def _audit_organization(
+    db: Session,
+    actor_user_id: int | None,
+    actor_label: str,
+    action: str,
+    node_id: int | None,
+    before: dict[str, object] | None,
+    after: dict[str, object] | None,
+) -> None:
+    db.add(AuditLog(
+        user_id=actor_user_id,
+        action=action,
+        table_name="organization_node",
+        record_id=node_id,
+        entity_key=str(node_id) if node_id is not None else None,
+        actor_label=actor_label,
+        before_data=json.dumps(before, ensure_ascii=False, sort_keys=True) if before is not None else None,
+        after_data=json.dumps(after, ensure_ascii=False, sort_keys=True) if after is not None else None,
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+    ))
 
 
 def _nodes(db: Session) -> dict[int, OrganizationNode]:
@@ -48,7 +73,8 @@ def _get(nodes: dict[int, OrganizationNode], node_id: int) -> OrganizationNode:
 
 
 def release_members(db: Session, selected_id: int, person_id: str | None = None,
-                    person_ids: list[str] | None = None) -> dict[str, int]:
+                    person_ids: list[str] | None = None,
+                    actor_user_id: int | None = None, actor_label: str = "system") -> dict[str, int]:
     """Release current members only within the selected unit and its descendants."""
     nodes = _nodes(db)
     selected = _get(nodes, selected_id)
@@ -79,6 +105,11 @@ def release_members(db: Session, selected_id: int, person_id: str | None = None,
         if released:
             scope = "" if selected.kind == "root" else f"{selected.name} "
             record_change(db, "release", f"{scope}편성 해제 {len(released)}명", released)
+        if people:
+            _audit_organization(
+                db, actor_user_id, actor_label, "organization.release_members", selected_id,
+                {"member_count": len(people)}, {"released_count": len(people)},
+            )
         db.commit()
         return {"released_count": len(people)}
     except Exception:
@@ -121,7 +152,10 @@ def hierarchy(db: Session) -> list[dict[str, object]]:
     return results
 
 
-def create_unit(db: Session, parent_id: int, kind: str, name: str) -> OrganizationNode:
+def create_unit(
+    db: Session, parent_id: int, kind: str, name: str,
+    actor_user_id: int | None = None, actor_label: str = "system",
+) -> OrganizationNode:
     nodes = _nodes(db)
     parent = _get(nodes, parent_id)
     name = name.strip()
@@ -139,6 +173,11 @@ def create_unit(db: Session, parent_id: int, kind: str, name: str) -> Organizati
         node = OrganizationNode(parent_id=parent_id, kind=kind, name=name,
                                 squad_id=squad_id, planned_strength=11 if kind == "squad" else None)
         db.add(node)
+        db.flush()
+        _audit_organization(
+            db, actor_user_id, actor_label, "organization.create", node.id, None,
+            {"parent_id": parent_id, "kind": kind, "name": name, "squad_id": squad_id},
+        )
         db.commit()
         db.refresh(node)
         return node
@@ -147,24 +186,35 @@ def create_unit(db: Session, parent_id: int, kind: str, name: str) -> Organizati
         raise
 
 
-def rename_unit(db: Session, node_id: int, name: str) -> None:
+def rename_unit(
+    db: Session, node_id: int, name: str,
+    actor_user_id: int | None = None, actor_label: str = "system",
+) -> None:
     node = _get(_nodes(db), node_id)
     name = name.strip()
     if not name or len(name) > 100:
         raise ValueError("이름은 1~100자여야 합니다.")
     try:
+        previous_name = node.name
         node.name = name
         if node.squad_id is not None:
             squad = db.get(Squad, node.squad_id)
             if squad is not None:
                 squad.name = name
+            _audit_organization(
+                db, actor_user_id, actor_label, "organization.rename", node_id,
+                {"name": previous_name}, {"name": name},
+            )
         db.commit()
     except Exception:
         db.rollback()
         raise
 
 
-def move_unit(db: Session, node_id: int, parent_id: int) -> None:
+def move_unit(
+    db: Session, node_id: int, parent_id: int,
+    actor_user_id: int | None = None, actor_label: str = "system",
+) -> None:
     nodes = _nodes(db)
     node, parent = _get(nodes, node_id), _get(nodes, parent_id)
     if parent_id == node_id or parent_id in {child.id for child in _descendants(nodes, node_id)}:
@@ -172,14 +222,22 @@ def move_unit(db: Session, node_id: int, parent_id: int) -> None:
     if node.kind == "root" or node.kind not in ALLOWED_CHILDREN[parent.kind]:
         raise ValueError("해당 편제 단위를 이 위치로 이동할 수 없습니다.")
     try:
+        previous_parent_id = node.parent_id
         node.parent_id = parent_id
+        _audit_organization(
+            db, actor_user_id, actor_label, "organization.move", node_id,
+            {"parent_id": previous_parent_id}, {"parent_id": parent_id},
+        )
         db.commit()
     except Exception:
         db.rollback()
         raise
 
 
-def delete_unit(db: Session, node_id: int) -> None:
+def delete_unit(
+    db: Session, node_id: int,
+    actor_user_id: int | None = None, actor_label: str = "system",
+) -> None:
     nodes = _nodes(db)
     node = _get(nodes, node_id)
     if node.kind == "root":
@@ -192,6 +250,10 @@ def delete_unit(db: Session, node_id: int) -> None:
         if db.scalar(select(Assignment.id).where(Assignment.squad_id == node.squad_id).limit(1)):
             raise ValueError("배정 이력이 있는 분대는 삭제할 수 없습니다.")
     try:
+        deleted_snapshot = {
+            "parent_id": node.parent_id, "kind": node.kind, "name": node.name,
+            "squad_id": node.squad_id,
+        }
         if node.squad_id is not None:
             squad = db.get(Squad, node.squad_id)
             db.delete(node)
@@ -200,6 +262,10 @@ def delete_unit(db: Session, node_id: int) -> None:
                 db.delete(squad)
         else:
             db.delete(node)
+        _audit_organization(
+            db, actor_user_id, actor_label, "organization.delete", node_id,
+            deleted_snapshot, None,
+        )
         db.commit()
     except Exception:
         db.rollback()
@@ -262,7 +328,10 @@ def root_node_id(db: Session) -> int | None:
                      .order_by(OrganizationNode.id).limit(1))
 
 
-def assign_vacancies(db: Session, selected_id: int) -> dict[str, object]:
+def assign_vacancies(
+    db: Session, selected_id: int,
+    actor_user_id: int | None = None, actor_label: str = "system",
+) -> dict[str, object]:
     """Fill vacancies in existing squads without changing the hierarchy."""
     plan = plan_vacancies(db, selected_id)
     assignments: list[dict[str, object]] = []
@@ -276,6 +345,10 @@ def assign_vacancies(db: Session, selected_id: int) -> dict[str, object]:
                                 "name": candidate.name, "squad_id": squad_id})
         if assignments:
             record_change(db, "assign", f"빈자리 자동 편성 {len(assignments)}명", assignments)
+            _audit_organization(
+                db, actor_user_id, actor_label, "organization.assign_vacancies", selected_id,
+                {"total_assigned": 0}, {"total_assigned": len(assignments), "scope_id": selected_id},
+            )
         db.commit()
         return {"total_assigned": len(assignments), "total_shortfall": plan["shortfall"],
                 "assigned": assignments, "scope_id": selected_id}
@@ -284,7 +357,10 @@ def assign_vacancies(db: Session, selected_id: int) -> dict[str, object]:
         raise
 
 
-def expand_formation(db: Session, selected_id: int) -> dict[str, object]:
+def expand_formation(
+    db: Session, selected_id: int,
+    actor_user_id: int | None = None, actor_label: str = "system",
+) -> dict[str, object]:
     """Create the standard 10-platoon, 4-squad formation without assigning people."""
     nodes = _nodes(db)
     selected = _get(nodes, selected_id)
@@ -329,11 +405,17 @@ def expand_formation(db: Session, selected_id: int) -> dict[str, object]:
                 squads.append(node)
                 created_squads.append({"id": node.id, "squad_id": squad.id, "name": node.name})
                 squad_number += 1
-        db.commit()
-        return {"created_platoons": created_platoons, "created_squads": created_squads,
-                "total_platoons": len(platoons), "total_squads": sum(
+        result = {"created_platoons": created_platoons, "created_squads": created_squads,
+                  "total_platoons": len(platoons), "total_squads": sum(
                     1 for node in nodes.values() if node.kind == "squad"
-                )}
+                  )}
+        if created_platoons or created_squads:
+            _audit_organization(
+                db, actor_user_id, actor_label, "organization.expand", selected_id,
+                None, {"created_platoons": len(created_platoons), "created_squads": len(created_squads)},
+            )
+        db.commit()
+        return result
     except Exception:
         db.rollback()
         raise

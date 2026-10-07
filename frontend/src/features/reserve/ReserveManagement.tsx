@@ -39,6 +39,9 @@ type TrainingProgress = {
   completed_hours: number
   remaining_hours: number
   prosecution_risk: boolean
+  absence_recorded: boolean
+  round_escalated: boolean
+  review_hints: string[]
   consecutive_unexcused_absences?: number
   current_zero_training_hours?: boolean
   consecutive_zero_training_years?: number
@@ -51,6 +54,7 @@ type TrainingRecord = {
   id: number
   education_year: number
   training_year: number | null
+  scheduled_date: string | null
   training_type: string
   training_round: number
   attendance_status: string
@@ -60,6 +64,7 @@ type TrainingRecord = {
 type TrainingRecordForm = {
   service_year: number
   training_year: number
+  scheduled_date: string
   training_type: string
   training_round: number
   attendance_status: string
@@ -214,7 +219,7 @@ function ReserveManagement() {
   const saveRecord = async (id: number) => {
     if (!selectedId || !recordForm) return
     try {
-      const r = await fetch(`${API_BASE}/reservists/${selectedId}/training-hours/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(recordForm) })
+      const r = await fetch(`${API_BASE}/reservists/${selectedId}/training-hours/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...recordForm, scheduled_date: recordForm.scheduled_date || null }) })
       if (!r.ok) throw new Error(await responseError(r, '훈련 기록 수정에 실패했습니다.'))
       setEditingRecord(null); setRecordForm(null); setRefreshKey(k => k + 1)
     } catch (e) { setActionError(e instanceof Error ? e.message : '훈련 기록 수정에 실패했습니다.') }
@@ -222,7 +227,7 @@ function ReserveManagement() {
   const addRecord = async () => {
     if (!selectedId || !recordForm) return
     try {
-      const r = await fetch(`${API_BASE}/reservists/${selectedId}/training-hours`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(recordForm) })
+      const r = await fetch(`${API_BASE}/reservists/${selectedId}/training-hours`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...recordForm, scheduled_date: recordForm.scheduled_date || null }) })
       if (!r.ok) throw new Error(await responseError(r, '훈련 기록 추가에 실패했습니다.'))
       setAddingRecord(false); setRecordForm(null); setRefreshKey(k => k + 1)
     } catch (e) { setActionError(e instanceof Error ? e.message : '훈련 기록 추가에 실패했습니다.') }
@@ -280,8 +285,8 @@ function ReserveManagement() {
       onEdit={() => { if (selectedPerson) { setPersonForm(selectedPerson); setEditingPerson(true) } }} onDelete={deletePerson}
       editingPerson={editingPerson} personForm={personForm} setPersonForm={setPersonForm} onSavePerson={savePerson} onCancelPerson={() => setEditingPerson(false)}
       editingRecord={editingRecord} recordForm={recordForm} setRecordForm={setRecordForm} addingRecord={addingRecord}
-      onStartAdd={() => { setAddingRecord(true); setEditingRecord(null); setRecordForm({ service_year: selectedPerson?.service_year && selectedPerson.service_year <= 8 ? selectedPerson.service_year : 1, training_year: new Date().getFullYear(), training_type: '기본훈련', training_round: 1, attendance_status: 'postponed', training_hours: 0, notes: '' }) }}
-      onEditRecord={r => { setEditingRecord(r.id); setAddingRecord(false); setRecordForm({ service_year: r.education_year, training_year: r.training_year ?? new Date().getFullYear(), training_type: r.training_type, training_round: r.training_round, attendance_status: r.attendance_status, training_hours: r.training_hours, notes: r.notes ?? '' }) }}
+      onStartAdd={() => { setAddingRecord(true); setEditingRecord(null); setRecordForm({ service_year: selectedPerson?.service_year && selectedPerson.service_year <= 8 ? selectedPerson.service_year : 1, training_year: new Date().getFullYear(), scheduled_date: '', training_type: '기본훈련', training_round: 1, attendance_status: 'scheduled', training_hours: 0, notes: '' }) }}
+      onEditRecord={r => { setEditingRecord(r.id); setAddingRecord(false); setRecordForm({ service_year: r.education_year, training_year: r.training_year ?? new Date().getFullYear(), scheduled_date: r.scheduled_date ?? '', training_type: r.training_type, training_round: r.training_round, attendance_status: r.attendance_status, training_hours: r.training_hours, notes: r.notes ?? '' }) }}
       onCancelRecord={() => { setEditingRecord(null); setAddingRecord(false); setRecordForm(null) }} onSaveRecord={saveRecord} onAddRecord={addRecord} onDeleteRecord={deleteRecord} actionError={actionError} />}
     <CreatePersonModal open={addingPerson} form={createPersonForm} setForm={setCreatePersonForm} loading={createPersonLoading} error={createPersonError} onClose={() => setAddingPerson(false)} onSubmit={submitCreatePerson} />
     <TransferAssignmentModal arrival={newArrival} error={createPersonError} onClose={() => setNewArrival(null)} onConfirm={confirmNewArrival} />
@@ -312,21 +317,28 @@ function ProfileTab({ person, progress }: { person: Person; progress: TrainingPr
   const absenceStreak = Math.max(...progress.map(item => item.consecutive_unexcused_absences ?? 0), 0)
   const isProsecutionTarget = progress.some(item => item.prosecution_status === '고발대상자')
   const prosecutionReason = progress.find(item => item.prosecution_status === '고발대상자')?.prosecution_reason
-  const currentZeroHours = progress.find(item => item.service_year === person.service_year)?.current_zero_training_hours
+  const absenceRecorded = progress.some(item => item.absence_recorded)
+  const roundEscalated = progress.some(item => item.round_escalated)
+  const reviewHints = [...new Set(progress.flatMap(item => item.review_hints ?? []))]
   const incompleteYears = progress.filter(item => item.training_status === '훈련 미이수' && (person.service_year == null || item.service_year <= person.service_year)).map(item => item.service_year)
   const currentProgress = progress.find(item => item.service_year === person.service_year)
   const mobilizationStatus = person.squad_id ? '동원지정' : '동원미지정'
   return <div className="modal-body"><div className="profile-status"><StatusBadge status={person.status} /><span>{person.service_year}년차 · {mobilizationStatus} · {currentProgress?.training_plan.map(item => item.name).join(', ') || '훈련 대상 확인 필요'}</span></div>
-    {(absenceStreak > 0 || currentZeroHours || isProsecutionTarget) && <section className={`prosecution-warning ${isProsecutionTarget ? '' : 'prosecution-warning--notice'}`}><b>!</b><div><strong>{isProsecutionTarget ? '고발대상자' : currentZeroHours ? '현재 연차 훈련 미이수' : '무단불참 기록'}</strong><p>{isProsecutionTarget ? `${prosecutionReason ?? '훈련 미이수'}로 고발 대상입니다.` : currentZeroHours ? `${person.service_year}년차 훈련시간을 아직 이수하지 않았습니다.` : `연속 무단불참 ${absenceStreak}회입니다. 3회 연속 무단불참 시 고발 대상이 됩니다.`}</p></div></section>}
+    {isProsecutionTarget && <section className="prosecution-warning"><b>!</b><div><strong>고발 요건 충족</strong><p>{prosecutionReason}</p></div></section>}
+    {(absenceRecorded || roundEscalated || absenceStreak > 0 || reviewHints.length > 0) && <section className="prosecution-warning prosecution-warning--notice"><b>i</b><div><strong>훈련 이력 및 검토 참고</strong><p>{[
+      absenceRecorded ? '무단불참 기록 있음' : '',
+      roundEscalated ? '후속 차수 진행' : '',
+      ...reviewHints,
+    ].filter(Boolean).join(' · ')}</p></div></section>}
     {incompleteYears.length > 0 && <section className="training-incomplete-notice"><strong>훈련 미이수</strong><p>{incompleteYears.map(year => `${year}년차`).join(', ')} 훈련이 완료되지 않았습니다.</p></section>}
     <section className="info-grid"><Info label="현재 복무연차" value={person.service_year != null ? `${person.service_year}년차` : null} /><Info label="계급" value={person.rank} /><Info label="군종" value={person.branch} /><Info label="소속부대" value={person.unit} /><Info label="특기" value={person.specialty} /><Info label="직책" value={person.position} /><Info label="등록구분" value={person.registration_type} /><Info label="분대" value={person.squad_id ? `${person.squad_id}분대` : '-'} /></section>
   </div>
 }
 function ProgressTab({ progress }: { progress: TrainingProgress[] }) {
-  return <div className="modal-body"><div className="section-heading"><h3>훈련 이수 현황</h3>{progress.some(x => x.prosecution_risk) && <span className="risk-summary">고발 위험 연차 있음</span>}</div><TrainingTable progress={progress} /></div>
+  return <div className="modal-body"><div className="section-heading"><h3>훈련 이수 현황</h3>{progress.some(x => x.prosecution_risk) && <span className="risk-summary">고발 요건 충족 연차 있음</span>}</div><TrainingTable progress={progress} /></div>
 }
 function TrainingTable({ progress }: { progress: TrainingProgress[] }) {
-  return <div className="table-wrap"><table><thead><tr><th>연차</th><th>동원상태</th><th>훈련종류</th><th>훈련상태</th><th>목표시간</th><th>이수시간</th><th>잔여시간</th><th>고발위험</th></tr></thead><tbody>{progress.map(x => <tr className={x.prosecution_risk ? 'risk-row' : ''} key={x.service_year}><td>{x.service_year}년차</td><td>{x.mobilization_status ?? '-'}</td><td>{x.training_plan.map(p => `${p.name} ${p.hours}시간`).join(', ') || '-'}</td><td>{x.training_status === '훈련 미이수' ? <span className="risk-badge">훈련 미이수</span> : x.training_status ?? '-'}</td><td>{x.target_hours}시간</td><td>{x.completed_hours}시간</td><td>{x.remaining_hours}시간</td><td>{x.prosecution_risk ? <span className="risk-badge">주의</span> : '-'}</td></tr>)}</tbody></table></div>
+  return <div className="table-wrap"><table><thead><tr><th>연차</th><th>동원상태</th><th>훈련종류</th><th>훈련상태</th><th>목표시간</th><th>이수시간</th><th>잔여시간</th><th>무단불참</th><th>차수 증가</th><th>고발 판정</th></tr></thead><tbody>{progress.map(x => <tr className={x.prosecution_risk ? 'risk-row' : ''} key={x.service_year}><td>{x.service_year}년차</td><td>{x.mobilization_status ?? '-'}</td><td>{x.training_plan.map(p => `${p.name} ${p.hours}시간`).join(', ') || '-'}</td><td>{x.training_status === '훈련 미이수' ? <span className="risk-badge">훈련 미이수</span> : x.training_status ?? '-'}</td><td>{x.target_hours}시간</td><td>{x.completed_hours}시간</td><td>{x.remaining_hours}시간</td><td>{x.absence_recorded ? '기록 있음' : '-'}</td><td>{x.round_escalated ? '진행' : '-'}</td><td>{x.prosecution_risk ? <span className="risk-badge">{x.prosecution_reason ?? '고발 대상'}</span> : '-'}</td></tr>)}</tbody></table></div>
 }
 function getRequired(progress: TrainingProgress[], year: number) {
   const p = progress.find(x => x.service_year === year)
@@ -340,14 +352,15 @@ function RecordsTab({ progress, records, editingRecord, recordForm, setRecordFor
     {(addingRecord || editingRecord !== null) && recordForm && <div className="record-editor">
       <label>의무연차<input type="number" min="1" max="8" value={recordForm.service_year} onChange={e => update('service_year', Number(e.target.value))} /></label>
       <label>훈련연도<input type="number" value={recordForm.training_year} onChange={e => update('training_year', Number(e.target.value))} /></label>
+      <label>훈련일<input type="date" value={recordForm.scheduled_date} onChange={e => update('scheduled_date', e.target.value)} /></label>
       <label>훈련 종류<select value={recordForm.training_type} onChange={e => update('training_type', e.target.value)}>{trainingTypes.map(t => <option key={t}>{t}</option>)}</select></label>
       <label>차수<select value={recordForm.training_round} onChange={e => update('training_round', Number(e.target.value))}><option value={1}>1차</option><option value={2}>2차</option><option value={3}>3차</option></select></label>
-      <label>출결<select value={recordForm.attendance_status} onChange={e => update('attendance_status', e.target.value)}><option value="completed">이수</option><option value="무단불참">무단불참</option><option value="postponed">연기</option></select></label>
-      <label>훈련시간<input type="number" min="0" value={recordForm.training_hours} onChange={e => { const h = Number(e.target.value); setRecordForm({ ...recordForm, training_hours: h, attendance_status: getRequired(progress, recordForm.service_year) > 0 && h >= getRequired(progress, recordForm.service_year) ? 'completed' : 'postponed' }) }} /></label>
+      <label>출결<select value={recordForm.attendance_status} onChange={e => update('attendance_status', e.target.value)}><option value="scheduled">훈련 예정</option><option value="completed">이수</option><option value="참석">참석</option><option value="무단불참">무단불참</option><option value="postponed">연기</option><option value="보류">보류</option></select></label>
+      <label>훈련시간<input type="number" min="0" value={recordForm.training_hours} onChange={e => { const h = Number(e.target.value); setRecordForm({ ...recordForm, training_hours: h, attendance_status: h === 0 && recordForm.attendance_status === 'scheduled' ? 'scheduled' : getRequired(progress, recordForm.service_year) > 0 && h >= getRequired(progress, recordForm.service_year) ? 'completed' : 'postponed' }) }} /></label>
       <label className="wide">메모<input value={recordForm.notes} onChange={e => update('notes', e.target.value)} /></label>
       <div className="form-actions wide"><button className="button secondary" onClick={onCancel}>취소</button><button className="button primary" onClick={addingRecord ? onAdd : () => onSave(editingRecord as number)}>저장</button></div>
     </div>}
-    <div className="table-wrap"><table><thead><tr><th>연차</th><th>훈련연도</th><th>훈련종류</th><th>차수</th><th>출결</th><th>시간</th><th>메모</th><th>관리</th></tr></thead><tbody>{records.map(r => <tr key={r.id}><td>{r.education_year}년차</td><td>{r.training_year ?? '-'}</td><td>{r.training_type}</td><td>{r.training_round}차</td><td>{r.attendance_status}</td><td>{r.training_hours}시간</td><td>{r.notes ?? '-'}</td><td><button className="button small secondary" onClick={() => onEdit(r)}>수정</button> <button className="button small danger-outline" onClick={() => onDelete(r.id)}>삭제</button></td></tr>)}</tbody></table></div>
+    <div className="table-wrap"><table><thead><tr><th>연차</th><th>훈련연도</th><th>훈련일</th><th>훈련종류</th><th>차수</th><th>출결</th><th>시간</th><th>메모</th><th>관리</th></tr></thead><tbody>{records.map(r => <tr key={r.id}><td>{r.education_year}년차</td><td>{r.training_year ?? '-'}</td><td>{r.scheduled_date ?? '-'}</td><td>{r.training_type}</td><td>{r.training_round}차</td><td>{r.attendance_status}</td><td>{r.training_hours}시간</td><td>{r.notes ?? '-'}</td><td><button className="button small secondary" onClick={() => onEdit(r)}>수정</button> <button className="button small danger-outline" onClick={() => onDelete(r.id)}>삭제</button></td></tr>)}</tbody></table></div>
   </div>
 }
 

@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from user.app.models.assignment import Assignment
+from user.app.models.audit_log import AuditLog
 from user.app.models.organization import OrganizationNode
 from user.app.models.person import Person
 from user.app.models.squad import Squad
@@ -94,6 +96,23 @@ ASSIGNABLE_CONDITIONS = (
 	Person.status == "active",
 	Person.service_year >= MIN_ASSIGNABLE_SERVICE_YEAR,
 )
+def _audit_assignment(
+	db: Session,
+	actor_user_id: int | None,
+	actor_label: str,
+	action: str,
+	before: dict[str, object],
+	after: dict[str, object],
+) -> None:
+	db.add(AuditLog(
+		user_id=actor_user_id,
+		action=action,
+		table_name="assignment",
+		actor_label=actor_label,
+		before_data=json.dumps(before, ensure_ascii=False, sort_keys=True),
+		after_data=json.dumps(after, ensure_ascii=False, sort_keys=True),
+		created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+	))
 
 
 @dataclass(frozen=True)
@@ -223,6 +242,8 @@ def fill_squad_positions(
 	position_quotas: dict[str, int] | dict[str, dict[str, int]],
 	branch_order: tuple[str, ...] = BRANCHES,
 	allow_branch_merge: bool = True,
+	actor_user_id: int | None = None,
+	actor_label: str = "system",
 ) -> dict[str, object]:
 	"""Fill one squad from the shared, unassigned candidate pool."""
 	for quota in position_quotas.values():
@@ -297,8 +318,7 @@ def fill_squad_positions(
 		filled = [{**item, "squad_id": squad_id} for position in positions.values() for item in position["assigned"]]
 		if filled:
 			record_change(db, "assign", f"{squad_id}번 분대 직책별 채우기 {len(filled)}명", filled)
-		db.commit()
-		return {
+		result = {
 			"squad_id": squad_id,
 			"positions": positions,
 			"total_requested": sum(
@@ -308,6 +328,14 @@ def fill_squad_positions(
 			"total_assigned": assigned_total,
 			"total_shortfall": sum(item["shortfall"] for item in positions.values()),
 		}
+		_audit_assignment(
+			db, actor_user_id, actor_label, "assignment.fill_squad",
+			{"total_assigned": 0},
+			{"squad_id": squad_id, "total_assigned": assigned_total,
+			 "total_shortfall": result["total_shortfall"]},
+		)
+		db.commit()
+		return result
 	except Exception:
 		db.rollback()
 		raise
@@ -350,6 +378,10 @@ def available_assignment_candidates(
 def confirm_assignment_selections(
 	db: Session,
 	selections: Iterable[tuple[str, int]],
+	*,
+	commit: bool = True,
+	actor_user_id: int | None = None,
+	actor_label: str = "system",
 ) -> dict[str, object]:
 	"""Persist a reviewed assignment proposal as one atomic operation."""
 	selection_list = list(selections)
@@ -399,16 +431,26 @@ def confirm_assignment_selections(
 				)
 			)
 			assigned.append({"military_number": person_id, "name": person.name, "squad_id": squad_id})
+		result = {"total_assigned": len(assigned), "assigned": assigned}
 		if assigned:
 			record_change(db, "assign", f"편성 {len(assigned)}명", assigned)
-		db.commit()
-		return {"total_assigned": len(assigned), "assigned": assigned}
+			_audit_assignment(
+				db, actor_user_id, actor_label, "assignment.confirm",
+				{"total_assigned": 0}, {"total_assigned": len(assigned)},
+			)
+		if commit:
+			db.commit()
+		return result
 	except Exception:
 		db.rollback()
 		raise
 
 
-def reset_assignment_pool(db: Session) -> dict[str, int]:
+def reset_assignment_pool(
+	db: Session,
+	actor_user_id: int | None = None,
+	actor_label: str = "system",
+) -> dict[str, int]:
 	"""Move every reservist back to the temporary, unassigned pool."""
 	try:
 		assigned_people = list(db.scalars(select(Person).where(Person.squad_id.is_not(None))).all())
@@ -419,6 +461,10 @@ def reset_assignment_pool(db: Session) -> dict[str, int]:
 		db.query(Assignment).delete(synchronize_session=False)
 		if reset_count:
 			record_change(db, "release", f"전체 편성 초기화 {reset_count}명", {"count": reset_count})
+			_audit_assignment(
+				db, actor_user_id, actor_label, "assignment.reset",
+				{"assigned_count": reset_count}, {"assigned_count": 0},
+			)
 		db.commit()
 		return {"reset_count": reset_count}
 	except Exception:
@@ -429,13 +475,15 @@ def reset_assignment_pool(db: Session) -> dict[str, int]:
 def auto_assign_people(
 	db: Session,
 	limit: int | None = None,
+	actor_user_id: int | None = None,
+	actor_label: str = "system",
 ) -> dict[str, object]:
 	"""Reset assignments and distribute people by branch and personnel category."""
 	if limit is not None and limit < 1:
 		raise ValueError("Assignment limit must be positive")
 
 	try:
-		reset_assignment_pool(db)
+		reset_assignment_pool(db, actor_user_id, actor_label)
 		people = list(
 			db.scalars(
 				select(Person).where(*ASSIGNABLE_CONDITIONS).order_by(Person.military_number)
@@ -511,12 +559,17 @@ def auto_assign_people(
 					"tier": candidate.tier,
 				})
 				assigned_count += 1
+		result = {"total_assigned": len(assigned), "assigned": assigned}
 		if assigned:
 			record_change(db, "assign", f"전체 자동 편성 {len(assigned)}명", [
 				{key: item[key] for key in ("military_number", "name", "squad_id")} for item in assigned
 			])
+			_audit_assignment(
+				db, actor_user_id, actor_label, "assignment.auto",
+				{"total_assigned": 0}, {"total_assigned": len(assigned)},
+			)
 		db.commit()
-		return {"total_assigned": len(assigned), "assigned": assigned}
+		return result
 	except Exception:
 		db.rollback()
 		raise

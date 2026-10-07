@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from user.app.database import get_db
+from user.app.models.user import User
+from user.app.services.auth import require_scheduler, require_viewer
 from user.app.services.organization import (
     assign_vacancies, create_unit, delete_unit, expand_formation, hierarchy, move_unit, release_members, rename_unit,
 )
@@ -25,10 +27,13 @@ class UnitRename(BaseModel):
     name: str = Field(min_length=1, max_length=100)
 
 
-@router.patch("/{node_id}/name")
-def change_name(node_id: int, payload: UnitRename, db: Session = Depends(get_db)) -> dict[str, bool]:
+@router.patch("/{node_id}/name", dependencies=[Depends(require_scheduler)])
+def change_name(
+    node_id: int, payload: UnitRename, db: Session = Depends(get_db),
+    actor: User = Depends(require_scheduler),
+) -> dict[str, bool]:
     try:
-        rename_unit(db, node_id, payload.name)
+        rename_unit(db, node_id, payload.name, actor.id, actor.username)
         return {"ok": True}
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -39,57 +44,75 @@ class MemberRelease(BaseModel):
     person_ids: list[str] | None = Field(default=None, min_length=1)
 
 
-@router.post("/{node_id}/release-members")
-def release_unit_members(node_id: int, payload: MemberRelease, db: Session = Depends(get_db)) -> dict[str, int]:
+@router.post("/{node_id}/release-members", dependencies=[Depends(require_scheduler)])
+def release_unit_members(
+    node_id: int, payload: MemberRelease, db: Session = Depends(get_db),
+    actor: User = Depends(require_scheduler),
+) -> dict[str, int]:
     try:
-        return release_members(db, node_id, payload.person_id, payload.person_ids)
+        return release_members(db, node_id, payload.person_id, payload.person_ids, actor.id, actor.username)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-@router.get("")
+@router.get("", dependencies=[Depends(require_viewer)])
 def get_hierarchy(db: Session = Depends(get_db)) -> list[dict[str, object]]:
     return hierarchy(db)
 
 
-@router.post("", status_code=201)
-def add_unit(payload: UnitCreate, db: Session = Depends(get_db)) -> dict[str, object]:
+@router.post("", status_code=201, dependencies=[Depends(require_scheduler)])
+def add_unit(
+    payload: UnitCreate, db: Session = Depends(get_db),
+    actor: User = Depends(require_scheduler),
+) -> dict[str, object]:
     try:
-        node = create_unit(db, payload.parent_id, payload.kind, payload.name)
+        node = create_unit(db, payload.parent_id, payload.kind, payload.name, actor.id, actor.username)
         return {"id": node.id}
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-@router.patch("/{node_id}/parent")
-def change_parent(node_id: int, payload: UnitMove, db: Session = Depends(get_db)) -> dict[str, bool]:
+@router.patch("/{node_id}/parent", dependencies=[Depends(require_scheduler)])
+def change_parent(
+    node_id: int, payload: UnitMove, db: Session = Depends(get_db),
+    actor: User = Depends(require_scheduler),
+) -> dict[str, bool]:
     try:
-        move_unit(db, node_id, payload.parent_id)
+        move_unit(db, node_id, payload.parent_id, actor.id, actor.username)
         return {"ok": True}
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-@router.delete("/{node_id}")
-def remove_unit(node_id: int, db: Session = Depends(get_db)) -> dict[str, bool]:
+@router.delete("/{node_id}", dependencies=[Depends(require_scheduler)])
+def remove_unit(
+    node_id: int, db: Session = Depends(get_db),
+    actor: User = Depends(require_scheduler),
+) -> dict[str, bool]:
     try:
-        delete_unit(db, node_id)
+        delete_unit(db, node_id, actor.id, actor.username)
         return {"ok": True}
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-@router.post("/{node_id}/auto-fill")
-def auto_fill_unit(node_id: int, db: Session = Depends(get_db)) -> dict[str, object]:
+@router.post("/{node_id}/auto-fill", dependencies=[Depends(require_scheduler)])
+def auto_fill_unit(
+    node_id: int, db: Session = Depends(get_db),
+    actor: User = Depends(require_scheduler),
+) -> dict[str, object]:
     try:
-        return assign_vacancies(db, node_id)
+        return assign_vacancies(db, node_id, actor.id, actor.username)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-@router.post("/{node_id}/expand")
-def expand_unit(node_id: int, db: Session = Depends(get_db)) -> dict[str, object]:
+@router.post("/{node_id}/expand", dependencies=[Depends(require_scheduler)])
+def expand_unit(
+    node_id: int, db: Session = Depends(get_db),
+    actor: User = Depends(require_scheduler),
+) -> dict[str, object]:
     try:
-        return expand_formation(db, node_id)
+        return expand_formation(db, node_id, actor.id, actor.username)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
