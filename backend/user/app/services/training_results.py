@@ -35,6 +35,7 @@ from user.app.services.training import (
     ATTENDANCE_ZERO_HOURS,
     EARLY_DISMISSAL_COUNTS_HOURS,
     ROUND_SCHEDULED,
+    TYPE_II_TRAINING_NAMES,
     UNEXCUSED_ABSENCE,
     OVERDUE_GRACE_DAYS,
     all_training_progress,
@@ -144,6 +145,15 @@ def _validated_sessions(sessions) -> list:
     return ordered
 
 
+def _validate_schedule_round(training_type: str, training_round: int) -> None:
+    normalized_type = "".join(training_type.split())
+    if normalized_type not in TYPE_II_TRAINING_NAMES and training_round != 1:
+        raise HTTPException(
+            status_code=422,
+            detail="Only 동원훈련Ⅱ형 supports rounds 2 and 3",
+        )
+
+
 def _required_round_hours(db: Session, person: Person, record: Education) -> int | None:
     return training_record_required_hours(
         record.training_type,
@@ -167,6 +177,7 @@ def _linked_approved_postponement(db: Session, record: Education, expected_types
 def create_schedule(
     db: Session, payload: TrainingScheduleCreate, actor: User
 ) -> TrainingSchedule:
+    _validate_schedule_round(payload.training_type, payload.training_round)
     sessions = _validated_sessions(payload.sessions)
 
     schedule = TrainingSchedule(
@@ -285,6 +296,7 @@ def update_schedule(
         raise HTTPException(status_code=409, detail="Demo early-save schedules cannot be edited")
     if not payload.title.strip():
         raise HTTPException(status_code=422, detail="Schedule title cannot be empty")
+    _validate_schedule_round(payload.training_type, payload.training_round)
 
     records = db.scalars(select(Education).where(Education.schedule_id == schedule_id)).all()
     if any(record.attendance_status not in ROUND_SCHEDULED or record.confirmed_by for record in records):
