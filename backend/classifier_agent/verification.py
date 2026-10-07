@@ -166,6 +166,9 @@ def verify_application(documents, context=None):
     entry = config['types'][kind]
     evaluator = Evaluation(documents, context or {})
     checks = [evaluator.evaluate(r) for r in config['common'] + entry['checks']]
+    for document in documents:
+        for issue in document.get('consistency_issues', []):
+            checks.append({**issue, 'status': 'review', 'required_fields': []})
     # A second matching identifier must not conceal an explicit mismatch.
     for field, context_key in [('subject_service_number', 'context.applicant_service_number'),
                                ('subject_birth_date', 'context.applicant_birth_date')]:

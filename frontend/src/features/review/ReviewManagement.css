@@ -106,14 +106,27 @@
 .review-reason-picker button em { flex-basis: 100%; color: #637080; font-style: normal; font-size: 11px; }
 .review-reason-picker textarea { width: 100%; min-width: 0; padding: 7px; border: 1px solid #cdd6df; border-radius: 4px; font-size: 12px; }
 .review-action-error { padding: 9px; border-radius: 4px; background: #fff0ee; color: #ad302b; }
-.review-roster { overflow: hidden; border: 1px solid #cbd1d8; border-radius: 5px; background: #fff; }
+.review-roster { display: flex; flex-direction: column; height: calc(var(--screen-height) - var(--topbar-height, 48px) - var(--workspace-tabs-height, 31px) - 80px); min-height: 0; gap: 12px; overflow: hidden; background: #f8faff; }
+.review-roster-title { margin: 5px 0; font-size: 24px; color: #172b45; }
+.review-roster-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; flex-shrink: 0; }
+.review-roster-card { display: flex; flex-direction: column; gap: 10px; padding: 18px; border: 1px solid #cfd8e5; border-radius: 5px; background: white; }
+.review-roster-card strong { font-size: 32px; text-align: center; color: #132945; }
+.review-roster-card small { text-align: center; font-size: 12px; color: #8392a8; }
+.review-roster-card:nth-child(2) strong { color: #087af4; }
+.review-roster-card:nth-child(3) strong { color: #08a477; }
+.review-roster-card:nth-child(4) strong { color: #e88721; }
+.review-roster-pagination { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; padding: 10px 14px; background: white; border: 1px solid #dce2e9; border-radius: 8px; font-size: 12px; }
+.review-roster-pagination div { display: flex; align-items: center; gap: 12px; }
+.review-roster-pagination button { padding: 5px 10px; border: 1px solid #dce2e9; border-radius: 12px; background: white; color: #087af4; }
 .review-roster-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 13px 15px; border-bottom: 1px solid #dce2e9; font-size: 13px; }
 .review-roster-filters > input, .review-roster-filters select { min-width: 0; padding: 6px 10px; border: 1px solid #cbd1d8; border-radius: 4px; background: #fff; font-size: 13px; }
 .review-roster-filters > input { width: 224px; }
 .review-roster-filters label { display: flex; align-items: center; gap: 5px; }
 .review-roster-total { margin-left: auto; color: #6b7580; font-size: 12px; }
-.review-roster-table-wrap { overflow-x: auto; }
-.review-management .review-roster-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.review-roster-table-wrap { flex: 1; min-height: 0; overflow: auto; border: 1px solid #dce2e9; border-radius: 10px; background: white; }
+.review-management .review-roster-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; text-align: left; }
+.review-management .review-roster-table th { position: sticky; top: 0; }
+.review-management .review-roster-table td { overflow: hidden; text-overflow: ellipsis; }
 .review-management .review-roster-table th { padding: 10px 13px; border-bottom: 1px solid #dce2e9; background: #f8fafc; color: #677380; font-size: 12px; text-align: left; white-space: nowrap; }
 .review-management .review-roster-table td { padding: 9px 13px; border-bottom: 1px solid #edf1f6; white-space: nowrap; }
 .review-management .review-roster-table tbody tr { cursor: pointer; }

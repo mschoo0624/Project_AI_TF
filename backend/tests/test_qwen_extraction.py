@@ -25,6 +25,31 @@ def test_evidence_and_date():
     assert invalid['status'] == 'invalid'
 
 
+def test_employment_issue_date_with_incomplete_model_quote():
+    pdf = Path(__file__).resolve().parents[2] / 'frontend/public/pdfs/old/employment.pdf'
+    def client(messages):
+        payload = json.loads(messages[1]['content'])
+        output = {key: {'value': None, 'evidence': []} for key in payload['requested_fields']}
+        if 'issued_on' in output:
+            output['issued_on'] = {'value': '2026-04-19', 'evidence': ['발급일자 : 04월 19일']}
+        return json.dumps(output)
+    result = ex.extract_application(pdf, 'statutory.police', client=client)
+    issued = result['fields']['issued_on']
+    assert issued['value'] == '2026-04-19'
+    assert issued['status'] == 'observed'
+    assert issued['evidence'][0]['quote'] == '발급일자 : 2026년 04월 19일'
+
+
+def test_explicit_issue_date_does_not_invent_or_accept_invalid_dates():
+    spec = {'type': 'date'}
+    for text in ['발급일자 : 2026년 04월', '재직기간 2026년 04월 19일', '발급일자 : 04월 19일']:
+        assert ex.explicit_issue_dates({'number': 1, 'text': text}, spec, 'id') == []
+    bad = ex.explicit_issue_dates({'number': 1, 'text': '발급일자 : 2026년 02월 30일'}, spec, 'id')
+    assert bad[0]['status'] == 'invalid'
+    dates = ex.explicit_issue_dates({'number': 1, 'text': '발급일자 : 2026-04-19\n발급일자 : 2026-04-20'}, spec, 'id')
+    assert [item['value'] for item in dates] == ['2026-04-19', '2026-04-20']
+
+
 def test_missing_is_not_false_and_rejects_types():
     page = {'number': 1, 'text': '입원하지 않음'}
     field = {'type': 'boolean'}
@@ -56,8 +81,9 @@ def test_pipeline_conflicts_and_missing(tmp_path, monkeypatch):
     assert result['fields']['subject_name']['value'] is None
     assert result['status'] == 'needs_review'
     assert result['eligibility_decision'] is None
-    with pytest.raises(ex.ModelError):
-        ex.extract_application(pdf, 'postponement.illness', client=lambda _: '{}')
+    failed = ex.extract_application(pdf, 'postponement.illness', client=lambda _: '{}')
+    assert failed['status'] == 'needs_review'
+    assert failed['fields']['subject_name']['status'] == 'invalid'
 
 
 def test_api_rejects_unknown_type_and_invalid_pdf():

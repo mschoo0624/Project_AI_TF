@@ -35,7 +35,7 @@ backend/.venv/Scripts/python.exe -m uvicorn backend.classifier_agent.API:app --h
 CLI도 같은 구현을 사용한다:
 
 ```powershell
-backend/.venv/Scripts/python.exe -m backend.classifier_agent.extraction frontend/public/pdfs/medical.pdf --application-type postponement.illness -o extraction-result.json
+backend/.venv/Scripts/python.exe -m backend.classifier_agent.extraction frontend/public/pdfs/old/medical.pdf --application-type postponement.illness -o extraction-result.json
 ```
 
 출력 파일은 덮어쓰지 않는다. 종료 코드 0은 추출 완료, 2는 확인 필요, 1은 실행 오류다.
@@ -49,16 +49,32 @@ backend/.venv/Scripts/python.exe -m backend.classifier_agent.extraction frontend
 부분 날짜 등 근거만 있는 항목은 `unresolved`로 보존한다.
 자료형/원문 인용/날짜 정밀도 검사 실패는 `invalid`이며 확정값을 null로 차단한다.
 
-근거는 PDF SHA-256 식별자·페이지·원문 인용을 포함한다. 근거 좌표는 추측하지 않아
-bbox/table/row/column은 null이다. 원래 단어·표 좌표는 응답 `pdf`에 따로 보존된다.
+근거는 PDF SHA-256 식별자·페이지·원문 인용을 포함한다. 모델은 제공된 셀/문장의
+`source_id`를 선택하고 서버가 원문과 bbox/table/row/column을 연결한다. 표에 속하지
+않은 문장은 표 좌표가 null이다. `pdf.pages[].sources`에 셀·문장별 원문과 좌표를 보존한다.
+바깥쪽 세로선이 없는 서식은 실제 가로선·칸막이로 셀을 복원한다. 회전된 글자는
+`rotated_text`로 별도 보존해 SAMPLE 등의 문구가 성명·번호에 섞이지 않도록 한다.
+원래 페이지 텍스트·단어·표도 그대로 보존한다.
 `model_responses`에는 검토용 원문 응답이 있다. 개인정보가 포함될 수 있으므로
 응답은 자동 파일 저장/로그 출력하지 않는다.
 
 신청 유형의 모든 field_groups를 사용한다. 분기는 아직 별도 필터링하지 않으며
 미기재 항목 전체를 승인 필수 요건으로 취급하지 않는다. 페이지별 최대 6000자,
-4개 항목씩 독립 요청하고 이전 대화를 전달하지 않는다. 지시문을 합친 입력도 UTF-8
-6500바이트로 제한해 문맥 공간을 확보한다. 초과 페이지는 조용히 자르지 않고
-오류로 반환한다. 긴 문서/항목이 많은 유형은 여러 번 추론하므로 오래 걸릴 수 있다.
+4개 항목씩 독립 요청하고 이전 대화를 전달하지 않는다. 셀/문장을 통째로 묶어 UTF-8
+6100바이트 이내의 입력으로 나누며, 재시도를 포함한 호출 한도는 6500바이트다.
+단일 셀/문장이 한도를 넘거나 페이지가 6000자를 넘으면 자르지 않고 오류로 반환한다.
+JSON 스키마로 출력을 제한하고, 형식·근거 검증이 실패한 항목만 한 번 재시도한다.
+재시도 후에도 실패하면 해당 항목은 invalid로 남긴다. 미기재 항목은 재시도하지 않는다.
+긴 문서/항목이 많은 유형은 여러 번 추론하므로 오래 걸릴 수 있다.
+띄어진 숫자와 줄바꿈은 원문을 보존한 채 검증 시 정규화한다. 완전한 연월일만
+날짜로 인정하며, 진단일을 치료 시작일로 간주하거나 치료기간으로 종료일을 계산하지 않는다.
+시험 접수일은 접수/등록일/신청일 근거를 추가 검사한다.
+발행기관이 함께 적힌 하단의 독립된 완전한 날짜도 발급일 근거로 읽는다.
+등록번호를 발급기관으로 선택하거나 진단일을 치료 시작일로 선택하는 등 명백한
+항목 역할 오류는 차단한다. 이름·기관명·병명 등은 선택한 근거에 실제 값이 있는지도
+확인한다. 같은 치료 소견에 여러 기간이 있으면 임의로 하나를 확정하지 않고 검토 대상으로 남긴다.
+`consistency_issues`는 검증 단계의 담당자 검토 사유로 전달한다. 현재 표현 차이 검사는
+병명의 '염좌'와 치료 소견의 '골절' 조합에 한정하며, 포괄적인 의학적 모순 판정이 아니다.
 스캔·빈 페이지가 섞이면 `needs_review`다. 인용 일치는 의미적 정확성을 보장하지 않는다.
 같은 페이지에서 복수 인물·상충 정보가 있으면 모델이 놓칠 수 있어 담당자 검토가 필요하다.
 
@@ -96,7 +112,7 @@ backend/.venv/Scripts/python.exe -m backend.classifier_agent.reprocess_legacy --
 ## 검증
 
 ```powershell
-backend/.venv/Scripts/python.exe -m pytest backend/tests/test_qwen_extraction.py backend/tests/test_pdf_extract.py -q
+backend/.venv/Scripts/python.exe -m pytest backend/tests/test_layout_extraction.py backend/tests/test_qwen_extraction.py backend/tests/test_pdf_extract.py backend/tests/test_verification.py backend/tests/test_qwen_submissions.py -q
 ```
 
 [Qwen 평가 실행기](evaluation/README.md)는 운영 구현과 분리된 고정 입력 평가용이다.

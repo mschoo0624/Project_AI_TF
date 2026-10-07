@@ -95,6 +95,7 @@ function RosterView({ people, onSelect }: { people: Person[]; onSelect: (person:
   const [search, setSearch] = useState('')
   const [classification, setClassification] = useState('')
   const [onlyPending, setOnlyPending] = useState(false)
+  const [page, setPage] = useState(1)
   const filtered = useMemo(() => people.filter(person => {
     const term = search.trim().toLowerCase()
     if (term && !person.name.toLowerCase().includes(term) && !person.person_id.toLowerCase().includes(term)) return false
@@ -102,11 +103,21 @@ function RosterView({ people, onSelect }: { people: Person[]; onSelect: (person:
     if (onlyPending && person.pending_count === 0) return false
     return true
   }), [people, search, classification, onlyPending])
+  const pages = Math.max(1, Math.ceil(filtered.length / 20))
+  const currentPage = Math.min(page, pages)
+  const shown = filtered.slice((currentPage - 1) * 20, currentPage * 20)
 
   return <section className="review-roster">
+    <h2 className="review-roster-title">보류·연기 대상자 관리</h2>
+    <div className="review-roster-cards">{[
+      ['전체 대상자', people.length, '새 신청에 연결된 등록 인원'],
+      ['보류자', people.filter(p => p.classification.includes('보류')).length, '보류 승인 인원'],
+      ['연기자', people.filter(p => p.classification === '연기').length, '연기 승인 인원'],
+      ['검토 필요', people.filter(p => p.pending_count > 0).length, '검토 중인 신청이 있는 인원'],
+    ].map(([label, count, description]) => <div className="review-roster-card" key={label}><span>{label}</span><strong>{count}명</strong><small>{description}</small></div>)}</div>
     <div className="review-roster-filters">
-      <input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="성명 또는 군번 검색" aria-label="성명 또는 군번 검색" />
-      <select value={classification} onChange={event => setClassification(event.target.value)} aria-label="분류">
+      <input type="search" value={search} onChange={event => { setSearch(event.target.value); setPage(1) }} placeholder="성명 또는 군번 검색" aria-label="성명 또는 군번 검색" />
+      <select value={classification} onChange={event => { setClassification(event.target.value); setPage(1) }} aria-label="분류">
         <option value="">전체 분류</option>
         {['법규보류', '방침보류', '보류', '연기', '일반'].map(value => <option key={value}>{value}</option>)}
       </select>
@@ -115,7 +126,7 @@ function RosterView({ people, onSelect }: { people: Person[]; onSelect: (person:
     </div>
     <div className="review-roster-table-wrap"><table className="review-roster-table"><thead><tr>
       {['군번', '성명', '직업', '연차', '분류', '훈련', '시간', '검토'].map(label => <th key={label}>{label}</th>)}
-    </tr></thead><tbody>{filtered.map(person => <tr key={person.person_id} tabIndex={0}
+    </tr></thead><tbody>{shown.map(person => <tr key={person.person_id} tabIndex={0}
       onClick={() => onSelect(person)} onKeyDown={event => { if (event.key === 'Enter') onSelect(person) }}>
       <td>{person.person_id}</td><td><strong>{person.name}</strong></td><td>{person.occupation ?? '—'}</td>
       <td>{person.resource_year == null ? '—' : `${person.resource_year}년차`}</td><td><ClassChip label={person.classification} /></td>
@@ -124,6 +135,7 @@ function RosterView({ people, onSelect }: { people: Person[]; onSelect: (person:
     </tr>)}</tbody></table>
       {!filtered.length && <p className="review-empty-state">검색 결과가 없습니다.</p>}
     </div>
+    <footer className="review-roster-pagination"><span>총 {filtered.length}명 · 페이지당 20명</span><div><button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>이전</button><span>{currentPage} / {pages}</span><button disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}>다음</button></div></footer>
   </section>
 }
 

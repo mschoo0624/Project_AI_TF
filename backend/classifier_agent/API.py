@@ -62,7 +62,7 @@ def field_definitions():
 
 @app.get('/submissions')
 def submission_list():
-    return submissions.list_all()
+    return [item for item in submissions.list_all() if not item.get('archived') and not item.get('legacy_source_id')]
 
 
 def stored(id):
@@ -84,11 +84,10 @@ def submission_pdf(id: str):
 
 
 @app.post('/submissions')
-def create_submission(application_type: str = Form(...), military_number: str = Form(...),
-                      applicant_name: str = Form(...), file: UploadFile = File(...)):
+def create_submission(application_type: str = Form(...), military_number: str = Form(''),
+                      applicant_name: str = Form(''), file: UploadFile = File(...)):
     try: selected_fields(application_type)
     except ValueError as exc: raise HTTPException(422, str(exc)) from exc
-    if not military_number.strip() or not applicant_name.strip(): raise HTTPException(422, '대상자 정보가 필요합니다.')
     if not busy.acquire(blocking=False): raise HTTPException(429, '다른 문서를 처리 중입니다.')
     id = 'qwen_' + uuid4().hex
     path = None
@@ -101,10 +100,12 @@ def create_submission(application_type: str = Form(...), military_number: str = 
                 size += len(chunk)
                 if size > 20 * 1024 * 1024: raise HTTPException(413, 'PDF는 20MB 이하만 지원합니다.')
                 stream.write(chunk)
-        extraction = extract_application(path, application_type, applicant_name=applicant_name)
+        extraction = extract_application(path, application_type, applicant_name=applicant_name or None)
+        name_field = extraction.get('fields', {}).get('subject_name', {})
+        extracted_name = name_field.get('value') if name_field.get('status') == 'observed' else None
         item = submissions.save({'id': id, 'filename': Path(file.filename or 'document.pdf').name,
             'saved_path': f'/submissions/{id}/pdf', 'military_number': military_number.strip(),
-            'applicant_name': applicant_name, 'application_type': application_type,
+            'applicant_name': applicant_name or (extracted_name if isinstance(extracted_name, str) else ''), 'application_type': application_type,
             'reason_category': catalog()[1][application_type]['label'], 'extraction': extraction,
             'verification': None, 'context': {}, 'status': 'pending', 'note': None,
             'confirmation_requested': False, 'created_at': submissions.now(), 'decided_at': None})
@@ -122,11 +123,27 @@ class StoredVerification(BaseModel):
     context: dict[str, ContextFact] = Field(default_factory=dict)
 
 
+class IdentityRequest(BaseModel):
+    military_number: str = Field(min_length=1)
+    applicant_name: str = Field(min_length=1)
+
+
+@app.post('/submissions/{id}/identity')
+def set_identity(id: str, payload: IdentityRequest):
+    stored(id)
+    def mutate(current):
+        if current['status'] != 'pending' or current.get('military_number'):
+            raise HTTPException(409, '이미 연결되거나 처리된 신청입니다.')
+        current.update(military_number=payload.military_number, applicant_name=payload.applicant_name,
+                       verification=None, context={})
+    return submissions.update(id, mutate)
+
+
 @app.post('/submissions/{id}/verify')
 def verify_submission(id: str, payload: StoredVerification):
     item = stored(id)
     context = {k: v.model_dump() for k, v in payload.context.items()}
-    if context.get('applicant_service_number', {}).get('value') != item['military_number']:
+    if context.get('applicant_service_number', {}).get('value', '') != item['military_number']:
         raise HTTPException(422, '제출 대상자와 검증 대상자가 다릅니다.')
     result = verify_application([item['extraction']], context)
     def mutate(current):
@@ -145,6 +162,8 @@ class DecisionRequest(BaseModel):
 def submission_decision(id: str, payload: DecisionRequest):
     stored(id)
     def mutate(current):
+        if payload.decision == 'approved' and not current.get('military_number'):
+            raise HTTPException(422, '먼저 대상자를 연결하세요.')
         if current['status'] == payload.decision: return
         if current['status'] != 'pending': raise HTTPException(409, '이미 처리된 신청입니다.')
         current.update(status=payload.decision, decided_at=submissions.now(), note=payload.note, confirmation_requested=False)

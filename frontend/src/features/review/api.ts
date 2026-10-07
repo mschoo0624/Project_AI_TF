@@ -88,8 +88,9 @@ function toDocument(item: Submission): Document {
     reviewer: null, reviewed_at: item.decided_at, verification: item.verification }
 }
 export async function fetchBootstrap(signal?: AbortSignal): Promise<Bootstrap> {
-  const [submissions, records] = await Promise.all([loadSubmissions(signal), request<Postponement[]>(`${API_BASE}/postponements`, { signal })])
-  const ids = [...new Set([...submissions.map(s => s.military_number), ...records.map(r => r.person_id)])]
+  const [submissions, allRecords] = await Promise.all([loadSubmissions(signal), request<Postponement[]>(`${API_BASE}/postponements`, { signal })])
+  const records = allRecords.filter(r => submissions.some(s => s.id === r.classifier_submission_id))
+  const ids = [...new Set([...submissions.map(s => s.military_number), ...records.map(r => r.person_id)])].filter(Boolean)
   const matches = await Promise.all(ids.map(async id => {
     const response = await fetch(`${API_BASE}/persons/${encodeURIComponent(id)}`, { signal })
     if (response.status === 404) return [id, null] as const
@@ -110,7 +111,7 @@ export async function fetchBootstrap(signal?: AbortSignal): Promise<Bootstrap> {
       pending_count: docs.filter(s => s.status === 'pending').length, documents: docs.map(toDocument) }
   })
   const queue: QueueItem[] = submissions.filter(s => s.status === 'pending').map(s => ({ ...toDocument(s),
-    person_id: s.military_number, person_name: byId.get(s.military_number)?.name ?? s.applicant_name,
+    person_id: s.military_number || '대상자 미연결', person_name: byId.get(s.military_number)?.name ?? (s.applicant_name || '성명 미확인'),
     occupation: byId.get(s.military_number)?.position ?? null, waiting_days: Math.max(0, Math.floor((Date.now() - Date.parse(s.created_at)) / 86400000)),
     current_classification: people.find(p => p.person_id === s.military_number)?.classification ?? '일반',
     if_accepted_classification: classification(s.application_type), application_date: s.created_at }))
