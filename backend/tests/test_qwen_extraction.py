@@ -34,10 +34,26 @@ def test_employment_issue_date_with_incomplete_model_quote():
             output['issued_on'] = {'value': '2026-04-19', 'evidence': ['발급일자 : 04월 19일']}
         return json.dumps(output)
     result = ex.extract_application(pdf, 'statutory.police', client=client)
-    issued = result['fields']['issued_on']
-    assert issued['value'] == '2026-04-19'
-    assert issued['status'] == 'observed'
-    assert issued['evidence'][0]['quote'] == '발급일자 : 2026년 04월 19일'
+    assert 'issued_on' not in result['fields']
+
+
+def test_every_type_extracts_exactly_rule_references():
+    from backend.classifier_agent.verification import rules_catalog
+    rules = rules_catalog()
+    common, types = ex.catalog()
+    used = set()
+    for kind in types:
+        required = ex.rule_fields(rules['types'][kind].get('common', rules['common'])) | ex.rule_fields(rules['types'][kind]['checks'])
+        selected = ex.selected_fields(kind)[1]
+        assert set(selected) == required, kind
+        assert not any(k.startswith('context.') for k in selected)
+        used.update(required)
+    assert set(common['fields']) == used
+    assert all(set(keys) <= used for keys in common['field_groups'].values())
+    assert len(ex.selected_fields('postponement.illness')[1]) == 8
+    assert len(ex.selected_fields('postponement.exam')[1]) == 10
+    assert 'treatment_duration' not in ex.selected_fields('postponement.illness')[1]
+    assert 'treatment_opinion' in ex.selected_fields('policy.long_illness')[1]
 
 
 def test_explicit_issue_date_does_not_invent_or_accept_invalid_dates():
@@ -63,7 +79,7 @@ def test_missing_is_not_false_and_rejects_types():
 
 def test_context_limit_before_network():
     with pytest.raises(ValueError, match='문맥'):
-        ex.ask_qwen([{'role': 'user', 'content': '가' * 3000}])
+        ex.ask_qwen([{'role': 'user', 'content': '가' * 4000}])
 
 
 def test_pipeline_conflicts_and_missing(tmp_path, monkeypatch):

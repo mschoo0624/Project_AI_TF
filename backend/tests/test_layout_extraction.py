@@ -84,6 +84,7 @@ def test_retry_only_failed_fields(tmp_path, monkeypatch):
     result = ex.extract_application(pdf, 'postponement.illness', client=client)
     retries = [r for r in requests if r.get('retry')]
     assert len(retries) == 1
+    assert len(requests) == 2
     assert list(retries[0]['requested_fields']) == ['subject_name']
     assert result['fields']['subject_name']['value'] == '홍길동'
 
@@ -100,3 +101,18 @@ def test_real_forms_layout_preserves_cells_and_separates_watermark():
     assert any(s['kind'] == 'rotated_text' and 'SAMPLE' in s['text'] for s in exam['sources'])
     issues = ex.consistency_issues({'pages':[medical]}, {'diagnosis':{'value':'우측 무릎 염좌'}})
     assert issues[0]['id'] == 'diagnosis_narrative_difference'
+
+
+def test_compact_full_page_has_no_missing_sources():
+    root = Path(__file__).resolve().parents[2]/'frontend/public/pdfs'
+    for name, kind in [('홍길동.pdf','postponement.illness'), ('홍진호.pdf','postponement.exam')]:
+        requests = []
+        def client(messages):
+            assert sum(len(m['content'].encode()) for m in messages) <= ex.MAX_INPUT_BYTES
+            data = json.loads(messages[-1]['content']); requests.append(data)
+            return json.dumps({k:{'value':None,'evidence_ids':[]} for k in data['requested_fields']})
+        result = ex.extract_application(root/name, kind, client=client)
+        assert len(requests) == 1
+        assert {s['id'] for s in requests[0]['sources']} == {s['id'] for s in result['pdf']['pages'][0]['sources']}
+        assert 'issued_on' not in requests[0]['requested_fields']
+        assert 'issued_on' not in result['fields']

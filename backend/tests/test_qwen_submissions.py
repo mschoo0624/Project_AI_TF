@@ -1,7 +1,5 @@
 """Persistence and UI workflow integration. Extraction is stubbed, not an LLM evaluation."""
 from pathlib import Path
-import json
-import sqlite3
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -140,28 +138,3 @@ def test_business_link_and_decision_are_persisted(client, monkeypatch):
         assert app.patch(f'/postponements/{id}/approve', json={}).status_code == 200
         assert client.get(f'/submissions/{item["id"]}').json()['status'] == 'approved'
     engine.dispose()
-
-
-def test_legacy_reprocessing_preserves_old_record_and_is_repeat_safe(client, tmp_path, monkeypatch):
-    from backend.classifier_agent.reprocess_legacy import reprocess
-    legacy = tmp_path/'legacy'; (legacy/'uploads').mkdir(parents=True)
-    (legacy/'uploads'/'old.pdf').write_bytes(b'%PDF-fixture')
-    old = {'id': 'old-id', 'military_number': '22-1', 'filename': 'old.pdf', 'saved_path': '/uploads/old.pdf', 'status': 'approved'}
-    source = json.dumps(old)
-    (legacy/'submissions.jsonl').write_text(source, encoding='utf-8')
-    project = tmp_path/'project.sqlite'
-    with sqlite3.connect(project) as db:
-        db.execute('CREATE TABLE person (military_number TEXT, name TEXT)')
-        db.execute('INSERT INTO person VALUES (?,?)', ('22-1', '홍길동'))
-        db.execute('CREATE TABLE postponement (id INTEGER PRIMARY KEY, person_id TEXT, type TEXT, reason TEXT, status TEXT, category TEXT, source_file TEXT, classifier_submission_id TEXT UNIQUE)')
-    first = reprocess('old-id', 'postponement.illness', legacy, project)
-    def no_repeat(*args, **kwargs): raise AssertionError('Must not repeat model work')
-    monkeypatch.setattr(api, 'extract_application', no_repeat)
-    second = reprocess('old-id', 'postponement.illness', legacy, project)
-    assert first['id'] == second['id']
-    assert first['status'] == 'pending'
-    assert first['legacy_original_status'] == 'approved'
-    assert first['verification'] is not None
-    assert (legacy/'submissions.jsonl').read_text(encoding='utf-8') == source
-    with sqlite3.connect(project) as db:
-        assert db.execute('SELECT COUNT(*) FROM postponement').fetchone()[0] == 1

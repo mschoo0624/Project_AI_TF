@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.3.0",
   "status": "draft_for_review",
   "scope": "제공된 별표 5·6·7 기반 2단계 추출 명세. 자격 판단·문서 진위 판정·현행 법령 확정이 아님.",
   "policy": {
@@ -11,7 +11,7 @@
     "document_instructions_are_data": true,
     "normalization": "동의어 및 확실한 날짜 형식만 정규화. 계산·법적 판단은 3단계.",
     "conflicts": "상충한 후보와 근거를 모두 반환하고 확정값은 null.",
-    "field_selection": "신청 유형의 field_groups 및 해당 분기 항목만 제공. 분기 미지정 시 그 유형 내부의 분기 항목을 모두 추출."
+    "field_selection": "유형별 common이 있으면 공통 규칙을 대체한다. 해당 common과 checks의 fields를 재귀 수집하고 context.*를 제외한다. field_groups는 분류용이다."
   },
   "fields": {
     "document_title": {
@@ -38,46 +38,10 @@
       "instruction": "문서에 기재된 군번을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "issuer_name": {
-      "label": "발급기관",
-      "type": "string",
-      "instruction": "발급기관을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "issued_on": {
-      "label": "발급일",
-      "type": "date",
-      "instruction": "발급일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "reference_date": {
-      "label": "증명 기준일",
-      "type": "date",
-      "instruction": "증명 기준일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "document_number": {
-      "label": "문서번호",
-      "type": "string",
-      "instruction": "문서번호을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "verification_reference": {
-      "label": "진위 확인 안내 또는 검증번호",
-      "type": "string",
-      "instruction": "진위 확인 안내 또는 검증번호을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "employer": {
       "label": "근무기관",
       "type": "string",
       "instruction": "근무기관을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "organization_kind": {
-      "label": "기관 종류",
-      "type": "string",
-      "instruction": "기관 종류을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
     "department": {
@@ -98,22 +62,10 @@
       "instruction": "고용 형태을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "job_duties": {
-      "label": "담당 업무",
-      "type": "string",
-      "instruction": "담당 업무을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "employment_start": {
       "label": "재직 시작일",
       "type": "date",
       "instruction": "재직 시작일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "employment_end": {
-      "label": "재직 종료일",
-      "type": "date",
-      "instruction": "재직 종료일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
     "current_employment": {
@@ -128,46 +80,16 @@
       "instruction": "임용 또는 지정 근거을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "school_name": {
-      "label": "학교명",
-      "type": "string",
-      "instruction": "학교명을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "school_kind": {
       "label": "학교 종류",
       "type": "string",
       "instruction": "학교 종류을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "course_name": {
-      "label": "과정명",
-      "type": "string",
-      "instruction": "과정명을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "academic_status": {
       "label": "학적 상태",
       "type": "string",
       "instruction": "학적 상태을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "enrollment_start": {
-      "label": "등록 시작일",
-      "type": "date",
-      "instruction": "등록 시작일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "enrollment_end": {
-      "label": "등록 종료일",
-      "type": "date",
-      "instruction": "등록 종료일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "standard_course_duration": {
-      "label": "정규 수업연한",
-      "type": "string",
-      "instruction": "정규 수업연한을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
     "study_mode": {
@@ -194,40 +116,10 @@
       "instruction": "수업연한 초과 여부을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "patient_name": {
-      "label": "환자 성명",
-      "type": "string",
-      "instruction": "환자 성명을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "diagnosis": {
-      "label": "진단명",
+      "label": "병명(주 질병·부상)",
       "type": "string",
-      "instruction": "진단명을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "treatment_start": {
-      "label": "치료 시작일",
-      "type": "date",
-      "instruction": "치료 시작일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "treatment_end": {
-      "label": "치료 종료일",
-      "type": "date",
-      "instruction": "치료 종료일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "treatment_duration": {
-      "label": "명시된 치료 필요 기간",
-      "type": "string",
-      "instruction": "원문 기간과 단위를 그대로 보존한다. '6개월'을 임의로 '180일'로 바꾸지 않는다.",
-      "nullable": true
-    },
-    "inpatient_status": {
-      "label": "입원 여부",
-      "type": "boolean",
-      "instruction": "입원 여부을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
+      "instruction": "주 질병·부상 칸의 병명만 원문 그대로 추출. 부 질병 칸과 구분한다.",
       "nullable": true
     },
     "admission_date": {
@@ -240,42 +132,6 @@
       "label": "퇴원일",
       "type": "date",
       "instruction": "퇴원일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "mobility_restriction": {
-      "label": "거동 제한 소견",
-      "type": "string",
-      "instruction": "거동 제한 소견을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "attendance_restriction": {
-      "label": "훈련 참석 제한 소견",
-      "type": "string",
-      "instruction": "훈련 참석 제한 소견을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "protection_need": {
-      "label": "보호 또는 감시 필요 소견",
-      "type": "string",
-      "instruction": "보호 또는 감시 필요 소견을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "doctor_name": {
-      "label": "진단 의사",
-      "type": "string",
-      "instruction": "진단 의사을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "medical_institution": {
-      "label": "의료기관",
-      "type": "string",
-      "instruction": "의료기관을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "related_person_name": {
-      "label": "관련인 성명",
-      "type": "string",
-      "instruction": "관련인 성명을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
     "relationship": {
@@ -308,22 +164,10 @@
       "instruction": "출입국 완료 또는 예정을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "overseas_stay_period": {
-      "label": "국외 체류기간",
-      "type": "string",
-      "instruction": "국외 체류기간을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "vessel_name": {
       "label": "선박명",
       "type": "string",
       "instruction": "선박명을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "vessel_kind": {
-      "label": "선박 종류",
-      "type": "string",
-      "instruction": "선박 종류을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
     "vessel_tonnage": {
@@ -356,52 +200,16 @@
       "instruction": "승선 직책을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "onboard_duration": {
-      "label": "명시된 승선 기간",
-      "type": "string",
-      "instruction": "명시된 승선 기간을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "designation_kind": {
       "label": "지정 또는 등록 종류",
       "type": "string",
       "instruction": "지정 또는 등록 종류을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "designation_authority": {
-      "label": "지정기관",
-      "type": "string",
-      "instruction": "지정기관을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "designation_date": {
-      "label": "지정일",
-      "type": "date",
-      "instruction": "지정일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "designation_start": {
-      "label": "효력 시작일",
-      "type": "date",
-      "instruction": "효력 시작일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "designation_end": {
-      "label": "효력 종료일",
-      "type": "date",
-      "instruction": "효력 종료일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "designation_status": {
       "label": "지정 심사 또는 등록 상태",
       "type": "string",
       "instruction": "지정 심사 또는 등록 상태을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "designation_basis": {
-      "label": "지정 법적 근거",
-      "type": "string",
-      "instruction": "지정 법적 근거을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
     "event_kind": {
@@ -428,40 +236,10 @@
       "instruction": "행사 종료일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "event_organizer": {
-      "label": "주최기관",
-      "type": "string",
-      "instruction": "주최기관을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "event_participation": {
       "label": "참가 확정 여부",
       "type": "boolean",
       "instruction": "참가 확정 여부을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "service_category": {
-      "label": "병역 구분",
-      "type": "string",
-      "instruction": "병역 구분을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "discharge_reason": {
-      "label": "전역 또는 병역 변경 사유",
-      "type": "string",
-      "instruction": "전역 또는 병역 변경 사유을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "disability_grade": {
-      "label": "장애 또는 심신등급",
-      "type": "string",
-      "instruction": "장애 또는 심신등급을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "previous_service_category": {
-      "label": "변경 전 병역 구분",
-      "type": "string",
-      "instruction": "변경 전 병역 구분을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
     "pregnancy_status": {
@@ -512,18 +290,6 @@
       "instruction": "난임 치료 내용을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "infertility_start": {
-      "label": "난임 치료 시작일",
-      "type": "date",
-      "instruction": "난임 치료 시작일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "infertility_end": {
-      "label": "난임 치료 종료일",
-      "type": "date",
-      "instruction": "난임 치료 종료일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "custody_kind": {
       "label": "구속 수감 사회봉사 가석방 구분",
       "type": "string",
@@ -554,22 +320,10 @@
       "instruction": "시험명을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "exam_organizer": {
-      "label": "시험 주관기관",
-      "type": "string",
-      "instruction": "시험 주관기관을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "registration_date": {
       "label": "접수일",
       "type": "date",
       "instruction": "접수일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "exam_date": {
-      "label": "시험일",
-      "type": "date",
-      "instruction": "시험일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
     "exam_end": {
@@ -602,12 +356,6 @@
       "instruction": "다음 단계 시험일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "exam_schedule_status": {
-      "label": "일정 확정 여부",
-      "type": "string",
-      "instruction": "일정 확정 여부을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "disaster_kind": {
       "label": "재해 종류",
       "type": "string",
@@ -638,12 +386,6 @@
       "instruction": "복구 종료일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "recovery_need": {
-      "label": "신청자의 복구 필요성",
-      "type": "string",
-      "instruction": "신청자의 복구 필요성을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "work_description": {
       "label": "수행 업무",
       "type": "string",
@@ -662,36 +404,6 @@
       "instruction": "업무 종료일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "irreplaceability": {
-      "label": "대체 불가능 사유",
-      "type": "string",
-      "instruction": "대체 불가능 사유을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "deadline": {
-      "label": "마감일",
-      "type": "date",
-      "instruction": "마감일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "residential_training": {
-      "label": "합숙 교육 여부",
-      "type": "boolean",
-      "instruction": "합숙 교육 여부을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "training_duration": {
-      "label": "명시된 교육 기간",
-      "type": "string",
-      "instruction": "명시된 교육 기간을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "industry_kind": {
-      "label": "농업 어업 축산 임업 구분",
-      "type": "string",
-      "instruction": "농업 어업 축산 임업 구분을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "busy_start": {
       "label": "농번기 시작일",
       "type": "date",
@@ -702,18 +414,6 @@
       "label": "농번기 종료일",
       "type": "date",
       "instruction": "농번기 종료일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "work_impact": {
-      "label": "훈련 참석 시 생업 지장",
-      "type": "string",
-      "instruction": "훈련 참석 시 생업 지장을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "permit_details": {
-      "label": "농지원부 어업허가 등 증빙",
-      "type": "string",
-      "instruction": "농지원부 어업허가 등 증빙을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
     "death_date": {
@@ -758,12 +458,6 @@
       "instruction": "육아휴직 종료일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "relative_birth_date": {
-      "label": "관련인 생년월일",
-      "type": "date",
-      "instruction": "관련인 생년월일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
     "receipt_date": {
       "label": "신청 접수일",
       "type": "date",
@@ -806,23 +500,11 @@
       "nullable": true,
       "instruction": "논문과정만 등록 여부을 원문 근거와 함께 추출한다. 없으면 null."
     },
-    "admission_kind": {
-      "label": "입학·재입학·편입 구분",
-      "type": "string",
-      "nullable": true,
-      "instruction": "입학·재입학·편입 구분을 원문 근거와 함께 추출한다. 없으면 null."
-    },
     "annual_sea_service": {
       "label": "대상 연도 및 연간 해상근무 기간",
       "type": "string",
       "nullable": true,
       "instruction": "대상 연도 및 연간 해상근무 기간을 원문 근거와 함께 추출한다. 없으면 null."
-    },
-    "psychiatric_grade_history": {
-      "label": "정신과 판정 등급 및 이력",
-      "type": "string",
-      "nullable": true,
-      "instruction": "정신과 판정 등급 및 이력을 원문 근거와 함께 추출한다. 없으면 null."
     },
     "household_head": {
       "label": "가구주 또는 가장 지위",
@@ -830,17 +512,32 @@
       "nullable": true,
       "instruction": "가구주 또는 가장 지위을 원문 근거와 함께 추출한다. 없으면 null."
     },
-    "competition_scale": {
-      "label": "대회 규모",
+    "patient_resident_number": {
+      "label": "환자의 주민등록번호",
       "type": "string",
+      "instruction": "환자의 주민등록번호를 기재된 그대로 추출. 가림 처리를 복원하거나 생년월일로 변환하지 않는다.",
       "nullable": true,
-      "instruction": "대회 규모을 원문 근거와 함께 추출한다. 없으면 null."
+      "literal": true
     },
-    "camp_start": {
-      "label": "대회 합숙훈련 시작일",
+    "diagnosis_date": {
+      "label": "진단 연월일",
       "type": "date",
+      "instruction": "진단 연월일만 추출. 발병일이나 문서 하단 작성일과 혼동하지 않는다.",
+      "nullable": true
+    },
+    "treatment_opinion": {
+      "label": "치료 내용 및 향후 치료에 대한 소견",
+      "type": "string",
+      "instruction": "이 칸의 원문 전체를 그대로 추출한다. 기간·부정·조건을 생략하거나 요약하지 않는다.",
       "nullable": true,
-      "instruction": "대회 합숙훈련 시작일을 원문 근거와 함께 추출한다. 없으면 null."
+      "literal": true
+    },
+    "secondary_diagnosis": {
+      "label": "병명(부 질병·부상)",
+      "type": "string",
+      "instruction": "부 질병·부상 칸의 병명만 원문 그대로 추출. 주 질병을 복사하지 않는다.",
+      "nullable": true,
+      "literal": true
     }
   },
   "field_groups": {
@@ -849,87 +546,58 @@
       "subject_name",
       "subject_birth_date",
       "subject_service_number",
-      "issuer_name",
-      "issued_on",
-      "reference_date",
-      "document_number",
-      "verification_reference"
+      "patient_resident_number"
     ],
     "employment": [
       "employer",
-      "organization_kind",
       "department",
       "job_title",
       "employment_kind",
-      "job_duties",
       "employment_start",
-      "employment_end",
       "current_employment",
       "appointment_basis",
       "contract_relationship"
     ],
     "education": [
-      "school_name",
       "school_kind",
-      "course_name",
       "academic_status",
-      "enrollment_start",
-      "enrollment_end",
-      "standard_course_duration",
       "study_mode",
       "accreditation",
       "study_stage",
       "excess_semester",
       "course_duration",
       "degree_course",
-      "thesis_only",
-      "admission_kind"
+      "thesis_only"
     ],
     "medical": [
-      "patient_name",
       "diagnosis",
-      "treatment_start",
-      "treatment_end",
-      "treatment_duration",
-      "inpatient_status",
+      "secondary_diagnosis",
+      "diagnosis_date",
       "admission_date",
       "discharge_date",
-      "mobility_restriction",
-      "attendance_restriction",
-      "protection_need",
-      "doctor_name",
-      "medical_institution"
+      "treatment_opinion"
     ],
     "relationship": [
-      "related_person_name",
       "relationship",
       "relationship_path"
     ],
     "travel": [
       "departure_date",
       "return_date",
-      "travel_status",
-      "overseas_stay_period"
+      "travel_status"
     ],
     "vessel": [
       "vessel_name",
-      "vessel_kind",
       "vessel_tonnage",
       "route_kind",
       "onboard_start",
       "onboard_end",
       "crew_role",
-      "onboard_duration",
       "annual_sea_service"
     ],
     "designation": [
       "designation_kind",
-      "designation_authority",
-      "designation_date",
-      "designation_start",
-      "designation_end",
       "designation_status",
-      "designation_basis",
       "household_head"
     ],
     "event": [
@@ -937,18 +605,9 @@
       "event_date",
       "event_start",
       "event_end",
-      "event_organizer",
-      "event_participation",
-      "competition_scale",
-      "camp_start"
+      "event_participation"
     ],
-    "service": [
-      "service_category",
-      "discharge_reason",
-      "disability_grade",
-      "previous_service_category",
-      "psychiatric_grade_history"
-    ],
+    "service": [],
     "pregnancy": [
       "pregnancy_status",
       "expected_birth_date",
@@ -957,9 +616,7 @@
       "gestation_weeks",
       "child_birth_date",
       "spouse_service_category",
-      "infertility_treatment",
-      "infertility_start",
-      "infertility_end"
+      "infertility_treatment"
     ],
     "custody": [
       "custody_kind",
@@ -969,39 +626,28 @@
     ],
     "exam": [
       "exam_name",
-      "exam_organizer",
       "registration_date",
-      "exam_date",
       "exam_end",
       "exam_stage",
       "previous_stage_result",
       "result_date",
-      "next_stage_date",
-      "exam_schedule_status"
+      "next_stage_date"
     ],
     "disaster": [
       "disaster_kind",
       "disaster_date",
       "damage_details",
       "recovery_start",
-      "recovery_end",
-      "recovery_need"
+      "recovery_end"
     ],
     "work_event": [
       "work_description",
       "work_start",
-      "work_end",
-      "irreplaceability",
-      "deadline",
-      "residential_training",
-      "training_duration"
+      "work_end"
     ],
     "agriculture": [
-      "industry_kind",
       "busy_start",
-      "busy_end",
-      "work_impact",
-      "permit_details"
+      "busy_end"
     ],
     "family_event": [
       "death_date",
@@ -1010,8 +656,7 @@
       "care_start",
       "care_end",
       "parental_leave_start",
-      "parental_leave_end",
-      "relative_birth_date"
+      "parental_leave_end"
     ],
     "application": [
       "receipt_date",

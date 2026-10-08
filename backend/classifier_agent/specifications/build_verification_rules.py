@@ -63,9 +63,6 @@ def build():
         setrule('statutory.'+key, employer, current, enum('job_title', titles, '법규보류 대상 직종의 명시적 근거'))
     setrule('statutory.assembly', current, enum('job_title', ['국회의원'], '국회의원 재직'),
             manual('assembly_scope', '2015.12.31부터 훈련대상에 포함된 예외: 동원/훈련 구분 확인'), coverage='partial')
-    setrule('policy.long_illness', present('diagnosis', '질병·심신장애의 진단'),
-            leaf('long_treatment', '180일 이상의 장기치료 필요 기간', 'days_at_least', ['treatment_duration'], days=180),
-            enum('document_title', ['진단서', '의사 진단서'], '진단서 제출'))
     setrule('policy.police_student', enum('school_kind', ['경찰학교'], '경찰학교'),
             enum('academic_status', ['재학', '재학중', '재학 중'], '재학 상태', ['휴학', '휴학중', '졸업', '제적']))
     setrule('policy.judge_prosecutor', current, enum('job_title', ['판사', '검사', '현직판사', '법관'], '현직 판사 또는 검사'))
@@ -84,20 +81,6 @@ def build():
             manual('teacher_exceptions', '학교 인가, 평생교육시설 제외, 기간제·상담·순회교사 6개월 이상 재직 조건 확인', ['school_kind', 'accreditation', 'employment_kind', 'employment_start']), coverage='partial')
     setrule('policy.ship_crew', present('vessel_name', '선박명'), present('crew_role', '승선 직책'),
             manual('tonnage_document', '25톤 이상/이하 증명 구분과 정확히 25톤인 경우 해석 확인', ['vessel_tonnage', 'document_title', 'onboard_start', 'onboard_end']), coverage='partial')
-
-    medical_document = group('medical_document', '의료기관의 관련 서류 중 해당 서류', 'any',
-        enum('document_title', ['진단서', '진료확인서', '통원치료 확인서', '입원확인서', '장애인등록증'], '의료 증빙 종류'),
-        manual('other_medical_document', '제시된 문서명이 다른 경우 허용 서류와의 동일성 확인', ['document_title']))
-    inpatient = group('inpatient', '훈련일 입원 중', 'all', eq('inpatient_status', True, '입원 근거'), overlap('admission_date', 'discharge_date'))
-    immobile = group('immobile', '훈련일 거동 불가', 'all',
-        enum('mobility_restriction', ['거동 불가', '거동할 수 없음', '거동 불가능'], '거동 불가의 명시적 소견', ['거동 가능', '거동 제한 없음']), overlap('treatment_start', 'treatment_end'))
-    supervision = group('supervision', '정신질환 보호·감시', 'all', present('diagnosis', '진단'),
-        enum('protection_need', ['보호 필요', '감시 필요', '보호 또는 감시 필요'], '보호·감시 필요 소견'),
-        eq('context.mental_illness_confirmed', True, '정신질환 진단 해당 여부 확인'), overlap('treatment_start', 'treatment_end'))
-    visible = group('visible', '훈련에 참석하기 어려운 명백한 질병·장애', 'all',
-        enum('attendance_restriction', ['훈련 참석 불가', '훈련 참석이 어려움'], '훈련 참석 제한 소견'),
-        eq('context.visible_illness_confirmed', True, '외관상 명백한 질병·장애 확인'), overlap('treatment_start', 'treatment_end'))
-    setrule('postponement.illness', medical_document, group('medical_reason', '대체 요건 중 하나 충족', 'any', inpatient, immobile, supervision, visible))
 
     relatives_death = ['부', '모', '부친', '모친', '아버지', '어머니', '배우자', '자녀', '아들', '딸', '조부', '조모', '친조부', '친조모', '외조부', '외조모', '증조부', '증조모', '외증조부', '외증조모', '손자', '손녀', '배우자의 부', '배우자의 모', '장인', '장모', '시부', '시모', '형', '동생', '누나', '오빠', '언니', '형제자매', '백부', '백모', '숙부', '숙모', '고모', '고모부', '이모', '이모부', '외숙부', '외숙모']
     death = group('death', '허용 가족 사망 및 7일 기간', 'all',
@@ -208,9 +191,6 @@ def build():
     setrule('policy.female_reservist', eq('context.female_reservist_confirmed', True, '여군 출신 예비군 확인'),
             manual('female_branches', '임신~출산 후 12개월, 유산·사산 주수별 3/6/12개월, 6세 이하 자녀, 배우자 군인·군무원·예비군, 불임치료의 대체 요건 확인',
                    ['pregnancy_status', 'birth_date', 'pregnancy_loss_date', 'gestation_weeks', 'child_birth_date', 'spouse_service_category', 'infertility_treatment']), coverage='partial')
-    setrule('policy.medical_service_change', present('service_category', '병역 구분'),
-            manual('medical_change_branches', '현역→보충역 복무 후 예비군, 간부 심신장애 1~9급 전역, 정신과 4급 이력의 대체 요건 및 예비전력과-156 공문 확인',
-                   ['previous_service_category', 'disability_grade', 'psychiatric_grade_history']), coverage='partial')
     setrule('policy.university_professor', employer, current,
             enum('job_title', ['교수', '부교수', '조교수', '전임강사'], '대상 교수 직위', ['명예교수', '시간강사', '초빙교수', '겸임교원']),
             eq('context.university_professor_scope_confirmed', True, '고등교육법/특별법 대상 대학 및 원격·평생교육·연구전담 등 제외 확인'))
@@ -226,15 +206,36 @@ def build():
             eq('degree_course', False, '기능대학 학위과정 학생 제외'),
             manual('vocational_duration', '공공직업훈련시설 훈련생의 6개월 이상 교육과정 및 기능대학 분기 확인', ['school_kind', 'course_duration']), coverage='partial')
 
-    # Prevent a misspelled field silently turning a condition into an eternal unknown.
-    common = json.loads((BASE/'common_fields.json').read_text(encoding='utf-8'))
-    def inspect(rule):
-        for key in rule.get('fields', []):
-            assert key.startswith('context.') or key in common['fields'], key
-        for child in rule.get('children', []): inspect(child)
-    for entry in types.values():
-        for rule in entry['checks']: inspect(rule)
-    result = {'version': '1.0.0', 'basis': 'provided_pdf', 'common': [
+    # Conditions belong to the same catalog as every other application type.
+    duration = dict(
+        duration_pattern=r'(?:진단일(?:로)?부터\s*)?(?P<count>\d+)\s*(?P<unit>일|주)(?:간)?(?:의)?\s*(?:안정\s*및\s*)?(?:치료|가료)(?:가|를)?\s*필요(?:합니다|하다|함|할 것으로 사료됩니다)?[.]?',
+        split_pattern=r'(?<=[.!?])\s+|\n', unit_days={'일': 1, '주': 7},
+        exclude_pattern=r'(?:치료|가료).{0,20}(?:필요하지|불필요|종료|완료|않|경우)')
+    period = leaf('treatment_period', '진단일을 1일째로 포함한 명시적 치료 기간과 훈련 기간 대조', 'overlap',
+        ['diagnosis_date', 'treatment_opinion', 'context.training_start', 'context.training_end'],
+        **{**duration, 'duration_pattern': duration['duration_pattern'].replace(r'(?:진단일(?:로)?부터\s*)?', r'진단일(?:로)?부터\s*')})
+    branches = [overlap('admission_date', 'discharge_date')]
+    for key, label, accepted, extra in [
+        ('immobile', '명시적 거동 불가 소견', ['거동 불가', '거동할 수 없음', '거동이 불가능함'], []),
+        ('supervision', '명시적 보호·감시 필요 소견', ['보호 필요', '감시 필요', '보호 또는 감시 필요'],
+         [eq('context.mental_illness_confirmed', True, '정신질환 진단 해당 여부 확인')]),
+        ('visible', '명시적 훈련 참석 불가 소견', ['훈련 참석 불가', '훈련 참석이 어려움'],
+         [eq('context.visible_illness_confirmed', True, '외관상 명백한 질병·장애 확인')]),
+    ]:
+        branches.append(group(key, label, 'all',
+            leaf(key+'_opinion', label+' (간접 표현은 담당자 검토)', 'enum', ['treatment_opinion'],
+                 accepted=accepted, split_pattern=r'\n|(?<=\.)\s+', strip_suffix='.'), period, *extra))
+    setrule('postponement.illness',
+        group('medical_reason', '훈련일 입원·거동 불가·정신질환 보호·외관상 명백한 질환의 대체 요건', 'any', *branches), coverage='partial')
+    setrule('policy.long_illness',
+        group('diagnosis', '질병·심신장애 진단', 'any', present('diagnosis', '주 질병·부상'), present('secondary_diagnosis', '부 질병·부상')),
+        leaf('long_treatment', '소견에 명시된 180일 이상 장기치료', 'days_at_least', ['treatment_opinion'], days=180, **duration),
+        eq('context.medical_certificate_confirmed', True, '진단서 제출 및 의료기관 발급 확인'), coverage='partial')
+    setrule('policy.medical_service_change',
+        eq('context.medical_service_history_confirmed', True,
+           '공적 병역 이력 확인: 현역→보충역 복무 후 예비군, 간부 심신장애 1~9급 전역, 정신과 4급 이력 중 해당 요건 및 관련 공문 확인'), coverage='partial')
+
+    result = {'version': '1.2.0', 'basis': 'provided_pdf', 'common': [
         group('identity', '신청자와 증빙 대상자 일치', 'all',
               leaf('name_match', '성명 대조', 'equal_fields', ['subject_name', 'context.applicant_name']),
               group('identity_number', '군번 또는 생년월일 대조', 'any',
@@ -242,6 +243,28 @@ def build():
                     leaf('birth_match', '생년월일 대조', 'equal_fields', ['subject_birth_date', 'context.applicant_birth_date']))),
         eq('context.documents_acceptable', True, '신청 분기에 맞는 구비서류·발급주체·유효기간 확인'),
         eq('context.training_scope_applicable', True, '신청한 훈련종류에 해당 보류/연기 범위 적용')], 'types': types}
+    for kind in ('postponement.illness', 'policy.long_illness', 'policy.medical_service_change'):
+        types[kind]['common'] = [
+            group('identity', '환자와 신청자 본인 확인', 'all',
+                  leaf('name_match', '환자 성명 대조', 'equal_fields', ['subject_name', 'context.applicant_name']),
+                  leaf('patient_identity', '원본 신원 자료와 신청자 일치 확인', 'equals',
+                       ['context.patient_identity_confirmed'], value=True, supporting_fields=['patient_resident_number'])),
+            {**result['common'][1], 'supporting_fields': ['diagnosis', 'secondary_diagnosis', 'treatment_opinion']},
+            result['common'][2]]
+    def references(rules):
+        used = set()
+        for rule in rules:
+            used.update(k for k in rule.get('fields', []) + rule.get('supporting_fields', []) if not k.startswith('context.'))
+            used.update(references(rule.get('children', [])))
+        return used
+    used = set()
+    for entry in types.values():
+        used.update(references(entry.get('common', result['common']) + entry['checks']))
+    assert used <= common['fields'].keys(), used - common['fields'].keys()
+    common['fields'] = {k: v for k, v in common['fields'].items() if k in used}
+    common['field_groups'] = {k: [f for f in v if f in used] for k, v in common['field_groups'].items()}
+    common['version'] = '0.3.0'
+    (BASE/'common_fields.json').write_text(json.dumps(common, ensure_ascii=False, indent=2), encoding='utf-8')
     (BASE/'verification_rules.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
 
 

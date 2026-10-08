@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.2.0",
   "basis": "provided_pdf",
   "common": [
     {
@@ -1621,41 +1621,112 @@
         "page_text": "교육훈련\n(재난) 확인\n보류직종 기관(업체)별 보류대상 기본 작계 동원훈련 예비\n동원 책임\n훈련 훈련 ⅠㆍⅡ형 시간\n청원 경찰 청원경찰법에 적용 받는 자 × × × × × 소속장\n소년원 및 소년분류심사원의\n보호직 × × × × × 소속장\n보호직 공무원\n질병 및 180일 이상의 장기치료가 필요\n× × × × × 진단서\n심신 장애인 하다고 인정된 진단서제출자\n수감기간\n교도\n구속 수감자 (6개월이상사회봉사명령이행기간 × × × × ×\n소장\n및 가석방 기간 포함)\n기초생활 지자\n기초생활 수급자로 등록된 자 × × × × ×\n수급자 체장\n차상위계층\n이면서 차상위계층 증명서 및 읍․면\n× × × × ×\n한부모 한부모 가족 증명서 제출자 동․장\n가족의 가장\n- 임신시부터출산후12개월까지\n- 유산 또는 사산시\n․임신기간이15주이내시: 3개월\n진단서\n․임신기간이16~27주시 : 6개월\n여군 출신 또는\n․임신기간이28주이상시: 12개월 × × × × ×\n예비군 증빙\n- 6세 이하의 자녀를 둔 경우\n서류\n- 배우자가 군인, 군무원,\n예비군일 경우\n- 불임치료중인 경우\n- 현역에서 전환되어\n보충역으로 근무 후\n예비군에 편성된 자\n-심신장애 1급∼9급으로\n심신질환으로\n전역한 간부 직권\n병역의무가 × × × × ×\n- 병무청 신체검사 중 처리\n변경된자\n정신과 4급 판정을 받은\n사실이 있는 자\n*예비전력과-156(16.1.13)\n공문 참고\n민영교도소 법무부의 위탁을 받은\n× × × × × 소속장\n직원 민영교도소의 직원",
         "source_url": "/verification-sources/6#page=2"
       },
-      "coverage": "structured",
+      "coverage": "partial",
       "training_scope": "신청 훈련종류에 대한 별표의 참가/보류 및 횟수 범위를 별도로 확인. 일괄 면제로 취급하지 않음.",
       "checks": [
         {
           "id": "diagnosis",
-          "label": "질병·심신장애의 진단",
-          "op": "present",
-          "fields": [
-            "diagnosis"
+          "label": "질병·심신장애 진단",
+          "op": "any",
+          "children": [
+            {
+              "id": "diagnosis",
+              "label": "주 질병·부상",
+              "op": "present",
+              "fields": [
+                "diagnosis"
+              ]
+            },
+            {
+              "id": "secondary_diagnosis",
+              "label": "부 질병·부상",
+              "op": "present",
+              "fields": [
+                "secondary_diagnosis"
+              ]
+            }
           ]
         },
         {
           "id": "long_treatment",
-          "label": "180일 이상의 장기치료 필요 기간",
+          "label": "소견에 명시된 180일 이상 장기치료",
           "op": "days_at_least",
           "fields": [
-            "treatment_duration"
+            "treatment_opinion"
           ],
-          "days": 180
+          "days": 180,
+          "duration_pattern": "(?:진단일(?:로)?부터\\s*)?(?P<count>\\d+)\\s*(?P<unit>일|주)(?:간)?(?:의)?\\s*(?:안정\\s*및\\s*)?(?:치료|가료)(?:가|를)?\\s*필요(?:합니다|하다|함|할 것으로 사료됩니다)?[.]?",
+          "split_pattern": "(?<=[.!?])\\s+|\\n",
+          "unit_days": {
+            "일": 1,
+            "주": 7
+          },
+          "exclude_pattern": "(?:치료|가료).{0,20}(?:필요하지|불필요|종료|완료|않|경우)"
         },
         {
-          "id": "document_title",
-          "label": "진단서 제출",
-          "op": "enum",
+          "id": "context.medical_certificate_confirmed",
+          "label": "진단서 제출 및 의료기관 발급 확인",
+          "op": "equals",
           "fields": [
-            "document_title"
+            "context.medical_certificate_confirmed"
           ],
-          "accepted": [
-            "진단서",
-            "의사 진단서"
-          ],
-          "rejected": []
+          "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "common": [
+        {
+          "id": "identity",
+          "label": "환자와 신청자 본인 확인",
+          "op": "all",
+          "children": [
+            {
+              "id": "name_match",
+              "label": "환자 성명 대조",
+              "op": "equal_fields",
+              "fields": [
+                "subject_name",
+                "context.applicant_name"
+              ]
+            },
+            {
+              "id": "patient_identity",
+              "label": "원본 신원 자료와 신청자 일치 확인",
+              "op": "equals",
+              "fields": [
+                "context.patient_identity_confirmed"
+              ],
+              "value": true,
+              "supporting_fields": [
+                "patient_resident_number"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "context.documents_acceptable",
+          "label": "신청 분기에 맞는 구비서류·발급주체·유효기간 확인",
+          "op": "equals",
+          "fields": [
+            "context.documents_acceptable"
+          ],
+          "value": true,
+          "supporting_fields": [
+            "diagnosis",
+            "secondary_diagnosis",
+            "treatment_opinion"
+          ]
+        },
+        {
+          "id": "context.training_scope_applicable",
+          "label": "신청한 훈련종류에 해당 보류/연기 범위 적용",
+          "op": "equals",
+          "fields": [
+            "context.training_scope_applicable"
+          ],
+          "value": true
+        }
+      ]
     },
     "policy.custody": {
       "label": "구속수감자 등",
@@ -1847,25 +1918,69 @@
       "training_scope": "신청 훈련종류에 대한 별표의 참가/보류 및 횟수 범위를 별도로 확인. 일괄 면제로 취급하지 않음.",
       "checks": [
         {
-          "id": "service_category",
-          "label": "병역 구분",
-          "op": "present",
+          "id": "context.medical_service_history_confirmed",
+          "label": "공적 병역 이력 확인: 현역→보충역 복무 후 예비군, 간부 심신장애 1~9급 전역, 정신과 4급 이력 중 해당 요건 및 관련 공문 확인",
+          "op": "equals",
           "fields": [
-            "service_category"
+            "context.medical_service_history_confirmed"
+          ],
+          "value": true
+        }
+      ],
+      "document_options": [],
+      "common": [
+        {
+          "id": "identity",
+          "label": "환자와 신청자 본인 확인",
+          "op": "all",
+          "children": [
+            {
+              "id": "name_match",
+              "label": "환자 성명 대조",
+              "op": "equal_fields",
+              "fields": [
+                "subject_name",
+                "context.applicant_name"
+              ]
+            },
+            {
+              "id": "patient_identity",
+              "label": "원본 신원 자료와 신청자 일치 확인",
+              "op": "equals",
+              "fields": [
+                "context.patient_identity_confirmed"
+              ],
+              "value": true,
+              "supporting_fields": [
+                "patient_resident_number"
+              ]
+            }
           ]
         },
         {
-          "id": "medical_change_branches",
-          "label": "현역→보충역 복무 후 예비군, 간부 심신장애 1~9급 전역, 정신과 4급 이력의 대체 요건 및 예비전력과-156 공문 확인",
-          "op": "manual",
+          "id": "context.documents_acceptable",
+          "label": "신청 분기에 맞는 구비서류·발급주체·유효기간 확인",
+          "op": "equals",
           "fields": [
-            "previous_service_category",
-            "disability_grade",
-            "psychiatric_grade_history"
+            "context.documents_acceptable"
+          ],
+          "value": true,
+          "supporting_fields": [
+            "diagnosis",
+            "secondary_diagnosis",
+            "treatment_opinion"
           ]
+        },
+        {
+          "id": "context.training_scope_applicable",
+          "label": "신청한 훈련종류에 해당 보류/연기 범위 적용",
+          "op": "equals",
+          "fields": [
+            "context.training_scope_applicable"
+          ],
+          "value": true
         }
-      ],
-      "document_options": []
+      ]
     },
     "policy.private_prison": {
       "label": "민영교도소 직원",
@@ -3218,133 +3333,102 @@
         "page_text": "[별표 7]\n예비군훈련 연기대상(사유) 및 구비서류(제24조 관련)\n구분 연기 사유 처리 기준 구비 서류\nㆍ 의료기관에서 발행\nㆍ 훈련일현재입원중이거나거동할수없는사람\n하며 치료기간이\nㆍ 정신질환이 있는 사람으로서 보호나 감시를\n질병 또는 명시된 진단서\n요하는 사람\n1 심신장애가 또는 진료확인서\nㆍ 훈련에 참석이 어려울 정도로 외관상\n있는 사람 (통원치료 확인서)\n명백한 질병 또는 심신장애가 있으며,\nㆍ 장애인등록증사본\n훈련일이 포함된 진단서를 제출한 사람\nㆍ 입원확인서 사본\nㆍ 직계가족(외조부모 포함) 또는 배우자의 부모가\n위독하여본인이아니면간호할사람이없는경우\nㆍ 의료기관에서\n직계\nㆍ 직계가족(외조부모, 외증조부모포함) 또는배우자의 발행한 진단서\n존ㆍ비속\n2 부모(조부모, 증조부모 포함), 본인 및 배우자의\n등의\n형제자매, 백ㆍ숙부모(고모ㆍ부, 이모ㆍ부, ㆍ 사망확인서및기타\n위독 및 사망\n관계증명 자료\n외숙부모포함)의사망한날로부터소집기일포함\n7일까지의 기간과 중복된 경우\n천재지변 등 ㆍ 천재지변 또는 기타 재난을당하여 수습중인때 ㆍ 행정관서의 사실\n3\n재난 * 천재지변및재난전에연기신청한인원은미해당 확인서\nㆍ 국외체제기간(출ㆍ입국일 포함)이 소집기간과\n중복된 경우\n- 소집일이후 출ㆍ입국 상황을확인, 직권연기 ㆍ 국방동원정보체계상의\n4 출국(예정)\n* 동원훈련Ⅱ형(4일)의 경우 부과된 훈련 출ㆍ입국자 명부\n기간이 출ㆍ귀국일과 하루라도 중복될\n경우 전 기간(4일) 연기처리 후 재부과",
         "source_url": "/verification-sources/7#page=1"
       },
-      "coverage": "structured",
+      "coverage": "partial",
       "training_scope": "신청 훈련종류에 대한 별표의 참가/보류 및 횟수 범위를 별도로 확인. 일괄 면제로 취급하지 않음.",
       "checks": [
         {
-          "id": "medical_document",
-          "label": "의료기관의 관련 서류 중 해당 서류",
-          "op": "any",
-          "children": [
-            {
-              "id": "document_title",
-              "label": "의료 증빙 종류",
-              "op": "enum",
-              "fields": [
-                "document_title"
-              ],
-              "accepted": [
-                "진단서",
-                "진료확인서",
-                "통원치료 확인서",
-                "입원확인서",
-                "장애인등록증"
-              ],
-              "rejected": []
-            },
-            {
-              "id": "other_medical_document",
-              "label": "제시된 문서명이 다른 경우 허용 서류와의 동일성 확인",
-              "op": "manual",
-              "fields": [
-                "document_title"
-              ]
-            }
-          ]
-        },
-        {
           "id": "medical_reason",
-          "label": "대체 요건 중 하나 충족",
+          "label": "훈련일 입원·거동 불가·정신질환 보호·외관상 명백한 질환의 대체 요건",
           "op": "any",
           "children": [
             {
-              "id": "inpatient",
-              "label": "훈련일 입원 중",
-              "op": "all",
-              "children": [
-                {
-                  "id": "inpatient_status",
-                  "label": "입원 근거",
-                  "op": "equals",
-                  "fields": [
-                    "inpatient_status"
-                  ],
-                  "value": true
-                },
-                {
-                  "id": "admission_date_overlap",
-                  "label": "사유 기간과 훈련기간의 중복(양 끝 날짜 포함)",
-                  "op": "overlap",
-                  "fields": [
-                    "admission_date",
-                    "discharge_date",
-                    "context.training_start",
-                    "context.training_end"
-                  ]
-                }
+              "id": "admission_date_overlap",
+              "label": "사유 기간과 훈련기간의 중복(양 끝 날짜 포함)",
+              "op": "overlap",
+              "fields": [
+                "admission_date",
+                "discharge_date",
+                "context.training_start",
+                "context.training_end"
               ]
             },
             {
               "id": "immobile",
-              "label": "훈련일 거동 불가",
+              "label": "명시적 거동 불가 소견",
               "op": "all",
               "children": [
                 {
-                  "id": "mobility_restriction",
-                  "label": "거동 불가의 명시적 소견",
+                  "id": "immobile_opinion",
+                  "label": "명시적 거동 불가 소견 (간접 표현은 담당자 검토)",
                   "op": "enum",
                   "fields": [
-                    "mobility_restriction"
+                    "treatment_opinion"
                   ],
                   "accepted": [
                     "거동 불가",
                     "거동할 수 없음",
-                    "거동 불가능"
+                    "거동이 불가능함"
                   ],
-                  "rejected": [
-                    "거동 가능",
-                    "거동 제한 없음"
-                  ]
+                  "split_pattern": "\\n|(?<=\\.)\\s+",
+                  "strip_suffix": "."
                 },
                 {
-                  "id": "treatment_start_overlap",
-                  "label": "사유 기간과 훈련기간의 중복(양 끝 날짜 포함)",
+                  "id": "treatment_period",
+                  "label": "진단일을 1일째로 포함한 명시적 치료 기간과 훈련 기간 대조",
                   "op": "overlap",
                   "fields": [
-                    "treatment_start",
-                    "treatment_end",
+                    "diagnosis_date",
+                    "treatment_opinion",
                     "context.training_start",
                     "context.training_end"
-                  ]
+                  ],
+                  "duration_pattern": "진단일(?:로)?부터\\s*(?P<count>\\d+)\\s*(?P<unit>일|주)(?:간)?(?:의)?\\s*(?:안정\\s*및\\s*)?(?:치료|가료)(?:가|를)?\\s*필요(?:합니다|하다|함|할 것으로 사료됩니다)?[.]?",
+                  "split_pattern": "(?<=[.!?])\\s+|\\n",
+                  "unit_days": {
+                    "일": 1,
+                    "주": 7
+                  },
+                  "exclude_pattern": "(?:치료|가료).{0,20}(?:필요하지|불필요|종료|완료|않|경우)"
                 }
               ]
             },
             {
               "id": "supervision",
-              "label": "정신질환 보호·감시",
+              "label": "명시적 보호·감시 필요 소견",
               "op": "all",
               "children": [
                 {
-                  "id": "diagnosis",
-                  "label": "진단",
-                  "op": "present",
-                  "fields": [
-                    "diagnosis"
-                  ]
-                },
-                {
-                  "id": "protection_need",
-                  "label": "보호·감시 필요 소견",
+                  "id": "supervision_opinion",
+                  "label": "명시적 보호·감시 필요 소견 (간접 표현은 담당자 검토)",
                   "op": "enum",
                   "fields": [
-                    "protection_need"
+                    "treatment_opinion"
                   ],
                   "accepted": [
                     "보호 필요",
                     "감시 필요",
                     "보호 또는 감시 필요"
                   ],
-                  "rejected": []
+                  "split_pattern": "\\n|(?<=\\.)\\s+",
+                  "strip_suffix": "."
+                },
+                {
+                  "id": "treatment_period",
+                  "label": "진단일을 1일째로 포함한 명시적 치료 기간과 훈련 기간 대조",
+                  "op": "overlap",
+                  "fields": [
+                    "diagnosis_date",
+                    "treatment_opinion",
+                    "context.training_start",
+                    "context.training_end"
+                  ],
+                  "duration_pattern": "진단일(?:로)?부터\\s*(?P<count>\\d+)\\s*(?P<unit>일|주)(?:간)?(?:의)?\\s*(?:안정\\s*및\\s*)?(?:치료|가료)(?:가|를)?\\s*필요(?:합니다|하다|함|할 것으로 사료됩니다)?[.]?",
+                  "split_pattern": "(?<=[.!?])\\s+|\\n",
+                  "unit_days": {
+                    "일": 1,
+                    "주": 7
+                  },
+                  "exclude_pattern": "(?:치료|가료).{0,20}(?:필요하지|불필요|종료|완료|않|경우)"
                 },
                 {
                   "id": "context.mental_illness_confirmed",
@@ -3354,37 +3438,45 @@
                     "context.mental_illness_confirmed"
                   ],
                   "value": true
-                },
-                {
-                  "id": "treatment_start_overlap",
-                  "label": "사유 기간과 훈련기간의 중복(양 끝 날짜 포함)",
-                  "op": "overlap",
-                  "fields": [
-                    "treatment_start",
-                    "treatment_end",
-                    "context.training_start",
-                    "context.training_end"
-                  ]
                 }
               ]
             },
             {
               "id": "visible",
-              "label": "훈련에 참석하기 어려운 명백한 질병·장애",
+              "label": "명시적 훈련 참석 불가 소견",
               "op": "all",
               "children": [
                 {
-                  "id": "attendance_restriction",
-                  "label": "훈련 참석 제한 소견",
+                  "id": "visible_opinion",
+                  "label": "명시적 훈련 참석 불가 소견 (간접 표현은 담당자 검토)",
                   "op": "enum",
                   "fields": [
-                    "attendance_restriction"
+                    "treatment_opinion"
                   ],
                   "accepted": [
                     "훈련 참석 불가",
                     "훈련 참석이 어려움"
                   ],
-                  "rejected": []
+                  "split_pattern": "\\n|(?<=\\.)\\s+",
+                  "strip_suffix": "."
+                },
+                {
+                  "id": "treatment_period",
+                  "label": "진단일을 1일째로 포함한 명시적 치료 기간과 훈련 기간 대조",
+                  "op": "overlap",
+                  "fields": [
+                    "diagnosis_date",
+                    "treatment_opinion",
+                    "context.training_start",
+                    "context.training_end"
+                  ],
+                  "duration_pattern": "진단일(?:로)?부터\\s*(?P<count>\\d+)\\s*(?P<unit>일|주)(?:간)?(?:의)?\\s*(?:안정\\s*및\\s*)?(?:치료|가료)(?:가|를)?\\s*필요(?:합니다|하다|함|할 것으로 사료됩니다)?[.]?",
+                  "split_pattern": "(?<=[.!?])\\s+|\\n",
+                  "unit_days": {
+                    "일": 1,
+                    "주": 7
+                  },
+                  "exclude_pattern": "(?:치료|가료).{0,20}(?:필요하지|불필요|종료|완료|않|경우)"
                 },
                 {
                   "id": "context.visible_illness_confirmed",
@@ -3394,17 +3486,6 @@
                     "context.visible_illness_confirmed"
                   ],
                   "value": true
-                },
-                {
-                  "id": "treatment_start_overlap",
-                  "label": "사유 기간과 훈련기간의 중복(양 끝 날짜 포함)",
-                  "op": "overlap",
-                  "fields": [
-                    "treatment_start",
-                    "treatment_end",
-                    "context.training_start",
-                    "context.training_end"
-                  ]
                 }
               ]
             }
@@ -3415,6 +3496,59 @@
         "진단서 또는 진료확인서(치료기간 명시)",
         "장애인등록증 사본",
         "입원확인서 사본"
+      ],
+      "common": [
+        {
+          "id": "identity",
+          "label": "환자와 신청자 본인 확인",
+          "op": "all",
+          "children": [
+            {
+              "id": "name_match",
+              "label": "환자 성명 대조",
+              "op": "equal_fields",
+              "fields": [
+                "subject_name",
+                "context.applicant_name"
+              ]
+            },
+            {
+              "id": "patient_identity",
+              "label": "원본 신원 자료와 신청자 일치 확인",
+              "op": "equals",
+              "fields": [
+                "context.patient_identity_confirmed"
+              ],
+              "value": true,
+              "supporting_fields": [
+                "patient_resident_number"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "context.documents_acceptable",
+          "label": "신청 분기에 맞는 구비서류·발급주체·유효기간 확인",
+          "op": "equals",
+          "fields": [
+            "context.documents_acceptable"
+          ],
+          "value": true,
+          "supporting_fields": [
+            "diagnosis",
+            "secondary_diagnosis",
+            "treatment_opinion"
+          ]
+        },
+        {
+          "id": "context.training_scope_applicable",
+          "label": "신청한 훈련종류에 해당 보류/연기 범위 적용",
+          "op": "equals",
+          "fields": [
+            "context.training_scope_applicable"
+          ],
+          "value": true
+        }
       ]
     },
     "postponement.family": {

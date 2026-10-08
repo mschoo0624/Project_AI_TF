@@ -62,7 +62,7 @@ def field_definitions():
 
 @app.get('/submissions')
 def submission_list():
-    return [item for item in submissions.list_all() if not item.get('archived') and not item.get('legacy_source_id')]
+    return [item for item in submissions.list_all() if not item.get('archived')]
 
 
 def stored(id):

@@ -17,7 +17,7 @@ export type MatchedPerson = { military_number: string; name: string; branch: str
 export type Postponement = { id: number; person_id: string; classifier_submission_id: string | null; status: string; type: string; category: string | null; reason: string }
 export type ApplicationType = { id: string; label: string }
 export type Rule = { op: string; label: string; fields?: string[]; value?: unknown; children?: Rule[] }
-export type RuleCatalog = { common: Rule[]; types: Record<string, { checks: Rule[] }> }
+export type RuleCatalog = { common: Rule[]; types: Record<string, { common?: Rule[]; checks: Rule[] }> }
 export type FieldDefinitions = Record<string, { label: string; type: string }>
 
 export async function request<T>(url: string, init?: RequestInit): Promise<T> {

@@ -34,7 +34,7 @@ function SubmissionDetails({ item, rules, definitions, refresh }: { item: Submis
   const [error, setError] = useState('')
   const [note, setNote] = useState(item.note ?? '')
   const [identityNumber, setIdentityNumber] = useState('')
-  const inputs = rules ? contextInputs([...rules.common, ...(rules.types[item.application_type]?.checks ?? [])]) : []
+  const inputs = rules ? contextInputs([...(rules.types[item.application_type]?.common ?? rules.common), ...(rules.types[item.application_type]?.checks ?? [])]) : []
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true); setError('')
     try { await action(); await refresh() } catch (e) { setError(e instanceof Error ? e.message : '처리하지 못했습니다.') }
@@ -133,8 +133,15 @@ export default function PostponementModule({ initialSelectedId }: { initialSelec
     <header className="review-ai-top"><div><h2>서류 AI 판정</h2><p>신청 유형에 따라 PDF를 읽고, 근거와 관련 조항을 확인합니다.</p></div><button type="button" className="review-ai-secondary" disabled={busy || loading} onClick={() => void refresh().catch(e => setError(String(e)))}>목록 새로고침</button></header>
     <form className="review-ai-form" onSubmit={submit}>
       <label>군번 (선택)<small>생략하면 PDF의 성명으로 대상자를 찾습니다.</small><input disabled={busy} value={militaryNumber} onChange={e => void findPerson(e.target.value)} placeholder="군번 입력 또는 생략" /></label>
+      <div className="review-ai-file-field" role="group" aria-labelledby="submission-file-label">
+        <span id="submission-file-label">제출 서류</span><small>전자 PDF · 최대 20MB</small>
+        <div className="review-ai-file-control">
+          <button type="button" disabled={busy} onClick={() => fileInput.current?.click()}>찾아보기</button>
+          <span title={file?.name} aria-live="polite">{file?.name ?? '선택된 서류 없음'}</span>
+        </div>
+        <input hidden ref={fileInput} disabled={busy} type="file" aria-label="제출 서류 선택" accept="application/pdf,.pdf" onChange={e => { const candidate = e.target.files?.[0] ?? null; const valid = !candidate || (candidate.name.toLowerCase().endsWith('.pdf') && candidate.size <= 20 * 1024 * 1024); setFile(valid ? candidate : null); setError(valid ? '' : '20MB 이하의 PDF를 선택하세요.'); if (!valid) e.target.value = '' }} />
+      </div>
       <label>신청 유형<small>신청한 항목을 선택하세요.</small><select disabled={busy || loading} required value={type} onChange={e => setType(e.target.value)}><option value="">신청 유형 선택 ▼</option>{['statutory.', 'policy.', 'postponement.'].map((prefix, i) => <optgroup key={prefix} label={['법규보류', '방침보류', '연기'][i]}>{types.filter(t => t.id.startsWith(prefix)).map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
-      <label>제출 서류<small>전자 PDF · 최대 20MB</small><input ref={fileInput} disabled={busy} type="file" accept="application/pdf,.pdf" onChange={e => { const candidate = e.target.files?.[0] ?? null; const valid = !candidate || (candidate.name.toLowerCase().endsWith('.pdf') && candidate.size <= 20 * 1024 * 1024); setFile(valid ? candidate : null); setError(valid ? '' : '20MB 이하의 PDF를 선택하세요.') }} /></label>
       <div className={`review-ai-match ${person ? 'matched' : ''}`}>{matching ? '군번 조회 중…' : person ? `확인됨: ${person.name} · ${person.military_number} · ${person.branch}` : militaryNumber.trim() ? '등록된 군번을 확인하세요.' : 'PDF에서 추출한 성명과 정확히 일치하는 인원이 한 명이면 자동 연결합니다.'}</div>
       <div className="review-ai-form-actions"><span>{busy ? '문서를 분석하고 있습니다. 유형별 항목 수에 따라 수 분 걸릴 수 있습니다.' : file?.name ?? 'PDF 파일을 선택하세요.'}</span><button disabled={busy || matching || !file || (!!militaryNumber.trim() && !person) || !type} type="submit">{busy ? '처리 중…' : 'PDF 업로드 및 AI 분석'}</button></div>
     </form>

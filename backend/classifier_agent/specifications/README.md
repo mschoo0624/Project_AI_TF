@@ -4,7 +4,8 @@
 
 ## 파일
 
-- `common_fields.json`: 138개 필드 정의, 재사용 필드 묶음, 결측·근거·충돌 처리, 외부 DB 항목.
+- `common_fields.json`: 검증 규칙이 참조하는 필드 정의, 분류용 필드 묶음, 결측·근거·충돌 처리, 외부 DB 항목.
+- `build_verification_rules.py`: 모든 유형의 규칙 생성. 생성된 `verification_rules.json`을 공통 검증기가 실행한다.
 - `statutory_hold.json`: 법규보류 18개 묶음. 관련 직종을 함께 묶었으므로 원문 글머리 수와 같지 않다.
 - `policy_hold.json`: 방침보류 40개 유형. 철도 등 직무별 하위 분기는 설명에 보존했다.
 - `postponement.json`: 연기 10개 유형과 분기·구비서류 목록.
@@ -14,11 +15,20 @@
 
 ## 읽는 방법
 
-신청에서 받은 유형 ID로 유형을 선택하고, 그 유형의 `field_groups`를 공통 파일에서 펼친다. 해당 필드의 이름·자료형·설명만 AI에 전달한다. 모든 유형을 한꺼번에 판단시키지 않는다. '법규보류 대상 직종'처럼 넓은 유형이면 해당 그룹을 사용하되 구체적 직종과 근거를 추출한다.
+신청 유형 ID로 `verification_rules.json`의 공통 규칙과 해당 유형의 `checks`를 선택한다.
+유형에 `common`이 있으면 최상위 공통 규칙을 대체한다(진단서 본인 확인 등).
+중첩된 `children`을 포함해 `fields`를 수집하고 `context.*`를 제외한 항목만 추출한다.
+`supporting_fields`는 담당자 확인에 제시할 원문 항목이다. 미기재만으로 필수 요건 실패로 보지는 않지만, 근거 오류·충돌이 있으면 검토로 남긴다.
+항목의 이름·자료형·설명은 `common_fields.json`에서 가져온다. `field_groups`는 분류용이며,
+같은 묶음에 있더라도 해당 유형의 검증 규칙에서 참조하지 않으면 요청하지 않는다.
+`manual` 규칙이 담당자 확인용으로 참조하는 항목도 사용 항목으로 유지한다.
+규칙이 참조하는 항목 정의가 없으면 오류를 반환하며 조용히 누락하지 않는다.
 
 `branches`와 `extraction_notes`는 분기 설명이며 실행 가능한 AND/OR 규칙이 아니다. 신청 하위유형이 주어지면 관련 분기만 추출한다. 하위유형이 없으면 그 신청 유형 내부의 모든 관련 항목을 추출하고 3단계에서 분기를 검사한다. 필드가 많으면 문서·필드 묶음 단위로 나누되, 각 호출에 공통 식별 정보와 필요한 원문을 전달한다.
 
-예: `policy.school_teacher`는 성명·발급정보 + 근무기관·직위·재직기간 + 학교종류·인가정보를 추출한다. 'OO초등학교 재직'만으로 교사라고 채우지 않는다. 문서에 교사/교원이라는 직위가 있거나 이를 명시적으로 뒷받침하는 근거가 필요하다.
+예: `postponement.illness`는 8개, `policy.long_illness` 및 `policy.medical_service_change`는 5개,
+`postponement.exam`은 10개 항목을 선택한다. 치료 기간은 별도 추출하지 않고 원문 치료 소견을 검증 단계에서 대조한다.
+현재 규칙이 참조하지 않는 필드 정의는 제거한다.
 
 ## 2단계와 3단계의 경계
 
@@ -51,10 +61,10 @@
 
 ## 공통 필드 묶음
 
-- **identity**: 문서명, 문서 대상자 성명, 대상자 생년월일, 문서에 기재된 군번, 발급기관, 발급일, 증명 기준일, 문서번호, 진위 확인 안내 또는 검증번호.
+- **identity**: 문서명, 문서 대상자 성명, 대상자 생년월일, 문서에 기재된 군번, 환자의 주민등록번호. 유형별 실제 요청은 검증 규칙에 따르며 전부 요청하지 않는다.
 - **employment**: 근무기관, 기관 종류, 부서, 직위 또는 직종, 고용 형태, 담당 업무, 재직 시작일, 재직 종료일, 재직 여부, 임용 또는 지정 근거, 원청·수탁·용역 계약 관계.
 - **education**: 학교명, 학교 종류, 과정명, 학적 상태, 등록 시작일, 등록 종료일, 정규 수업연한, 통학 원격 등 수업 방식, 인가 또는 인정 사항, 학기 및 과정 단계, 수업연한 초과 여부, 교육과정 기간, 학위과정 여부, 논문과정만 등록 여부, 입학·재입학·편입 구분.
-- **medical**: 환자 성명, 진단명, 치료 시작일, 치료 종료일, 명시된 치료 필요 기간, 입원 여부, 입원일, 퇴원일, 거동 제한 소견, 훈련 참석 제한 소견, 보호 또는 감시 필요 소견, 진단 의사, 의료기관.
+- **medical**: 주 질병·부상, 부 질병·부상, 진단 연월일, 입원일, 퇴원일, 치료 내용 및 향후 치료 소견. 환자의 성명·주민등록번호는 identity 묶음이다.
 - **relationship**: 관련인 성명, 신청자 기준 관계, 관계 증명 연결 정보.
 - **travel**: 출국일 또는 예정일, 입국일 또는 예정일, 출입국 완료 또는 예정, 국외 체류기간.
 - **vessel**: 선박명, 선박 종류, 총톤수, 국제 또는 연안 항로, 승선 시작일, 승선 종료일, 승선 직책, 명시된 승선 기간, 대상 연도 및 연간 해상근무 기간.
@@ -153,18 +163,14 @@
 | postponement.agriculture | 농·어업 종사 | agriculture, designation | 3 |
 | postponement.other | 기타 | application, designation | 3 |
 
-## 사용 예시 (표준 라이브러리만 필요)
+## 실제 추출 항목 조회 예시 (백엔드 환경)
 
 ```python
-import json
-from pathlib import Path
+from backend.classifier_agent.extraction import selected_fields
 
-base = Path("backend/classifier_agent/specifications")
-common = json.loads((base / "common_fields.json").read_text(encoding="utf-8"))
-catalog = json.loads((base / "policy_hold.json").read_text(encoding="utf-8"))
-spec = next(t for t in catalog["types"] if t["id"] == "policy.school_student")
-keys = dict.fromkeys(k for group in spec["field_groups"] for k in common["field_groups"][group])
-extraction_fields = {k: common["fields"][k] for k in keys}
+application, extraction_fields = selected_fields("postponement.illness")
+for key, definition in extraction_fields.items():
+    print(key, definition["label"])
 ```
 
 추출 API와 고정 규칙 검증 API가 구현되어 있다. 구체적인 지원 범위 및 외부 확인값은 위 검증 API 안내를 참고한다.
