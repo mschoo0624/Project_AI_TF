@@ -14,6 +14,47 @@
     "field_selection": "유형별 common이 있으면 공통 규칙을 대체한다. 해당 common과 checks의 fields를 재귀 수집하고 context.*를 제외한다. field_groups는 분류용이다."
   },
   "fields": {
+    "onset_date": {
+      "label": "발병 연월일",
+      "type": "date",
+      "nullable": true,
+      "extraction": "layout",
+      "label_pattern": "발병연월일",
+      "instruction": "PDF 표의 발병 연월일 옆 칸에서 직접 읽는다."
+    },
+    "medical_institution": {
+      "label": "의료기관 명칭",
+      "type": "string",
+      "nullable": true,
+      "literal": true,
+      "extraction": "layout",
+      "label_pattern": "의료기관명칭[:：]?",
+      "value_pattern": "의료기관\\s*명칭\\s*[:：]\\s*(?P<value>[^\\n]+)"
+    },
+    "doctor_name": {
+      "label": "의사 이름",
+      "type": "string",
+      "nullable": true,
+      "literal": true,
+      "extraction": "layout",
+      "value_pattern": "^[ \\t]*성\\s*명\\s*[:：][ \\t]*(?P<value>[^\\n(]+)"
+    },
+    "doctor_license": {
+      "label": "면허번호",
+      "type": "string",
+      "nullable": true,
+      "literal": true,
+      "extraction": "layout",
+      "value_pattern": "면허번호\\s*(?P<value>제\\s*[0-9 ]+\\s*호)"
+    },
+    "doctor_kind": {
+      "label": "의료인 구분",
+      "type": "string",
+      "nullable": true,
+      "literal": true,
+      "extraction": "layout",
+      "value_pattern": "\\[\\s*[√✓vVxX]\\s*\\]\\s*(?P<value>치과의사|한의사|의사)"
+    },
     "document_title": {
       "label": "문서명",
       "type": "string",

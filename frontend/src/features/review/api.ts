@@ -1,8 +1,9 @@
-import { API_BASE, CLASSIFIER_BASE, decide, fieldValue, jsonRequest, loadSubmissions, notifyReviewChanged, pdfUrl, request,
+import { API_BASE, CLASSIFIER_BASE, analysisComplete, decide, fieldValue, jsonRequest, loadSubmissions, notifyReviewChanged, pdfUrl, request,
   type MatchedPerson, type Postponement, type Submission, type Verification } from './classifierApi'
 
 export type Document = {
   id: string
+  filename: string
   type: string
   issued: string
   expiry: string
@@ -41,6 +42,7 @@ export type Person = {
 }
 
 export type QueueItem = Document & {
+  submission: Submission
   application_date?: string
   person_id: string
   person_name: string
@@ -81,14 +83,15 @@ function classification(type: string): string {
   return type.startsWith('statutory.') ? '법규보류' : type.startsWith('policy.') ? '방침보류' : type.startsWith('postponement.') || type === 'delay' ? '연기' : '보류'
 }
 function toDocument(item: Submission): Document {
-  return { id: item.id, type: fieldValue(item, 'document_title'), issued: fieldValue(item, 'issued_on'), expiry: '—',
+  return { id: item.id, filename: item.filename, type: fieldValue(item, 'document_title'), issued: fieldValue(item, 'issued_on'), expiry: '—',
     status: item.status === 'approved' ? '승인' : item.status === 'declined' ? '반려' : item.confirmation_requested ? '확인요청' : '검토대기',
     owner: item.reason_category, file_path: pdfUrl(item.id), verify_number: item.extraction.fields.document_number?.value ? String(item.extraction.fields.document_number.value) : null,
     reject_reason: item.status === 'declined' ? item.note : null, verify_reason: item.confirmation_requested ? item.note : null,
-    reviewer: null, reviewed_at: item.decided_at, verification: item.verification }
+    reviewer: null, reviewed_at: item.status === 'approved' ? item.approved_at ?? item.decided_at : item.decided_at, verification: item.verification }
 }
 export async function fetchBootstrap(signal?: AbortSignal): Promise<Bootstrap> {
-  const [submissions, allRecords] = await Promise.all([loadSubmissions(signal), request<Postponement[]>(`${API_BASE}/postponements`, { signal })])
+  const [loaded, allRecords] = await Promise.all([loadSubmissions(signal), request<Postponement[]>(`${API_BASE}/postponements`, { signal })])
+  const submissions = loaded.filter(item => analysisComplete(item) || item.reanalysis)
   const records = allRecords.filter(r => submissions.some(s => s.id === r.classifier_submission_id))
   const ids = [...new Set([...submissions.map(s => s.military_number), ...records.map(r => r.person_id)])].filter(Boolean)
   const matches = await Promise.all(ids.map(async id => {
@@ -110,7 +113,7 @@ export async function fetchBootstrap(signal?: AbortSignal): Promise<Bootstrap> {
       reasons: approved.map(r => `승인된 신청: ${r.reason}`), alerts: approved.length ? ['승인 기록 기준입니다. 실제 적용 기간과 훈련 범위를 확인하세요.'] : [],
       pending_count: docs.filter(s => s.status === 'pending').length, documents: docs.map(toDocument) }
   })
-  const queue: QueueItem[] = submissions.filter(s => s.status === 'pending').map(s => ({ ...toDocument(s),
+  const queue: QueueItem[] = submissions.filter(s => s.status === 'pending').map(s => ({ ...toDocument(s), submission: s,
     person_id: s.military_number || '대상자 미연결', person_name: byId.get(s.military_number)?.name ?? (s.applicant_name || '성명 미확인'),
     occupation: byId.get(s.military_number)?.position ?? null, waiting_days: Math.max(0, Math.floor((Date.now() - Date.parse(s.created_at)) / 86400000)),
     current_classification: people.find(p => p.person_id === s.military_number)?.classification ?? '일반',

@@ -10,6 +10,7 @@ import re
 import urllib.error
 import urllib.request
 import logging
+from concurrent.futures import CancelledError
 
 from .pdf_extract import extract_pdf
 from .layout import compact, dates, sources_for
@@ -52,7 +53,7 @@ def selected_fields(application_type):
     item = types[application_type]
     rules = json.loads((BASE / 'verification_rules.json').read_text(encoding='utf-8'))
     entry = rules['types'][application_type]
-    needed = rule_fields(entry.get('common', rules['common'])) | rule_fields(entry['checks'])
+    needed = rule_fields(entry.get('common', rules['common'])) | rule_fields(entry['checks']) | rule_fields(entry.get('review_items', []))
     unknown = needed - common['fields'].keys()
     if unknown:
         raise ValueError('검증 규칙의 추출 항목 정의가 없습니다: ' + ', '.join(sorted(unknown)))
@@ -298,7 +299,7 @@ def consistency_issues(pdf, fields):
     return []
 
 
-def extract_application(path, application_type, *, applicant_name=None, client=ask_qwen):
+def extract_application(path, application_type, *, applicant_name=None, client=ask_qwen, cancelled=lambda: False):
     application, fields = selected_fields(application_type)
     pdf = extract_pdf(path)
     digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -306,11 +307,31 @@ def extract_application(path, application_type, *, applicant_name=None, client=a
     calls = []
     # Bounded page/chunk size prevents silent context truncation. Never omit long pages.
     for page in pdf['pages']:
+        if cancelled(): raise CancelledError()
         if not page['text'].strip():
             continue
         if len(page['text']) > 6000:
             raise ValueError('한 페이지의 텍스트가 6000자를 초과합니다. 문서를 나누어 제출하세요.')
         keys = list(fields)
+        for key in list(keys):
+            spec = fields[key]
+            if spec.get('extraction') != 'layout': continue
+            keys.remove(key)
+            for source in sources_for(page):
+                text = source['text']
+                label = compact(source.get('label') or '')
+                candidate = None
+                if spec.get('label_pattern') and re.fullmatch(spec['label_pattern'], label):
+                    candidate = text.strip()
+                if spec.get('value_pattern'):
+                    matches = list(re.finditer(spec['value_pattern'], text, re.MULTILINE))
+                    if len(matches) == 1: candidate = matches[0]['value'].strip()
+                if not candidate: continue
+                if spec['type'] == 'date':
+                    found = dates(candidate)
+                    if len(found) != 1: continue
+                    candidate = found[0][0]
+                results[key].append(resolve_field({'value': candidate, 'evidence_ids': [source['id']]}, spec, page, digest, {source['id']: source}))
         # Exact, standalone titles are safer than mistaking the small legal caption for a title.
         titles = [s for s in sources_for(page) if compact(s['text']) in ('진단서', '응시표', '재학증명서', '재직증명서')]
         if titles and 'document_title' in keys:
@@ -328,7 +349,9 @@ def extract_application(path, application_type, *, applicant_name=None, client=a
                 allowed = {s['id']: s for s in chunk}
                 pending, resolved = dict(batch), {}
                 for attempt in range(2):
+                    if cancelled(): raise CancelledError()
                     raw = client(messages(chunk, pending, retry=attempt > 0))
+                    if cancelled(): raise CancelledError()
                     calls.append({'page': page['number'], 'fields': list(pending), 'source_ids': list(allowed), 'attempt': attempt+1, 'response': raw})
                     try:
                         obj = json.loads(raw)

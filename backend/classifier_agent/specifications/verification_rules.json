@@ -1,5 +1,5 @@
 {
-  "version": "1.2.0",
+  "version": "1.3.0",
   "basis": "provided_pdf",
   "common": [
     {
@@ -107,7 +107,37 @@
           "fields": []
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.overseas": {
       "label": "외국 여행·체류",
@@ -154,7 +184,38 @@
           ]
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "departure_date",
+            "return_date",
+            "travel_status"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.international_ship": {
       "label": "국제선 선박 선원",
@@ -212,7 +273,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "crew_role",
+            "route_kind",
+            "vessel_name"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.international_aircrew": {
       "label": "국제선 항공기 조종사·승무원",
@@ -272,7 +364,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.police": {
       "label": "경찰관",
@@ -331,7 +454,38 @@
           "rejected": []
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.correction": {
       "label": "교도관",
@@ -381,7 +535,38 @@
           "rejected": []
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.firefighter": {
       "label": "소방관",
@@ -436,7 +621,38 @@
           "rejected": []
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.military_civilian": {
       "label": "군부대 근무 군무원",
@@ -493,7 +709,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.foreign_forces_employee": {
       "label": "주한외국군부대 종업원",
@@ -551,7 +798,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.navigation_aid": {
       "label": "항로표지 공무원",
@@ -609,7 +887,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.aircraft_maintenance": {
       "label": "항공기 정비사·항공교통관제사·항공무선표지소 근무자",
@@ -668,7 +977,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.coastal_radio": {
       "label": "해안무선국 통신사·정비사",
@@ -726,7 +1066,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.civil_defense_head": {
       "label": "민방위대장",
@@ -774,7 +1145,37 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "appointment_basis",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.usfk_agreement": {
       "label": "주한미군 관련 협정 적용 종업원·노무단원·경비원",
@@ -827,7 +1228,40 @@
           ]
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "appointment_basis",
+            "contract_relationship",
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.rail_technical": {
       "label": "철도 기관사·차량장비관리원·시설관리원·전기원",
@@ -888,7 +1322,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.metro_technical": {
       "label": "지하철·도시철도·광역철도 기관사·보선원·철도토목원",
@@ -947,7 +1412,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.foreign_news": {
       "label": "외교부 외신업무 공무원",
@@ -1004,7 +1500,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "statutory.fishery_guidance": {
       "label": "어업지도선 승무원",
@@ -1048,7 +1575,37 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "crew_role",
+            "vessel_name"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.postal": {
       "label": "우편집배원",
@@ -1107,7 +1664,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.older_cadre": {
       "label": "41세 이상 간부",
@@ -1150,7 +1738,34 @@
           "years": 41
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.presidential": {
       "label": "대통령실 수행비서·전문통역·경호",
@@ -1209,7 +1824,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.intelligence_records": {
       "label": "국군정보사 특수기록과",
@@ -1262,7 +1908,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "department",
+            "employer"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.immigration": {
       "label": "출입국관리직",
@@ -1319,7 +1996,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.veteran": {
       "label": "국가유공자·보훈보상대상자",
@@ -1364,7 +2072,36 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "designation_kind"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.essential_worker": {
       "label": "군동원업체 필수요원",
@@ -1409,7 +2146,36 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "designation_kind"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.customs": {
       "label": "세관 조사공무원",
@@ -1454,7 +2220,36 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "designation_kind"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.police_student": {
       "label": "경찰학교 재학생",
@@ -1504,7 +2299,37 @@
           ]
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "academic_status",
+            "school_kind"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.petition_police": {
       "label": "청원경찰",
@@ -1549,7 +2374,36 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "designation_kind"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.juvenile_protection": {
       "label": "보호직 공무원",
@@ -1606,7 +2460,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.long_illness": {
       "label": "질병 및 심신장애",
@@ -1726,6 +2611,59 @@
           ],
           "value": true
         }
+      ],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "patient_resident_number"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "diagnosis",
+            "secondary_diagnosis",
+            "treatment_opinion"
+          ]
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 확인",
+          "fields": [
+            "medical_institution",
+            "doctor_name",
+            "doctor_license",
+            "doctor_kind"
+          ]
+        },
+        {
+          "id": "injury",
+          "label": "부상·질병 내용",
+          "fields": [
+            "diagnosis",
+            "secondary_diagnosis",
+            "treatment_opinion"
+          ]
+        },
+        {
+          "id": "dates",
+          "label": "발병 시기와 훈련 날짜",
+          "fields": [
+            "onset_date"
+          ],
+          "context_fields": [
+            "training_start",
+            "training_end"
+          ]
+        }
       ]
     },
     "policy.custody": {
@@ -1770,7 +2708,39 @@
           ]
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "custody_duration",
+            "custody_end",
+            "custody_kind",
+            "custody_start"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.basic_livelihood": {
       "label": "기초생활수급자",
@@ -1811,7 +2781,36 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "designation_kind"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.single_parent_low_income": {
       "label": "차상위계층 한부모가족 가장",
@@ -1857,7 +2856,36 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "household_head"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.female_reservist": {
       "label": "여군 출신 예비군",
@@ -1899,7 +2927,42 @@
           ]
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "birth_date",
+            "child_birth_date",
+            "gestation_weeks",
+            "infertility_treatment",
+            "pregnancy_loss_date",
+            "pregnancy_status",
+            "spouse_service_category"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.medical_service_change": {
       "label": "심신질환 병역의무 변경",
@@ -1980,6 +3043,59 @@
           ],
           "value": true
         }
+      ],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "patient_resident_number"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "diagnosis",
+            "secondary_diagnosis",
+            "treatment_opinion"
+          ]
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 확인",
+          "fields": [
+            "medical_institution",
+            "doctor_name",
+            "doctor_license",
+            "doctor_kind"
+          ]
+        },
+        {
+          "id": "injury",
+          "label": "부상·질병 내용",
+          "fields": [
+            "diagnosis",
+            "secondary_diagnosis",
+            "treatment_opinion"
+          ]
+        },
+        {
+          "id": "dates",
+          "label": "발병 시기와 훈련 날짜",
+          "fields": [
+            "onset_date"
+          ],
+          "context_fields": [
+            "training_start",
+            "training_end"
+          ]
+        }
       ]
     },
     "policy.private_prison": {
@@ -2033,7 +3149,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "department",
+            "employer"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.nis": {
       "label": "국가정보원 정보수사요원",
@@ -2091,7 +3238,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.air_warning": {
       "label": "민방공 경보요원",
@@ -2144,7 +3322,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "department",
+            "employer"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.judge_prosecutor": {
       "label": "법관·검사",
@@ -2187,7 +3396,37 @@
           "rejected": []
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.ground_handling": {
       "label": "항공기 지상조업·장비정비사",
@@ -2247,7 +3486,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.special_guard": {
       "label": "특수경비원",
@@ -2292,7 +3562,36 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "designation_kind"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.school_teacher": {
       "label": "각급학교 교사",
@@ -2356,7 +3655,42 @@
           ]
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "accreditation",
+            "current_employment",
+            "employer",
+            "employment_kind",
+            "employment_start",
+            "job_title",
+            "school_kind"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.university_professor": {
       "label": "대학교수",
@@ -2421,7 +3755,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.school_student": {
       "label": "각급학교 학생",
@@ -2535,7 +3900,42 @@
           ]
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "academic_status",
+            "degree_course",
+            "excess_semester",
+            "school_kind",
+            "study_mode",
+            "study_stage",
+            "thesis_only"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.hydrographic": {
       "label": "국립해양조사원 해상근무자",
@@ -2579,7 +3979,37 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "annual_sea_service",
+            "employer"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.radio_monitor": {
       "label": "전파감시직",
@@ -2632,7 +4062,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "department",
+            "employer"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.security_telecom": {
       "label": "국가안보 통신요원",
@@ -2685,7 +4146,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "department",
+            "employer"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.rail_staff": {
       "label": "철도 종사자",
@@ -2745,7 +4237,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.rail_police": {
       "label": "철도 특별사법경찰관",
@@ -2803,7 +4326,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.fire_candidate": {
       "label": "소방학교 간부후보생",
@@ -2857,7 +4411,37 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "academic_status",
+            "school_kind"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.miner": {
       "label": "광부",
@@ -2914,7 +4498,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.urban_rail_staff": {
       "label": "도시철도·광역철도 특수근무자",
@@ -2980,7 +4595,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.vocational_teacher": {
       "label": "직업훈련 교수·교사",
@@ -3041,7 +4687,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.vocational_student": {
       "label": "직업훈련생",
@@ -3102,7 +4779,39 @@
           ]
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "academic_status",
+            "course_duration",
+            "degree_course",
+            "school_kind"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.defense_research": {
       "label": "국방과학연구 기술직",
@@ -3160,7 +4869,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.ship_crew": {
       "label": "선박·어선 승선자",
@@ -3206,7 +4946,41 @@
           ]
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "crew_role",
+            "document_title",
+            "onboard_end",
+            "onboard_start",
+            "vessel_name",
+            "vessel_tonnage"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.forest_helicopter": {
       "label": "산불방지 헬기 운용요원",
@@ -3265,7 +5039,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "employer",
+            "job_title"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "policy.road_control": {
       "label": "도로공사 교통정보센터·종합상황실",
@@ -3318,7 +5123,38 @@
           "value": true
         }
       ],
-      "document_options": []
+      "document_options": [],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "current_employment",
+            "department",
+            "employer"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
+      ]
     },
     "postponement.illness": {
       "label": "질병·심신장애",
@@ -3549,6 +5385,62 @@
           ],
           "value": true
         }
+      ],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "patient_resident_number"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "diagnosis",
+            "secondary_diagnosis",
+            "treatment_opinion"
+          ]
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 확인",
+          "fields": [
+            "medical_institution",
+            "doctor_name",
+            "doctor_license",
+            "doctor_kind"
+          ]
+        },
+        {
+          "id": "injury",
+          "label": "부상·질병 내용",
+          "fields": [
+            "diagnosis",
+            "secondary_diagnosis",
+            "treatment_opinion"
+          ]
+        },
+        {
+          "id": "dates",
+          "label": "발병 시기와 훈련 날짜",
+          "fields": [
+            "onset_date",
+            "diagnosis_date",
+            "admission_date",
+            "discharge_date"
+          ],
+          "context_fields": [
+            "training_start",
+            "training_end"
+          ]
+        }
       ]
     },
     "postponement.family": {
@@ -3744,6 +5636,41 @@
       "document_options": [
         "위독: 의료기관 진단서",
         "사망: 사망확인서 및 관계증명 자료"
+      ],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "care_end",
+            "care_start",
+            "critical_condition",
+            "death_date",
+            "other_caregiver_available",
+            "relationship",
+            "relationship_path"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
       ]
     },
     "postponement.disaster": {
@@ -3819,6 +5746,39 @@
       ],
       "document_options": [
         "행정관서 사실확인서"
+      ],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "damage_details",
+            "disaster_date",
+            "disaster_kind",
+            "recovery_end",
+            "recovery_start"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
       ]
     },
     "postponement.overseas": {
@@ -3868,6 +5828,37 @@
       ],
       "document_options": [
         "국방동원정보체계 출입국자 명부"
+      ],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "departure_date",
+            "return_date",
+            "travel_status"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
       ]
     },
     "postponement.exam": {
@@ -3946,6 +5937,41 @@
         "접수증·합격증·수험표 등",
         "승진시험: 직장확인서",
         "시험일 미기재: 시행기관 확인 근거"
+      ],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "exam_end",
+            "exam_name",
+            "exam_stage",
+            "next_stage_date",
+            "previous_stage_result",
+            "registration_date",
+            "result_date"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
       ]
     },
     "postponement.distance_attendance": {
@@ -4004,6 +6030,37 @@
       "document_options": [
         "출석수업 통지명단 또는 학사일정",
         "재학증명서 및 시험 일정"
+      ],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "event_end",
+            "event_start",
+            "study_mode"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
       ]
     },
     "postponement.family_event": {
@@ -4147,6 +6204,41 @@
       "document_options": [
         "예식장계약서 등 증빙",
         "진단서 또는 임신확인서"
+      ],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "birth_date",
+            "event_date",
+            "event_kind",
+            "expected_birth_date",
+            "parental_leave_end",
+            "parental_leave_start",
+            "relationship"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
       ]
     },
     "postponement.work": {
@@ -4194,6 +6286,41 @@
         "주최기관·단체장 확인서",
         "주요업무수행 확인서",
         "개인사유서"
+      ],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "event_end",
+            "event_kind",
+            "event_participation",
+            "event_start",
+            "work_description",
+            "work_end",
+            "work_start"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
       ]
     },
     "postponement.agriculture": {
@@ -4254,6 +6381,36 @@
       "document_options": [
         "후계농업·어업경영인 선정확인서",
         "농지대장(원부)·어업허가증 등"
+      ],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "busy_end",
+            "busy_start"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
       ]
     },
     "postponement.other": {
@@ -4287,6 +6444,38 @@
       "document_options": [
         "병무청 접수증",
         "선발부대 심사확인서"
+      ],
+      "review_items": [
+        {
+          "id": "identity",
+          "label": "본인확인",
+          "fields": [
+            "subject_name",
+            "subject_service_number",
+            "subject_birth_date"
+          ],
+          "person_fields": [
+            "name",
+            "military_number"
+          ]
+        },
+        {
+          "id": "eligibility",
+          "label": "보류/연기 사유 포함 여부",
+          "fields": [
+            "application_status",
+            "decision_date",
+            "designation_status",
+            "receipt_date"
+          ],
+          "context_fields": []
+        },
+        {
+          "id": "issuer",
+          "label": "발급주체 및 원본 확인",
+          "fields": [],
+          "context_fields": []
+        }
       ]
     }
   }

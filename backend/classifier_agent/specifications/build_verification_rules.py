@@ -23,6 +23,14 @@ def overlap(start, end): return leaf(start+'_overlap', '사유 기간과 훈련�
 def window(key, before, after, label): return leaf(key+'_window', label, 'window', [key, 'context.training_start', 'context.training_end'], before=before, after=after)
 
 
+def references(rules):
+    used = set()
+    for rule in rules:
+        used.update(k for k in rule.get('fields', []) + rule.get('supporting_fields', []) if not k.startswith('context.'))
+        used.update(references(rule.get('children', [])))
+    return used
+
+
 def build():
     common = json.loads((BASE/'common_fields.json').read_text(encoding='utf-8'))
     sources = json.loads((BASE/'sources.json').read_text(encoding='utf-8'))['sources']
@@ -235,7 +243,7 @@ def build():
         eq('context.medical_service_history_confirmed', True,
            '공적 병역 이력 확인: 현역→보충역 복무 후 예비군, 간부 심신장애 1~9급 전역, 정신과 4급 이력 중 해당 요건 및 관련 공문 확인'), coverage='partial')
 
-    result = {'version': '1.2.0', 'basis': 'provided_pdf', 'common': [
+    result = {'version': '1.3.0', 'basis': 'provided_pdf', 'common': [
         group('identity', '신청자와 증빙 대상자 일치', 'all',
               leaf('name_match', '성명 대조', 'equal_fields', ['subject_name', 'context.applicant_name']),
               group('identity_number', '군번 또는 생년월일 대조', 'any',
@@ -251,15 +259,23 @@ def build():
                        ['context.patient_identity_confirmed'], value=True, supporting_fields=['patient_resident_number'])),
             {**result['common'][1], 'supporting_fields': ['diagnosis', 'secondary_diagnosis', 'treatment_opinion']},
             result['common'][2]]
-    def references(rules):
-        used = set()
-        for rule in rules:
-            used.update(k for k in rule.get('fields', []) + rule.get('supporting_fields', []) if not k.startswith('context.'))
-            used.update(references(rule.get('children', [])))
-        return used
+    for kind, entry in types.items():
+        entry['review_items'] = [
+            dict(id='identity', label='본인확인', fields=['subject_name', 'subject_service_number', 'subject_birth_date'], person_fields=['name', 'military_number']),
+            dict(id='eligibility', label='보류/연기 사유 포함 여부', fields=sorted(references(entry['checks'])), context_fields=[]),
+            dict(id='issuer', label='발급주체 및 원본 확인', fields=[], context_fields=[]),
+        ]
+    for kind in ('postponement.illness', 'policy.long_illness', 'policy.medical_service_change'):
+        types[kind]['review_items'] = [
+            dict(id='identity', label='본인확인', fields=['subject_name', 'patient_resident_number'], person_fields=['name', 'military_number']),
+            dict(id='eligibility', label='보류/연기 사유 포함 여부', fields=['diagnosis', 'secondary_diagnosis', 'treatment_opinion']),
+            dict(id='issuer', label='발급주체 확인', fields=['medical_institution', 'doctor_name', 'doctor_license', 'doctor_kind']),
+            dict(id='injury', label='부상·질병 내용', fields=['diagnosis', 'secondary_diagnosis', 'treatment_opinion']),
+            dict(id='dates', label='발병 시기와 훈련 날짜', fields=['onset_date'] + (['diagnosis_date', 'admission_date', 'discharge_date'] if kind == 'postponement.illness' else []), context_fields=['training_start', 'training_end']),
+        ]
     used = set()
     for entry in types.values():
-        used.update(references(entry.get('common', result['common']) + entry['checks']))
+        used.update(references(entry.get('common', result['common']) + entry['checks'] + entry['review_items']))
     assert used <= common['fields'].keys(), used - common['fields'].keys()
     common['fields'] = {k: v for k, v in common['fields'].items() if k in used}
     common['field_groups'] = {k: [f for f in v if f in used] for k, v in common['field_groups'].items()}

@@ -97,12 +97,19 @@ JSON 스키마로 출력을 제한하고, 형식·근거 검증이 실패한 항
 
 - 업무 백엔드 8002, 새 Qwen API 8003, Ollama 11434를 실행한다.
 - Vite `/api` → 8002, `/classifier-api` → 8003. 운영 배포에서도 같은 역방향 프록시가 필요하다.
-- `POST /submissions`: multipart file/application_type/military_number/applicant_name. 원본 PDF와 새 추출 결과를 저장한다.
+- `POST /submissions`: multipart file/application_type/military_number/applicant_name. 원본 PDF와 접수 기록을 저장한 뒤 202로 즉시 반환한다. 분석은 서버 작업 큐에서 순서대로 진행한다.
+- 분석 상태: `queued`/`analyzing` → `completed` 또는 `failed`/`cancelled`. 완료된 문서만 검토함에 표시한다. 서버 재시작으로 중단된 작업은 `failed`로 남기며 다시 분석할 수 있다. 이 로컬 작업 큐는 Uvicorn 단일 worker로 실행한다.
+- `POST /submissions/{id}/cancel`, `/retry`: 분석 취소 및 실패 작업 재시도. 취소 상태는 즉시 저장하며, 이미 진행 중인 Qwen 요청은 응답 종료 후 결과를 버리고 후속 호출을 중단한다.
+- `POST /submissions/{id}/reanalyze`: 완료된 원본을 다시 분석한다. 검토함에는 기존 문서를 유지하되 작업 중 확인·결정은 차단하고, 완료 후 체크 항목을 다시 확인한다. 이미 저장된 최종 승인·반려는 자동 취소하지 않는다. 작업 식별자로 취소된 이전 응답이 새 작업 결과를 덮어쓰는 것을 막는다.
+- `BUSINESS_API_URL`(기본 `http://127.0.0.1:8002`)은 분석 후 성명으로 대상자를 연결하고 DB 본인 정보로 재검증할 업무 API 주소다. 연결 실패 시 완료 문서는 유지되며 화면에서 군번으로 연결할 수 있다.
 - `GET /submissions`, `GET /submissions/{id}`, `GET /submissions/{id}/pdf`: 목록·상세·원본 조회.
 - `POST /submissions/{id}/verify`: 저장된 추출 결과를 검증하며 결과와 확인 정보를 저장한다.
   화면은 DB 본인 정보를 사용하는 업무 백엔드 `/postponements/verify`를 통해 호출한다.
 - 승인·반려는 업무 백엔드 `/postponements/{id}/approve|reject`에서 처리한다.
-  검증 결과가 부족/검토 필요여도 담당자가 최종 판단할 수 있다.
+  검증 결과가 부족/검토 필요여도 담당자가 최종 판단할 수 있지만, 승인하려면 해당 유형의 근거 체크 항목을 전부 확인해야 한다. 미연결 문서의 반려는 분류기 제출 기록에 저장한다.
+- `PATCH /submissions/{id}/review-checks`: 근거 항목별 확인 상태를 저장한다. revision으로 오래된 화면의 덮어쓰기를 차단하며 본인 연결·재검증 후에는 체크를 초기화한다. 최종 승인 시 서버에서도 모든 항목을 검사한다.
+- `GET /submissions/{id}/pages/{page}/image`: 원본 페이지 PNG. pdfplumber의 기존 렌더링 의존성을 사용하며, 원본 PDF 좌표에 맞춰 프런트엔드에서 근거 영역을 표시한다.
+- 발병일·발급기관·의사 정보는 필드 명세의 `extraction: layout`에 따라 PDF 표/라벨에서 직접 읽는다. Qwen 요청 항목에는 포함하지 않는다. 명확하지 않은 값은 미확인으로 남긴다.
 - `POST /submissions/{id}/request-confirmation`: 확인요청 의견 저장. 외부 알림 발송은 하지 않는다.
 - 저장 위치: `classifier_agent/data/`의 SQLite 및 PDF. `CLASSIFIER_DATA_DIR`로 변경 가능하며 Git에서 제외된다.
   `/extract-pdf`는 기존처럼 임시 처리이며 `/submissions`만 영구 저장한다.

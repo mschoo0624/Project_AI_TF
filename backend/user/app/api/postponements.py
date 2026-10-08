@@ -74,6 +74,18 @@ class VerificationInput(BaseModel):
     submission_id: str | None = None
 
 
+@router.get('/submissions/{submission_id}/review-context')
+def review_context(submission_id: str, db: Session = Depends(get_db), _viewer: User = Depends(require_viewer)):
+    try:
+        item = get_submission(submission_id)
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, '제출 정보를 불러오지 못했습니다.') from exc
+    person = db.get(Person, item.get('military_number')) if item.get('military_number') else None
+    training = list(db.scalars(select(Education).where(Education.person_id == person.military_number)).all()) if person else []
+    return {'person': {'name': person.name, 'military_number': person.military_number, 'branch': person.branch} if person else None,
+            'trainings': [{'id': row.id, 'scheduled_date': row.scheduled_date.isoformat() if row.scheduled_date else None} for row in training]}
+
+
 @router.post('/verify')
 def verify_postponement(payload: VerificationInput, db: Session = Depends(get_db)):
     person = db.get(Person, payload.person_id)
@@ -185,6 +197,8 @@ def _decide_postponement(
         try:
             decide_submission(postponement.classifier_submission_id, decision, note)
         except httpx.HTTPError as error:
+            if isinstance(error, httpx.HTTPStatusError) and error.response.status_code in (409, 422):
+                raise HTTPException(error.response.status_code, error.response.json().get('detail', '근거 항목 확인 상태를 확인하세요.')) from error
             raise HTTPException(status_code=502, detail="Classifier decision synchronization failed") from error
     postponement.status = "approved" if decision == "approved" else "rejected"
     postponement.approved_at = datetime.utcnow() if decision == "approved" else None

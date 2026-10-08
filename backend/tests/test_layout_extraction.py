@@ -6,6 +6,41 @@ from backend.classifier_agent.layout import dates
 from backend.classifier_agent.pdf_extract import extract_pdf
 
 
+def test_review_only_fields_are_read_from_layout_not_sent_to_model():
+    path = Path(__file__).resolve().parents[2]/'frontend/public/pdfs/홍길동.pdf'
+    requested = set()
+    def client(messages):
+        fields = json.loads(messages[-1]['content'])['requested_fields']
+        requested.update(fields)
+        return json.dumps({key: {'value': None, 'evidence_ids': []} for key in fields})
+    result = ex.extract_application(path, 'postponement.illness', client=client)
+    direct = {'onset_date', 'medical_institution', 'doctor_name', 'doctor_license', 'doctor_kind'}
+    assert not (direct & requested)
+    assert len(requested) == 8
+    assert result['fields']['onset_date']['value'] == '2026-04-16'
+    assert '비호정형외과의원' == ''.join(result['fields']['medical_institution']['value'].split())
+    assert result['fields']['doctor_name']['value'] == '한의사'
+    assert result['fields']['doctor_kind']['value'] == '의사'
+    assert '123456' in result['fields']['doctor_license']['value'].replace(' ', '')
+    assert all(result['fields'][key]['evidence'][0]['bbox'] for key in direct)
+
+
+def test_cancellation_stops_followup_model_calls():
+    from concurrent.futures import CancelledError
+    import pytest
+    stopped = False
+    calls = []
+    def client(messages):
+        nonlocal stopped
+        calls.append(messages)
+        stopped = True
+        return '{}'
+    path = Path(__file__).resolve().parents[2]/'frontend/public/pdfs/홍길동.pdf'
+    with pytest.raises(CancelledError):
+        ex.extract_application(path, 'postponement.illness', client=client, cancelled=lambda: stopped)
+    assert len(calls) == 1
+
+
 def test_spaced_date_validation_and_no_invented_day():
     assert dates('2 0 2 6 년 0 4 월 1 6 일')[0][0] == '2026-04-16'
     assert dates('2026년 4월') == []

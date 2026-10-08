@@ -37,6 +37,13 @@
 .review-ai-status.pending { border-color:#f4d7a3; background:#fff5df; color:#8d6419; }
 .review-ai-status.approved { border-color:#bcdfc9; background:#edf8f0; color:#246d44; }
 .review-ai-status.declined { border-color:#f0c9c9; background:#fff0f0; color:#a73737; }
+.review-ai-status.queued, .review-ai-status.analyzing { border-color:#bdd5fa; background:#eff6ff; color:#175abb; }
+.review-ai-status.completed { border-color:#bcdfc9; background:#edf8f0; color:#246d44; }
+.review-ai-status.failed, .review-ai-status.cancelled { background:#fff0f0; color:#a73737; }
+.review-ai-select-document { min-width:0; padding:0; border:0; background:transparent; text-align:left; cursor:pointer; }
+.review-ai-select-document strong, .review-ai-select-document small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.review-ai-job-actions { display:flex; align-items:center; gap:6px; }
+.review-ai-cancel { border:1px solid #bc3030; border-radius:4px; background:#c93636; color:#fff; padding:4px 8px; cursor:pointer; }
 .review-ai-detail { padding:17px; }
 .review-ai-detail-empty, .review-ai-empty { display:grid; place-items:center; min-height:132px; padding:20px; color:#66768a; text-align:center; }
 .review-ai-heading { display:flex; justify-content:space-between; align-items:center; gap:10px; }

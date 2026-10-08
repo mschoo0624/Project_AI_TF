@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { API_BASE, CLASSIFIER_BASE, decide, fieldValue, jsonRequest, linkSubmission, loadSubmissions, notifyReviewChanged, pdfUrl, request, verifySubmission,
+import { API_BASE, CLASSIFIER_BASE, analysisComplete, analysisLabel, submissionTitle, formatApprovalTime, fieldValue, jsonRequest, linkSubmission, loadSubmissions, notifyReviewChanged, pdfUrl, request, verifySubmission,
   type ApplicationType, type Fact, type FieldDefinitions, type MatchedPerson, type Rule, type RuleCatalog, type Submission } from './classifierApi'
 import VerificationResult from './VerificationResult'
 import './PostponementModule.css'
 
-const statusLabel = (item: Submission) => item.status === 'approved' ? '승인' : item.status === 'declined' ? '반려' : item.confirmation_requested ? '확인요청' : '검토대기'
 type ContextInput = { key: string; label: string; kind: 'boolean' | 'date' | 'number' | 'text' }
 const contextLabels: Record<string, string> = {
   training_start: '훈련 시작일', training_end: '훈련 종료일', applicant_birth_date: '본인 생년월일',
@@ -32,7 +31,6 @@ function SubmissionDetails({ item, rules, definitions, refresh }: { item: Submis
   const [context, setContext] = useState<Record<string, Fact>>(item.context)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [note, setNote] = useState(item.note ?? '')
   const [identityNumber, setIdentityNumber] = useState('')
   const inputs = rules ? contextInputs([...(rules.types[item.application_type]?.common ?? rules.common), ...(rules.types[item.application_type]?.checks ?? [])]) : []
   const run = async (action: () => Promise<unknown>) => {
@@ -45,9 +43,16 @@ function SubmissionDetails({ item, rules, definitions, refresh }: { item: Submis
     if (Object.values(facts).some(fact => !fact.source.trim())) throw new Error('입력한 확인 정보에는 근거 또는 확인 기록을 적어 주세요.')
     await verifySubmission(item, facts)
   }
+  if (!analysisComplete(item)) return <section className="review-ai-detail">
+    <div className="review-ai-heading"><h3>{submissionTitle(item)}</h3><span className={`review-ai-status ${item.analysis_state}`}>{analysisLabel(item)}</span></div>
+    {item.status === 'approved' && <p className="review-ai-subtitle">승인 일시: {formatApprovalTime(item.approved_at ?? item.decided_at)} (한국시간)</p>}
+    {(item.analysis_error || item.analysis_state === 'cancelled') && <p>{item.analysis_error ?? '분석을 취소했습니다.'}</p>}
+    <div className="review-ai-pdf"><iframe title={`${item.filename} 원본 PDF`} src={pdfUrl(item.id)} /></div>
+  </section>
   return <section className="review-ai-detail" aria-label="서류 분석 및 검증 결과">
-    <div className="review-ai-heading"><h3>AI 분석 결과</h3><span className={`review-ai-status ${item.status}`}>{statusLabel(item)}</span></div>
+    <div className="review-ai-heading"><h3>{submissionTitle(item)}</h3><span className="review-ai-status completed">분석 완료</span></div>
     <p className="review-ai-subtitle">{item.applicant_name} · {item.military_number}</p>
+    {item.status === 'approved' && <p className="review-ai-subtitle">승인 일시: {formatApprovalTime(item.approved_at ?? item.decided_at)} (한국시간)</p>}
     <div className="review-ai-pdf"><div className="review-ai-pdf-header"><strong>원본 PDF</strong><span>{item.filename}</span><a href={pdfUrl(item.id)} target="_blank" rel="noreferrer">새 탭에서 열기 ↗</a></div><iframe title={`${item.filename} 원본 PDF`} src={pdfUrl(item.id)} /></div>
     <dl className="review-ai-facts"><div><dt>성명</dt><dd>{fieldValue(item, 'subject_name')}</dd></div><div><dt>서류 종류</dt><dd>{fieldValue(item, 'document_title')}</dd></div><div><dt>발급일</dt><dd>{fieldValue(item, 'issued_on')}</dd></div><div><dt>신청 유형</dt><dd>{item.reason_category}</dd></div><div><dt>검증 결과</dt><dd>{item.verification?.result_label ?? '검증 전'}</dd></div><div><dt>문서 진위</dt><dd>별도 확인 필요</dd></div></dl>
     <VerificationResult result={item.verification} />
@@ -65,9 +70,7 @@ function SubmissionDetails({ item, rules, definitions, refresh }: { item: Submis
         </label><label>확인 근거<input disabled={busy} placeholder="조회 자료·담당자 확인 기록" value={context[input.key]?.source ?? ''} onChange={e => setContext(prev => ({ ...prev, [input.key]: { value: prev[input.key]?.value ?? null, source: e.target.value } }))} /></label></div>)}
         <button type="button" className="review-ai-secondary" disabled={busy || !rules} onClick={() => void run(verify)}>{busy ? '처리 중…' : '정보 저장 및 재검증'}</button>
       </details>
-      <label className="review-decision-note">검토 의견<textarea disabled={busy} value={note} maxLength={2000} onChange={e => setNote(e.target.value)} placeholder="승인·반려 의견 또는 추가 확인할 내용" /></label>
-      {!item.projectPostponementId && <p className="review-ai-alert">업무 신청 연결이 필요합니다. 승인·반려 시 연결을 다시 시도합니다.</p>}
-      <div className="review-ai-actions"><button type="button" disabled={busy} onClick={() => void run(() => decide(item, 'approved', note))}>승인</button><button type="button" className="reject" disabled={busy} onClick={() => void run(() => decide(item, 'declined', note))}>반려</button><button type="button" className="reject" disabled={busy || !note.trim()} onClick={() => void run(async () => { await request(`${CLASSIFIER_BASE}/submissions/${item.id}/request-confirmation`, jsonRequest('POST', { note })); notifyReviewChanged() })}>확인요청</button></div>
+      <p className="review-ai-notice">분석 결과를 검토함에 전달했습니다. 근거별 확인과 최종 승인·반려는 검토함에서 진행하세요.</p>
     </>}
     {item.status !== 'pending' && item.note && <p className="review-ai-notice">검토 의견: {item.note}</p>}
     {error && <p role="alert" className="review-ai-feedback error">{error}</p>}
@@ -98,6 +101,13 @@ export default function PostponementModule({ initialSelectedId }: { initialSelec
     setSelectedId(current => loaded.some(item => item.id === current) ? current : loaded[0]?.id ?? null)
   }, [])
   useEffect(() => {
+    let active = true
+    const timer = window.setInterval(() => {
+      loadSubmissions().then(loaded => { if (active) setItems(loaded) }).catch(() => { /* the next poll or manual refresh can recover */ })
+    }, 3000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [])
+  useEffect(() => {
     let cancelled = false
     Promise.all([loadSubmissions(), request<ApplicationType[]>(`${CLASSIFIER_BASE}/application-types`), request<RuleCatalog>(`${CLASSIFIER_BASE}/verification-rules`), request<FieldDefinitions>(`${CLASSIFIER_BASE}/field-definitions`)]).then(([submissions, types, rules, definitions]) => {
       if (cancelled) return
@@ -122,12 +132,8 @@ export default function PostponementModule({ initialSelectedId }: { initialSelec
       if (person) { form.append('military_number', person.military_number); form.append('applicant_name', person.name) }
       const uploaded = await request<Submission>(`${CLASSIFIER_BASE}/submissions`, { method: 'POST', body: form }); saved = uploaded
       setSelectedId(uploaded.id); setItems(prev => [uploaded, ...prev]); setFile(null); if (fileInput.current) fileInput.current.value = ''
-      const resolved = uploaded.military_number ? uploaded : (await request<{ submission: Submission }>(`${API_BASE}/postponements/resolve-applicant`, jsonRequest('POST', { submission_id: uploaded.id }))).submission
-      if (!resolved.military_number) { await verifySubmission(resolved, {}); setNotice('PDF 분석·검증 결과를 저장했습니다. 이름으로 대상자를 확정하지 못했습니다. 상세 화면에서 군번으로 연결하세요.'); return }
-      await linkSubmission(resolved); await verifySubmission(resolved, {})
-      setNotice('PDF 추출과 근거 검증을 완료했습니다. 추가 확인 정보가 있으면 입력 후 재검증할 수 있습니다.')
     } catch (e) { setError(`${saved ? '문서는 저장되었습니다. 목록에서 연결·검증을 다시 시도할 수 있습니다. ' : ''}${e instanceof Error ? e.message : '처리 실패'}`) }
-    finally { if (saved) { notifyReviewChanged(); try { await refresh() } catch { /* retain saved submission */ } } setBusy(false) }
+    finally { setBusy(false); if (saved) { notifyReviewChanged(); try { await refresh() } catch { /* retain saved submission */ } } }
   }
   return <div className="review-ai-module">
     <header className="review-ai-top"><div><h2>서류 AI 판정</h2><p>신청 유형에 따라 PDF를 읽고, 근거와 관련 조항을 확인합니다.</p></div><button type="button" className="review-ai-secondary" disabled={busy || loading} onClick={() => void refresh().catch(e => setError(String(e)))}>목록 새로고침</button></header>
@@ -143,10 +149,16 @@ export default function PostponementModule({ initialSelectedId }: { initialSelec
       </div>
       <label>신청 유형<small>신청한 항목을 선택하세요.</small><select disabled={busy || loading} required value={type} onChange={e => setType(e.target.value)}><option value="">신청 유형 선택 ▼</option>{['statutory.', 'policy.', 'postponement.'].map((prefix, i) => <optgroup key={prefix} label={['법규보류', '방침보류', '연기'][i]}>{types.filter(t => t.id.startsWith(prefix)).map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
       <div className={`review-ai-match ${person ? 'matched' : ''}`}>{matching ? '군번 조회 중…' : person ? `확인됨: ${person.name} · ${person.military_number} · ${person.branch}` : militaryNumber.trim() ? '등록된 군번을 확인하세요.' : 'PDF에서 추출한 성명과 정확히 일치하는 인원이 한 명이면 자동 연결합니다.'}</div>
-      <div className="review-ai-form-actions"><span>{busy ? '문서를 분석하고 있습니다. 유형별 항목 수에 따라 수 분 걸릴 수 있습니다.' : file?.name ?? 'PDF 파일을 선택하세요.'}</span><button disabled={busy || matching || !file || (!!militaryNumber.trim() && !person) || !type} type="submit">{busy ? '처리 중…' : 'PDF 업로드 및 AI 분석'}</button></div>
+      <div className="review-ai-form-actions"><span>{busy ? '문서를 업로드하고 있습니다.' : file?.name ?? 'PDF 파일을 선택하세요.'}</span><button disabled={busy || matching || !file || (!!militaryNumber.trim() && !person) || !type} type="submit">{busy ? '업로드 중…' : 'PDF 업로드 및 AI 분석'}</button></div>
     </form>
     {error && <p role="alert" className="review-ai-feedback error">{error}</p>}{notice && <p role="status" className="review-ai-feedback">{notice}</p>}
-    <div className="review-ai-layout"><section className="review-ai-list"><header><h3>제출 목록</h3><span>검토대기 {items.filter(i => i.status === 'pending').length}건</span></header><div className="review-ai-list-scroll">{loading ? <p className="review-ai-empty">불러오는 중…</p> : !items.length ? <p className="review-ai-empty">제출된 PDF가 없습니다.</p> : items.map(item => <button key={item.id} disabled={busy} type="button" className={`review-ai-item ${item.id === selectedId ? 'selected' : ''}`} onClick={() => setSelectedId(item.id)}><strong>{item.applicant_name}</strong><span className={`review-ai-status ${item.status}`}>{statusLabel(item)}</span><small>{item.military_number} · {item.filename}</small></button>)}</div></section>
+    <div className="review-ai-layout"><section className="review-ai-list"><header><h3>제출 목록</h3><span>분석중 {items.filter(i => ['queued', 'analyzing'].includes(i.analysis_state ?? '')).length}건</span></header><div className="review-ai-list-scroll">{loading ? <p className="review-ai-empty">불러오는 중…</p> : !items.length ? <p className="review-ai-empty">제출된 PDF가 없습니다.</p> : items.map(item => <div key={item.id} className={`review-ai-item ${item.id === selectedId ? 'selected' : ''}`}>
+      <button className="review-ai-select-document" type="button" onClick={() => setSelectedId(item.id)}><strong>{item.applicant_name || '성명 확인 중'}</strong><small>{item.filename}</small>{item.status === 'approved' && <small>승인: {formatApprovalTime(item.approved_at ?? item.decided_at)} (한국시간)</small>}</button>
+      <div className="review-ai-job-actions">{['queued', 'analyzing'].includes(item.analysis_state ?? '') && <button type="button" className="review-ai-cancel" onClick={() => void request<Submission>(`${CLASSIFIER_BASE}/submissions/${item.id}/cancel`, jsonRequest('POST', {})).then(() => refresh()).catch(e => setError(String(e)))}>취소</button>}
+      {analysisComplete(item) && <button type="button" className="review-ai-secondary" onClick={() => void request(`${CLASSIFIER_BASE}/submissions/${item.id}/reanalyze`, jsonRequest('POST', {})).then(() => { notifyReviewChanged(); return refresh() }).catch(e => setError(String(e)))}>재검토</button>}
+      {(item.analysis_state === 'failed' || (item.reanalysis && item.analysis_state === 'cancelled')) && <button type="button" onClick={() => void request(`${CLASSIFIER_BASE}/submissions/${item.id}/retry`, jsonRequest('POST', {})).then(() => refresh()).catch(e => setError(String(e)))}>다시 분석</button>}
+      <span className={`review-ai-status ${item.analysis_state ?? 'completed'}`}>{analysisLabel(item)}</span></div>
+    </div>)}</div></section>
       {selected ? <SubmissionDetails key={selected.id} item={selected} rules={rules} definitions={definitions} refresh={refresh} /> : <section className="review-ai-detail review-ai-empty">왼쪽에서 제출 건을 선택하세요.</section>}
     </div>
   </div>

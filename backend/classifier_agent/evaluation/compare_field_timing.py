@@ -34,7 +34,7 @@ def main():
     app, fields = ex.selected_fields(args.application_type)
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     titles = any(ex.compact(s['text']) in ('진단서','응시표','재학증명서','재직증명서') for s in ex.sources_for(page))
-    fields = {k:v for k,v in fields.items() if k != 'document_title' or not titles}
+    fields = {k:v for k,v in fields.items() if v.get('extraction') != 'layout' and (k != 'document_title' or not titles)}
     count = len(fields)
     save('pdf.json', pdf)
     save('manifest.json', {'file':str(path.relative_to(root)), 'sha256':digest,
