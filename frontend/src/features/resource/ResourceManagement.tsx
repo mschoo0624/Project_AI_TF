@@ -68,13 +68,14 @@ export type CopilotView = {
 }
 
 export default function ResourceManagement(
-  { initialTab = 'organization', selectedTab, onTabChange, copilotView = null, dataRevision = 0, onClearCopilotFilter }: {
+  { initialTab = 'organization', selectedTab, onTabChange, copilotView = null, dataRevision = 0, onClearCopilotFilter, onOpenTrainingEvent }: {
     initialTab?: ResourceTabId
     selectedTab?: ResourceTabId
     onTabChange?: (tab: ResourceTabId) => void
     copilotView?: CopilotView | null
     dataRevision?: number
     onClearCopilotFilter?: () => void
+    onOpenTrainingEvent?: (scheduleId: number) => void
   } = {},
 ) {
   const [localTab, setLocalTab] = useState<ResourceTabId>(initialTab)
@@ -135,7 +136,8 @@ export default function ResourceManagement(
         </nav>
         <div className="rm-roster-subtab-pane" hidden={rosterSubTab !== 'people'}>
           <ResourceRosterPage revision={revision} onDataChanged={refreshResourceData}
-            copilotFilter={copilotView?.filter ?? null} onClearCopilotFilter={onClearCopilotFilter} />
+            copilotFilter={copilotView?.filter ?? null} onClearCopilotFilter={onClearCopilotFilter}
+            onOpenTrainingEvent={onOpenTrainingEvent} />
         </div>
         <div className="rm-roster-subtab-pane" hidden={rosterSubTab !== 'transfers'}>
           <TransferIntakePage revision={revision} onDataChanged={refreshResourceData} onPendingCountChange={setPendingTransfers}

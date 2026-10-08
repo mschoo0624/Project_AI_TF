@@ -16,7 +16,7 @@ import json
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -28,8 +28,18 @@ from user.app.models.education import Education
 from user.app.models.person import Person
 from user.app.models.postpoment import Postponement
 from user.app.models.user import User
-from user.app.models.training_recalculation import TrainingCarryover, TrainingYearResult
-from user.app.schemas.person import PersonCreate, PersonRead, PersonUpdate, PersonProfileUpdate
+from user.app.models.training_recalculation import (
+	TrainingCarryover,
+	TrainingCarryoverResolution,
+	TrainingYearResult,
+)
+from user.app.schemas.person import (
+	PersonCreate,
+	PersonRead,
+	PersonRosterRead,
+	PersonUpdate,
+	PersonProfileUpdate,
+)
 from user.app.services.person_profile import ProfileError, profile_options, save_profile
 from user.app.services.assignment import grouped_candidates, is_assignable, not_assignable_reason
 from user.app.services.person import create_person
@@ -251,6 +261,190 @@ def list_reservists(
 		category=category,
 		assigned=assigned,
 	))
+
+
+def _current_roster_hours(
+	db: Session, people: list[Person]
+) -> dict[str, dict[str, object]]:
+	people_with_year = [person for person in people if person.service_year is not None]
+	if not people_with_year:
+		return {}
+	person_ids = [person.military_number for person in people_with_year]
+	results = db.scalars(
+		select(TrainingYearResult).where(TrainingYearResult.person_id.in_(person_ids))
+	).all()
+	results_by_year: dict[tuple[str, int], list[TrainingYearResult]] = {}
+	for row in results:
+		results_by_year.setdefault((row.person_id, row.service_year), []).append(row)
+
+	carryovers = db.scalars(
+		select(TrainingCarryover).where(
+			TrainingCarryover.person_id.in_(person_ids),
+			or_(
+				TrainingCarryover.reason_code.is_(None),
+				TrainingCarryover.reason_code != "no_longer_required",
+			),
+		)
+	).all()
+	carryovers_by_person: dict[str, list[TrainingCarryover]] = {}
+	for row in carryovers:
+		carryovers_by_person.setdefault(row.person_id, []).append(row)
+	allocations: dict[int, list[tuple[int, int]]] = {}
+	if carryovers:
+		allocation_rows = db.execute(
+			select(
+				TrainingCarryoverResolution.carryover_id,
+				Education.education_year,
+				TrainingCarryoverResolution.hours,
+			)
+			.join(Education, Education.id == TrainingCarryoverResolution.education_id)
+			.where(TrainingCarryoverResolution.carryover_id.in_([row.id for row in carryovers]))
+		).all()
+		for carryover_id, education_year, hours in allocation_rows:
+			allocations.setdefault(carryover_id, []).append((education_year, hours))
+
+	summaries: dict[str, dict[str, object]] = {}
+	for person in people_with_year:
+		service_year = int(person.service_year)
+		year_results = results_by_year.get((person.military_number, service_year), [])
+		if not year_results:
+			current = next(
+				(item for item in all_training_progress(db, person) if item["service_year"] == service_year),
+				None,
+			)
+			if current is None:
+				continue
+			counted = int(current["completed_hours"])
+			credited = int(current.get("credited_hours", 0))
+			required = int(current.get("target_hours", current["required_hours"]))
+			carryover_hours = int(current.get("carryover_hours", 0))
+			unmet = int(current.get("unmet_required_hours", current["remaining_hours"]))
+			remaining = int(current["remaining_hours"])
+			review_reason = current.get("needs_review_reason")
+			training_status = str(current["training_status"])
+		else:
+			review = next((row for row in year_results if row.needs_review_reason), None)
+			if review is not None:
+				counted = credited = required = carryover_hours = unmet = remaining = 0
+				review_reason = review.needs_review_reason
+				training_status = "NEEDS_REVIEW"
+			else:
+				required = sum(row.required_hours for row in year_results)
+				counted = sum(row.counted_hours for row in year_results)
+				credited = sum(row.credited_hours for row in year_results)
+				carryover_hours = sum(
+					max(
+						0,
+						row.original_hours - sum(
+							hours for allocated_year, hours in allocations.get(row.id, [])
+							if allocated_year <= service_year
+						),
+					)
+					for row in carryovers_by_person.get(person.military_number, [])
+					if row.origin_year < service_year
+				)
+				unmet = max(required - counted - credited, 0)
+				remaining = unmet + carryover_hours
+				review_reason = None
+				training_status = (
+					"훈련 미이수" if required > 0 and remaining > 0
+					else "훈련 이수" if required > 0
+					else "훈련 대상 아님"
+				)
+		summaries[person.military_number] = {
+			"required_hours": required,
+			"counted_hours": counted,
+			"credited_hours": credited,
+			"recognized_hours": counted + credited,
+			"carryover_hours": carryover_hours,
+			"unmet_required_hours": unmet,
+			"remaining_hours": remaining,
+			"training_status": training_status,
+			"needs_review_reason": review_reason,
+			"over_limit": counted + credited > required,
+			"is_incomplete": remaining > 0,
+		}
+	return summaries
+
+
+@persons_router.get("/roster", response_model=list[PersonRosterRead], dependencies=[Depends(require_viewer)])
+def list_persons_with_training_summary(
+	query_text: str | None = Query(default=None, alias="query"),
+	branch: str | None = Query(default=None),
+	rank: str | None = Query(default=None),
+	status: str | None = Query(default=None),
+	mobilization_status: str | None = Query(default=None),
+	platoon: str | None = Query(default=None, description="소대 이름, 예: 1소대"),
+	category: Literal["병사", "부사관", "장교", "간부"] | None = Query(default=None),
+	assigned: bool | None = Query(default=None, description="true=편성, false=미편성"),
+	db: Session = Depends(get_db),
+) -> list[PersonRosterRead]:
+	people = search_people(db, PersonSearch(
+		query_text=query_text,
+		branch=branch,
+		rank=rank,
+		status=status,
+		mobilization_status=mobilization_status,
+		platoon=platoon,
+		category=category,
+		assigned=assigned,
+	))
+	hours_by_person = _current_roster_hours(db, people)
+	latest_records: dict[tuple[str, int], Education] = {}
+	person_ids = [person.military_number for person in people]
+	if person_ids:
+		for record in db.scalars(
+			select(Education)
+			.where(Education.person_id.in_(person_ids))
+			.order_by(Education.id)
+		).all():
+			latest_records[(record.person_id, record.education_year)] = record
+
+	result: list[PersonRosterRead] = []
+	for person in people:
+		summary = hours_by_person.get(person.military_number)
+		if summary is not None:
+			record = latest_records.get((person.military_number, person.service_year or 0))
+			attendance = record.attendance_status if record is not None else None
+			training_status = str(summary["training_status"])
+			if training_status != "NEEDS_REVIEW" and attendance == "조기퇴소":
+				training_status = f"조기퇴소 · {record.training_round}차"
+			elif training_status != "NEEDS_REVIEW" and attendance in {"보류", "round_hold"}:
+				training_status = "보류"
+			elif training_status != "NEEDS_REVIEW" and attendance in {"연기", "postponed"}:
+				training_status = "연기"
+			summary = {
+				**summary,
+				"training_status": training_status,
+				"latest_round": record.training_round if record is not None else None,
+				"latest_status": attendance,
+				"latest_schedule_id": record.schedule_id if record is not None else None,
+			}
+		elif person.service_year is None:
+			summary = {
+				"required_hours": 0,
+				"counted_hours": 0,
+				"credited_hours": 0,
+				"recognized_hours": 0,
+				"carryover_hours": 0,
+				"unmet_required_hours": 0,
+				"remaining_hours": 0,
+				"training_status": "NEEDS_REVIEW",
+				"needs_review_reason": "복무연차 미등록",
+				"latest_round": None,
+				"latest_status": None,
+				"latest_schedule_id": None,
+				"over_limit": False,
+				"is_incomplete": False,
+			}
+		result.append(PersonRosterRead.model_validate({
+			**{
+				column.name: getattr(person, column.name)
+				for column in Person.__table__.columns
+			},
+			"training_hours_summary": summary,
+		}))
+	return result
 
 @persons_router.get("/profile-options")
 def get_profile_options():

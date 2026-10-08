@@ -792,9 +792,14 @@ def overlay_progress_with_recalculation(
                 "carryover_hours": 0,
                 "required_hours": 0,
                 "completed_hours": 0,
+                "credited_hours": 0,
+                "recognized_hours": 0,
+                "unmet_required_hours": 0,
                 "remaining_hours": 0,
+                "over_limit": False,
                 "completed": False,
                 "training_status": "NEEDS_REVIEW",
+                "needs_review_reason": review.needs_review_reason,
                 "review_hints": list(item.get("review_hints", [])) + [review.needs_review_reason],
             })
             continue
@@ -830,7 +835,10 @@ def overlay_progress_with_recalculation(
             "required_hours": required,
             "completed_hours": counted,
             "credited_hours": credited,
+            "recognized_hours": counted + credited,
+            "unmet_required_hours": max(required - counted - credited, 0),
             "remaining_hours": remaining,
+            "over_limit": counted + credited > required,
             "completed": remaining == 0,
             "training_status": training_status,
         })

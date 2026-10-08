@@ -79,3 +79,24 @@ class PersonRead(PersonBase):
 	model_config = ConfigDict(from_attributes=True)
 
 	military_number: str
+
+
+class TrainingHoursSummary(BaseModel):
+	required_hours: int
+	counted_hours: int
+	credited_hours: int
+	recognized_hours: int
+	carryover_hours: int
+	unmet_required_hours: int
+	remaining_hours: int
+	training_status: str
+	needs_review_reason: str | None = None
+	latest_round: int | None = None
+	latest_status: str | None = None
+	latest_schedule_id: int | None = None
+	over_limit: bool = False
+	is_incomplete: bool = False
+
+
+class PersonRosterRead(PersonRead):
+	training_hours_summary: TrainingHoursSummary | None = None

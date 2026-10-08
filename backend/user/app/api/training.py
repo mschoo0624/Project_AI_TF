@@ -385,6 +385,7 @@ def get_training_hours(
 					),
 					person.mobilization_status,
 				),
+				"schedule_id": record.schedule_id,
 				"attendance_status": record.attendance_status,
 				"training_hours": record.training_hours,
 				"source_kind": record.source_kind,

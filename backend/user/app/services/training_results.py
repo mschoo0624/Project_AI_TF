@@ -398,6 +398,52 @@ def cancel_schedule(
     return schedule
 
 
+def complete_schedule(
+    db: Session, schedule_id: int, expected_version: int, actor: User,
+    today: date | None = None,
+) -> TrainingSchedule:
+    schedule = db.get(TrainingSchedule, schedule_id)
+    if schedule is None:
+        raise HTTPException(status_code=404, detail="Training schedule not found")
+    _advance_schedule_version(db, schedule, expected_version)
+    if schedule.status != "scheduled":
+        raise HTTPException(status_code=409, detail="예정 상태의 일정만 완료할 수 있습니다.")
+
+    last_session = max((item.session_date for item in schedule.sessions), default=None)
+    if last_session is None:
+        raise HTTPException(status_code=409, detail="세션이 없는 일정은 완료할 수 없습니다.")
+    if last_session >= (today or date.today()):
+        raise HTTPException(status_code=409, detail="모든 훈련 세션이 종료된 후 완료할 수 있습니다.")
+
+    records = db.scalars(
+        select(Education).where(Education.schedule_id == schedule_id)
+    ).all()
+    unresolved = [
+        record for record in records
+        if record.attendance_status in ROUND_SCHEDULED
+        or (record.attendance_status in UNEXCUSED_ABSENCE and not record.confirmed_by)
+    ]
+    if unresolved:
+        raise HTTPException(
+            status_code=409,
+            detail=f"배정된 훈련 결과 {len(unresolved)}건이 아직 확정되지 않았습니다.",
+        )
+
+    before = _schedule_snapshot(schedule)
+    schedule.status = "completed"
+    db.add(AuditLog(
+        action="training_schedule.complete",
+        table_name="training_schedule",
+        record_id=schedule.id,
+        user_id=actor.id,
+        actor_label=actor.username,
+        before_data=json.dumps(before, ensure_ascii=False),
+        after_data=json.dumps(_schedule_snapshot(schedule), ensure_ascii=False),
+        created_at=_now(),
+    ))
+    return schedule
+
+
 def delete_schedule(
     db: Session, schedule_id: int, expected_version: int, actor: User
 ) -> None:

@@ -144,6 +144,7 @@ function App() {
   const [chatOpen, setChatOpen] = useState(false)
   const [copilotView, setCopilotView] = useState<CopilotView | null>(null)
   const [dataRevision, setDataRevision] = useState(0)
+  const [trainingScheduleFocus, setTrainingScheduleFocus] = useState<number | null>(null)
   // Copilot의 화면 명령. 응답마다 navigate가 먼저 와서 이전 필터·강조를 지웁니다.
   const runCopilotAction = (action: CopilotAction) => {
     if (action.tab !== 'roster') return
@@ -212,8 +213,13 @@ function App() {
             ? <Home key={homeRevision} onNavigate={navigate} />
             : activePage === 'resource' ? <ResourceManagement selectedTab={resourceLanding} onTabChange={setResourceLanding}
               copilotView={copilotView} dataRevision={dataRevision}
+              onOpenTrainingEvent={scheduleId => { setTrainingScheduleFocus(scheduleId); setActivePage('training') }}
               onClearCopilotFilter={() => setCopilotView(current => current && { ...current, filter: null })} />
-            : activePage === 'training' ? <TrainingManagementPage onDataChanged={() => setDataRevision(value => value + 1)} />
+            : activePage === 'training' ? <TrainingManagementPage
+                focusScheduleId={trainingScheduleFocus}
+                onScheduleFocusHandled={() => setTrainingScheduleFocus(null)}
+                onDataChanged={() => setDataRevision(value => value + 1)}
+              />
             : ActiveComponent ? <ActiveComponent key={activePage} /> : null}
         </div>
       </main>

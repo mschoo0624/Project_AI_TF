@@ -27,6 +27,7 @@ from user.app.services.training_results import (
     ResultBatchValidationError,
     assign_schedule_roster,
     cancel_schedule,
+    complete_schedule,
     confirm_result_batch,
     create_schedule,
     delete_schedule,
@@ -132,6 +133,23 @@ def cancel_training_schedule(
 ) -> TrainingSchedule:
     try:
         schedule = cancel_schedule(db, schedule_id, payload.expected_version, actor)
+        db.commit()
+        db.refresh(schedule)
+        return schedule
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.post("/training-schedules/{schedule_id}/complete", response_model=TrainingScheduleRead)
+def complete_training_schedule(
+    schedule_id: int,
+    payload: TrainingScheduleVersion,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_scheduler),
+) -> TrainingSchedule:
+    try:
+        schedule = complete_schedule(db, schedule_id, payload.expected_version, actor)
         db.commit()
         db.refresh(schedule)
         return schedule

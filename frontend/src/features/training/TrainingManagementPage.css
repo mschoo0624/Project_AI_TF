@@ -232,6 +232,7 @@
 .training-table-wrap {
 	border: 1px solid #dce7df;
 	border-radius: 5px;
+	overflow-x: auto;
 	scrollbar-color: #b5cbbb #f4f7f4;
 	scrollbar-width: thin;
 }
@@ -250,9 +251,11 @@
 .training-table-wrap tbody tr:hover { background: #f1f8f3; }
 .training-schedule-actions { display:flex; align-items:center; gap:5px; }
 .training-schedule-actions button { min-height:29px; padding:5px 8px; white-space:nowrap; }
-.training-schedule-actions button:first-child { border-color:#c5dfd0; background:var(--train-green-pale); color:var(--train-green-dark); }
-.training-schedule-actions button:nth-child(2):not(:last-child) { border-color:#f0d6ae; background:var(--train-amber-pale); color:var(--train-amber); }
-.training-schedule-actions button:last-child { border-color:#efcbc6; background:var(--train-red-pale); color:var(--train-red); }
+.training-schedule-actions .training-schedule-edit,
+.training-schedule-actions .training-schedule-complete { border-color:#c5dfd0; background:var(--train-green-pale); color:var(--train-green-dark); }
+.training-schedule-actions .training-schedule-complete { font-weight:700; }
+.training-schedule-actions .training-schedule-cancel { border-color:#f0d6ae; background:var(--train-amber-pale); color:var(--train-amber); }
+.training-schedule-actions .training-schedule-delete { border-color:#efcbc6; background:var(--train-red-pale); color:var(--train-red); }
 
 .training-message {
 	margin: 10px 0;
@@ -389,3 +392,4 @@
 	.training-bulk-toolbar .training-field { min-width:0; flex:1 1 130px; }
 	.training-actions { flex-wrap:wrap; }
 }
+.training-schedule-focus { outline: 3px solid #245fc7; outline-offset: -3px; background: #eaf2ff; }
