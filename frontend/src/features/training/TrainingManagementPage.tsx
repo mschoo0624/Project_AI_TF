@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import { apiBase, authenticatedFetch } from './auth'
 import { buildTrainingHourPresets, bulkHourExclusionReason, resolveTrainingHours } from './trainingHours.mjs'
 import './TrainingManagementPage.css'
@@ -41,7 +41,7 @@ type DraftRow = RosterRow & {
   reversal_reason: string
 }
 type Worklists = {
-  missing_results: { education_id: number; military_number: string; name: string; schedule_title: string; result_status: string }[]
+  missing_results: { education_id: number; military_number: string; name: string; schedule_id?: number | null; schedule_title: string; result_status: string }[]
   import_review: { education_id?: number; military_number?: string; error?: string }[]
   absences_scheduler_can_confirm: { education_id: number; military_number: string; name: string; schedule_title: string }[]
   absences_needing_approver: { education_id: number; military_number: string; name: string; schedule_title: string }[]
@@ -149,6 +149,25 @@ function emptyWorklists(): Worklists {
   }
 }
 
+async function loadPendingAssignmentCandidates(schedules: Schedule[], signal: AbortSignal): Promise<Map<number, string[]>> {
+  const candidatesBySchedule = new Map<number, string[]>()
+  let nextIndex = 0
+  const worker = async () => {
+    while (nextIndex < schedules.length) {
+      const schedule = schedules[nextIndex++]
+      const response = await authenticatedFetch(`${API}/reservists/training-schedules/${schedule.id}/assignment-candidates`, { signal })
+      if (!response.ok) throw new Error(await apiError(response, '훈련부과 대기 인원을 불러오지 못했습니다.'))
+      const payload = await response.json() as { military_numbers?: unknown }
+      if (!Array.isArray(payload.military_numbers) || !payload.military_numbers.every((value): value is string => typeof value === 'string')) {
+        throw new Error('훈련부과 대기 인원 응답을 확인할 수 없습니다.')
+      }
+      candidatesBySchedule.set(schedule.id, payload.military_numbers)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(4, schedules.length) }, () => worker()))
+  return candidatesBySchedule
+}
+
 export default function TrainingManagementPage({ onDataChanged, focusScheduleId = null, onScheduleFocusHandled }: {
   onDataChanged?: () => void
   focusScheduleId?: number | null
@@ -161,6 +180,7 @@ export default function TrainingManagementPage({ onDataChanged, focusScheduleId 
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [revision, setRevision] = useState(0)
+  const [assignmentInitialScheduleId, setAssignmentInitialScheduleId] = useState('')
   const canWrite = true
 
   useEffect(() => {
@@ -205,8 +225,17 @@ export default function TrainingManagementPage({ onDataChanged, focusScheduleId 
         focusScheduleId={focusScheduleId}
         onFocusHandled={onScheduleFocusHandled}
       />}
-      {activeTab === 'assignment' && <AssignmentWorkspace schedules={schedules} people={people} canWrite={!!canWrite} onAssigned={refresh} />}
-      {activeTab === 'results' && <ResultsWorkspace schedules={schedules} people={people} canWrite={!!canWrite} onSaved={() => { refresh(); onDataChanged?.() }} />}
+      {activeTab === 'assignment' && <AssignmentWorkspace schedules={schedules} people={people} canWrite={!!canWrite} onAssigned={refresh} initialScheduleId={assignmentInitialScheduleId} />}
+      {activeTab === 'results' && <ResultsWorkspace
+        schedules={schedules}
+        people={people}
+        canWrite={!!canWrite}
+        onSaved={() => { refresh(); onDataChanged?.() }}
+        onNavigateToAssignment={scheduleId => {
+          setAssignmentInitialScheduleId(scheduleId === null ? '' : String(scheduleId))
+          setTab('assignment')
+        }}
+      />}
   </main>
 }
 
@@ -426,8 +455,8 @@ function ScheduleWorkspace({ schedules, canWrite, onCreated, focusScheduleId, on
   </div>
 }
 
-function AssignmentWorkspace({ schedules, people, canWrite, onAssigned }: { schedules: Schedule[]; people: Person[]; canWrite: boolean; onAssigned: () => void }) {
-  const [scheduleId, setScheduleId] = useState('')
+function AssignmentWorkspace({ schedules, people, canWrite, onAssigned, initialScheduleId }: { schedules: Schedule[]; people: Person[]; canWrite: boolean; onAssigned: () => void; initialScheduleId?: string }) {
+  const [scheduleId, setScheduleId] = useState(initialScheduleId ?? '')
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [assignedIds, setAssignedIds] = useState<Set<string>>(() => new Set())
@@ -556,13 +585,24 @@ function AssignmentWorkspace({ schedules, people, canWrite, onAssigned }: { sche
   </section>
 }
 
-function ResultsWorkspace({ schedules, people, canWrite, onSaved }: { schedules: Schedule[]; people: Person[]; canWrite: boolean; onSaved: () => void }) {
+function ResultsWorkspace({ schedules, people, canWrite, onSaved, onNavigateToAssignment }: {
+  schedules: Schedule[]
+  people: Person[]
+  canWrite: boolean
+  onSaved: () => void
+  onNavigateToAssignment: (scheduleId: number | null) => void
+}) {
   const [view, setView] = useState<'session' | 'person'>('session')
   const [scheduleId, setScheduleId] = useState('')
   const [resultsGroup, setResultsGroup] = useState<ResultsGroup>('all')
   const [resultsBranch, setResultsBranch] = useState<string | null>(null)
   const [roster, setRoster] = useState<DraftRow[]>([])
   const [worklists, setWorklists] = useState<Worklists>(emptyWorklists)
+  const [worklistsLoading, setWorklistsLoading] = useState(true)
+  const [worklistsError, setWorklistsError] = useState('')
+  const [pendingAssignmentCandidates, setPendingAssignmentCandidates] = useState<Map<number, string[]> | null>(null)
+  const [pendingAssignmentError, setPendingAssignmentError] = useState('')
+  const [pendingAssignmentsLoading, setPendingAssignmentsLoading] = useState(true)
   const [bulkState, setBulkState] = useState('이수')
   const [customBulkHours, setCustomBulkHours] = useState(8)
   const [customBulkHoursSelected, setCustomBulkHoursSelected] = useState(false)
@@ -582,6 +622,11 @@ function ResultsWorkspace({ schedules, people, canWrite, onSaved }: { schedules:
   const [historyRosterError, setHistoryRosterError] = useState('')
   const selectedScheduleId = scheduleId || (schedules[0] ? String(schedules[0].id) : '')
   const selectedSchedule = schedules.find(item => String(item.id) === selectedScheduleId)
+  const openSchedules = schedules.filter(schedule => schedule.status === 'scheduled')
+  const pendingAssignmentCount = pendingAssignmentCandidates
+    ? new Set([...pendingAssignmentCandidates.values()].flat()).size
+    : null
+  const approvalCount = worklists.absences_needing_approver.length + worklists.small_remainder_reviews.length
   const selectedHistoryPersonId = historyRoster.some(person => person.military_number === historyPersonId)
     ? historyPersonId
     : historyRoster[0]?.military_number ?? ''
@@ -614,13 +659,11 @@ function ResultsWorkspace({ schedules, people, canWrite, onSaved }: { schedules:
       return
     }
     const controller = new AbortController()
-    Promise.all([
-      authenticatedFetch(`${API}/reservists/training-schedules/${selectedSchedule.id}/roster`, { signal: controller.signal }),
-      authenticatedFetch(`${API}/reservists/training-results/worklists`, { signal: controller.signal }),
-    ]).then(async ([rosterResponse, worklistResponse]) => {
+    authenticatedFetch(`${API}/reservists/training-schedules/${selectedSchedule.id}/roster`, { signal: controller.signal })
+      .then(async rosterResponse => {
       if (!rosterResponse.ok) throw new Error(await apiError(rosterResponse, '훈련 결과 명단을 불러오지 못했습니다.'))
-      if (!worklistResponse.ok) throw new Error(await apiError(worklistResponse, '결과 worklist를 불러오지 못했습니다.'))
-      const rosterData = await rosterResponse.json() as { roster: RosterRow[] }
+      return await rosterResponse.json() as { roster: RosterRow[] }
+    }).then(rosterData => {
       setRoster(rosterData.roster.map(row => ({
         ...row,
         selected: row.attendance_status === 'scheduled' || row.result_status === '결과 미입력',
@@ -630,13 +673,46 @@ function ResultsWorkspace({ schedules, people, canWrite, onSaved }: { schedules:
         override_reason: '',
         reversal_reason: '',
       })))
-      setWorklists(await worklistResponse.json() as Worklists)
       setReviewing(false)
       setBatchKey(null)
       setError('')
     }).catch(cause => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : '훈련 결과를 불러오지 못했습니다.') })
     return () => controller.abort()
-  }, [view, selectedScheduleId, schedules.length, rosterRevision])
+  }, [view, selectedScheduleId, schedules, rosterRevision])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setWorklistsLoading(true)
+    setWorklistsError('')
+    authenticatedFetch(`${API}/reservists/training-results/worklists`, { signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error(await apiError(response, '결과 확인 목록을 불러오지 못했습니다.'))
+        return await response.json() as Worklists
+      })
+      .then(setWorklists)
+      .catch(cause => {
+        if (!controller.signal.aborted) setWorklistsError(cause instanceof Error ? cause.message : '결과 확인 목록을 불러오지 못했습니다.')
+      })
+      .finally(() => { if (!controller.signal.aborted) setWorklistsLoading(false) })
+    return () => controller.abort()
+  }, [rosterRevision])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const scheduled = schedules.filter(schedule => schedule.status === 'scheduled')
+    setPendingAssignmentsLoading(true)
+    setPendingAssignmentError('')
+    loadPendingAssignmentCandidates(scheduled, controller.signal)
+      .then(setPendingAssignmentCandidates)
+      .catch(cause => {
+        if (!controller.signal.aborted) {
+          setPendingAssignmentCandidates(null)
+          setPendingAssignmentError(cause instanceof Error ? cause.message : '훈련부과 대기 인원을 불러오지 못했습니다.')
+        }
+      })
+      .finally(() => { if (!controller.signal.aborted) setPendingAssignmentsLoading(false) })
+    return () => controller.abort()
+  }, [schedules])
 
   useEffect(() => {
     if (view !== 'person') return
@@ -840,7 +916,41 @@ function ResultsWorkspace({ schedules, people, canWrite, onSaved }: { schedules:
     setReviewing(true)
   }
 
-  return <div className="training-results-layout">
+  const focusWorklist = (id: string) => {
+    const target = document.getElementById(id)
+    target?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' })
+    target?.querySelector('summary')?.focus({ preventScroll: true })
+  }
+  const selectOpenSchedule = () => {
+    setView('session')
+    setResultsGroup('all')
+    setResultsBranch(null)
+    if (openSchedules[0]) setScheduleId(String(openSchedules[0].id))
+    requestAnimationFrame(() => document.getElementById('training-result-schedule-select')?.focus())
+  }
+  const navigateToPendingAssignments = () => {
+    const schedule = openSchedules.find(item => (pendingAssignmentCandidates?.get(item.id)?.length ?? 0) > 0) ?? openSchedules[0]
+    onNavigateToAssignment(schedule?.id ?? null)
+  }
+
+  return <>
+    <section className="training-results-summary" aria-label="훈련결과 업무 요약">
+      <button type="button" className="training-results-summary-card" onClick={selectOpenSchedule} aria-label={`예정 일정 ${openSchedules.length}건, 일정 결과 명단으로 이동`}>
+        <span>예정 일정</span><strong>{openSchedules.length}</strong><small>일정 결과 보기</small>
+      </button>
+      <button type="button" className="training-results-summary-card" onClick={navigateToPendingAssignments} aria-label={`부과 대기 ${pendingAssignmentsLoading ? '확인 중' : pendingAssignmentError ? '조회 오류' : `${pendingAssignmentCount ?? 0}명`}, 훈련부과로 이동`}>
+        <span>부과 대기</span><strong>{pendingAssignmentsLoading ? '…' : pendingAssignmentError ? '—' : pendingAssignmentCount}</strong><small>배정할 대상자</small>
+      </button>
+      <button type="button" className="training-results-summary-card" onClick={() => focusWorklist('training-worklist-missing')} aria-label={`결과 미입력 ${worklistsLoading ? '확인 중' : worklistsError ? '조회 오류' : `${worklists.missing_results.length}건`}, 결과 확인 목록으로 이동`}>
+        <span>결과 미입력</span><strong>{worklistsLoading ? '…' : worklistsError ? '—' : worklists.missing_results.length}</strong><small>입력 기한 경과</small>
+      </button>
+      <button type="button" className="training-results-summary-card is-warning" onClick={() => focusWorklist(worklists.absences_needing_approver.length ? 'training-worklist-approver' : 'training-worklist-small-remainder')} aria-label={`승인 대기 ${worklistsLoading ? '확인 중' : worklistsError ? '조회 오류' : `${approvalCount}건`}, 승인 확인 목록으로 이동`}>
+        <span>승인 대기</span><strong>{worklistsLoading ? '…' : worklistsError ? '—' : approvalCount}</strong><small>승인 확인 필요</small>
+      </button>
+    </section>
+    {pendingAssignmentError && <p className="training-results-summary-error" role="alert">{pendingAssignmentError}</p>}
+    {worklistsError && <p className="training-results-summary-error" role="alert">{worklistsError}</p>}
+    <div className="training-results-layout">
     <section className="training-section">
       <nav className="training-result-views" aria-label="결과 보기">
         <button type="button" className={view === 'session' ? 'is-active' : ''} onClick={() => setView('session')}>세션별</button>
@@ -864,9 +974,9 @@ function ResultsWorkspace({ schedules, people, canWrite, onSaved }: { schedules:
         {historyError && <p className="training-message is-error" role="alert">{historyError}</p>}
         {history && <PersonHistoryPanel key={history.military_number} history={history} />}
       </> : <>
-      <header><h2>행사 결과 roster</h2><button type="button" onClick={() => void downloadCsv()}>CSV 내보내기</button></header>
+      <header><h2>훈련 결과 명단</h2><button type="button" onClick={() => void downloadCsv()}>CSV 내보내기</button></header>
       <div className="training-toolbar">
-        <label className="training-field">훈련일정<select value={selectedScheduleId} onChange={event => { setScheduleId(event.target.value); setRoster([]); setResultsGroup('all'); setResultsBranch(null); setCustomBulkHoursSelected(false); setBulkPresetDay(null); setError(''); setMessage('') }}><option value="">일정 선택</option>{schedules.map(schedule => <option key={schedule.id} value={schedule.id}>{schedule.title} · {schedule.training_type} · {schedule.service_year}년차{isTypeIISchedule(schedule.training_type) ? ` · ${schedule.training_round}차` : ''}</option>)}</select></label>
+        <label className="training-field">훈련일정<select id="training-result-schedule-select" value={selectedScheduleId} onChange={event => { setScheduleId(event.target.value); setRoster([]); setResultsGroup('all'); setResultsBranch(null); setCustomBulkHoursSelected(false); setBulkPresetDay(null); setError(''); setMessage('') }}><option value="">일정 선택</option>{schedules.map(schedule => <option key={schedule.id} value={schedule.id}>{schedule.title} · {schedule.training_type} · {schedule.service_year}년차{isTypeIISchedule(schedule.training_type) ? ` · ${schedule.training_round}차` : ''}</option>)}</select></label>
       </div>
       {!canWrite && <p className="training-note">결과 입력과 확인에는 scheduler 권한이 필요합니다.</p>}
       {selectedSchedule && <div className="training-session-summary"><strong>{selectedSchedule.title}</strong><span>{selectedSchedule.service_year}년차{isTypeIISchedule(selectedSchedule.training_type) ? ' · 개인별 차수 자동' : ''} · {roster.length}명</span><span>완료 {roster.filter(row => row.result_status !== '결과 미입력' && row.attendance_status !== 'scheduled').length} · 결과 미입력 {worklists.missing_results.filter(row => row.schedule_title === selectedSchedule.title).length}</span>{selectedSchedule.demo_early_save_enabled && <span className="training-demo-save-state">DEMO 조기 저장 1회 가능</span>}{selectedSchedule.demo_early_save_used && <span className="training-demo-save-state is-used">DEMO 조기 저장 사용 완료</span>}</div>}
@@ -957,8 +1067,9 @@ function ResultsWorkspace({ schedules, people, canWrite, onSaved }: { schedules:
       {message && <p className="training-message" role="status">{message}</p>}
       </>}
     </section>
-    <WorklistPanel worklists={worklists} />
+    <WorklistPanel worklists={worklists} loading={worklistsLoading} error={worklistsError} />
   </div>
+  </>
 }
 
 function PersonHistoryPanel({ history }: { history: PersonHistory }) {
@@ -982,20 +1093,38 @@ function PersonHistoryPanel({ history }: { history: PersonHistory }) {
   </div>
 }
 
-function WorklistPanel({ worklists }: { worklists: Worklists }) {
+function WorklistPanel({ worklists, loading, error }: { worklists: Worklists; loading: boolean; error: string }) {
+  const total = Object.values(worklists).reduce((sum, rows) => sum + rows.length, 0)
   return <aside className="training-section training-worklists">
-    <header><h2>결과 worklists</h2><span>{worklists.missing_results.length + worklists.absences_scheduler_can_confirm.length + worklists.absences_needing_approver.length + worklists.small_remainder_reviews.length}건</span></header>
-    <h3>결과 미입력 · grace 기간 경과</h3>
-    {worklists.missing_results.length ? <ul>{worklists.missing_results.map(row => <li key={row.education_id}><strong>{row.name}</strong><span>{row.military_number} · {row.schedule_title}</span></li>)}</ul> : <p>현재 대기 항목이 없습니다.</p>}
-    <h3>무단불참 확인 · scheduler</h3>
-    {worklists.absences_scheduler_can_confirm.length ? <ul>{worklists.absences_scheduler_can_confirm.map(row => <li key={row.education_id}><strong>{row.name}</strong><span>{row.military_number} · {row.schedule_title}</span></li>)}</ul> : <p>현재 대기 항목이 없습니다.</p>}
-    <h3>무단불참 확인 · approver</h3>
-    {worklists.absences_needing_approver.length ? <ul>{worklists.absences_needing_approver.map(row => <li key={row.education_id}><strong>{row.name}</strong><span>{row.military_number} · {row.schedule_title}</span></li>)}</ul> : <p>현재 대기 항목이 없습니다.</p>}
-    <h3>가져오기 검토</h3>
-    <p>부대 export 형식과 익명 샘플 확인 후 연결합니다.</p>
-    <h3>승인된 연기/보류 검토</h3>
-    {worklists.late_deferral_review.length ? <ul>{worklists.late_deferral_review.map(row => <li key={row.education_id}><strong>{row.name}</strong><span>{row.military_number} · {row.schedule_title}</span></li>)}</ul> : <p>현재 대기 항목이 없습니다.</p>}
-    <h3>소액 잔여시간 · approver 검토</h3>
-    {worklists.small_remainder_reviews.length ? <ul>{worklists.small_remainder_reviews.map(row => <li key={row.education_id}><strong>{row.name} · {row.next_round}차 부과 대기</strong><span>{row.military_number} · {row.schedule_title} · {row.reason}</span></li>)}</ul> : <p>현재 대기 항목이 없습니다.</p>}
+    <header><h2>결과 확인 목록</h2><span>{loading ? '불러오는 중…' : error ? '확인 필요' : `${total}건`}</span></header>
+    {error ? <p className="training-worklist-error" role="alert">{error}</p> : loading ? <p className="training-worklist-status" role="status">결과 확인 목록을 불러오는 중입니다.</p> : <>
+      <WorklistSection id="training-worklist-missing" title="결과 미입력 · 입력 기한 경과" count={worklists.missing_results.length}>
+        <ul>{worklists.missing_results.map(row => <li key={row.education_id}><strong>{row.name}</strong><span>{row.military_number} · {row.schedule_title}</span></li>)}</ul>
+      </WorklistSection>
+      <WorklistSection title="무단불참 확인 · 담당자 확인" count={worklists.absences_scheduler_can_confirm.length}>
+        <ul>{worklists.absences_scheduler_can_confirm.map(row => <li key={row.education_id}><strong>{row.name}</strong><span>{row.military_number} · {row.schedule_title}</span></li>)}</ul>
+      </WorklistSection>
+      <WorklistSection id="training-worklist-approver" title="무단불참 확인 · 승인 대기" count={worklists.absences_needing_approver.length}>
+        <ul>{worklists.absences_needing_approver.map(row => <li key={row.education_id}><strong>{row.name}</strong><span>{row.military_number} · {row.schedule_title}</span></li>)}</ul>
+      </WorklistSection>
+      <WorklistSection title="가져오기 검토" count={worklists.import_review.length}>
+        <ul>{worklists.import_review.map((row, index) => <li key={row.education_id ?? row.military_number ?? index}><strong>{row.military_number ?? '가져오기 항목'}</strong><span>{row.error ?? '가져오기 검토가 필요합니다.'}</span></li>)}</ul>
+      </WorklistSection>
+      <WorklistSection title="연기·보류 검토" count={worklists.late_deferral_review.length}>
+        <ul>{worklists.late_deferral_review.map(row => <li key={row.education_id}><strong>{row.name}</strong><span>{row.military_number} · {row.schedule_title}</span></li>)}</ul>
+      </WorklistSection>
+      <WorklistSection id="training-worklist-small-remainder" title="소액 잔여시간 확인" count={worklists.small_remainder_reviews.length}>
+        <ul>{worklists.small_remainder_reviews.map(row => <li key={row.education_id}><strong>{row.name} · {row.next_round}차 부과 대기</strong><span>{row.military_number} · {row.schedule_title} · {row.reason}</span></li>)}</ul>
+      </WorklistSection>
+    </>}
   </aside>
+}
+
+function WorklistSection({ id, title, count, children }: { id?: string; title: string; count: number; children: ReactNode }) {
+  const [expanded, setExpanded] = useState(count > 0)
+  useEffect(() => { setExpanded(count > 0) }, [count])
+  return <details id={id} className={`training-worklist-group${count === 0 ? ' is-empty' : ''}`} open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
+    <summary><span>{title}</span><span className="training-worklist-count">{count}</span></summary>
+    <div className="training-worklist-content">{count > 0 ? children : <p>현재 확인할 항목이 없습니다.</p>}</div>
+  </details>
 }

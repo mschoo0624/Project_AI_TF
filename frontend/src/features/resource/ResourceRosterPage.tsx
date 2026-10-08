@@ -130,6 +130,7 @@ const groupTabs: { key: GroupTab; label: string }[] = [
   { key: 'specialty', label: '주특기별' },
 ]
 const yearBucketOrder = ['0년차', '1~4년차', '5~6년차', '7~8년차', '연차 미등록']
+const rankOrder = ['대령', '중령', '소령', '대위', '중위', '소위', '원사', '상사', '중사', '하사', '병장', '상병', '일병', '이병']
 const yearBucketLabel = (year: number | null) => {
   if (year === 0) return '0년차'
   if (year !== null && year >= 1 && year <= 4) return '1~4년차'
@@ -137,27 +138,37 @@ const yearBucketLabel = (year: number | null) => {
   if (year !== null && year >= 7 && year <= 8) return '7~8년차'
   return '연차 미등록'
 }
-const rankCategoryOrder = ['부사관', '장교', '병사', '기타']
+const rankCategoryOrder = ['장교', '부사관', '병사', '기타']
 const soldierRanks = new Set(['이병', '일병', '상병', '병장'])
 const ncoRanks = new Set(['하사', '중사', '상사', '원사'])
 const officerRanks = new Set(['소위', '중위', '대위', '소령', '중령', '대령'])
+const normalizeGroupValue = (value: string | null | undefined, fallback: string) =>
+  value?.trim().replace(/\s+/g, ' ') || fallback
 const rankCategoryLabel = (rank: string | null) => {
-  if (rank !== null && soldierRanks.has(rank)) return '병사'
-  if (rank !== null && ncoRanks.has(rank)) return '부사관'
-  if (rank !== null && officerRanks.has(rank)) return '장교'
+  const normalizedRank = normalizeGroupValue(rank, '')
+  if (soldierRanks.has(normalizedRank)) return '병사'
+  if (ncoRanks.has(normalizedRank)) return '부사관'
+  if (officerRanks.has(normalizedRank)) return '장교'
   return '기타'
 }
 const groupKeyFor = (person: ResourcePerson, tab: GroupTab): string => {
   switch (tab) {
     case 'year': return yearBucketLabel(person.service_year)
-    case 'rank': return person.rank ?? '계급 미등록'
+    case 'rank': return normalizeGroupValue(person.rank, '계급 미등록')
     case 'rankYear': return `${rankCategoryLabel(person.rank)} · ${yearBucketLabel(person.service_year)}`
-    case 'branch': return person.branch
-    case 'specialty': return person.specialty ?? '주특기 미등록'
+    case 'branch': return normalizeGroupValue(person.branch, '군별 미등록')
+    case 'specialty': return normalizeGroupValue(person.specialty, '주특기 미등록')
     default: return ''
   }
 }
 const sortGroupValues = (values: string[], tab: GroupTab): string[] => [...values].sort((a, b) => {
+  if (tab === 'rank') {
+    const rankA = rankOrder.indexOf(a)
+    const rankB = rankOrder.indexOf(b)
+    const orderA = rankA < 0 ? rankOrder.length : rankA
+    const orderB = rankB < 0 ? rankOrder.length : rankB
+    if (orderA !== orderB) return orderA - orderB
+  }
   if (tab === 'rankYear') {
     const categoryA = rankCategoryOrder.findIndex(label => a.startsWith(label))
     const categoryB = rankCategoryOrder.findIndex(label => b.startsWith(label))
@@ -218,6 +229,7 @@ export default function ResourceRosterPage({ revision, onDataChanged, copilotFil
   const [sort, setSort] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'squad_id', direction: 'ascending' })
   const [groupTab, setGroupTab] = useState<GroupTab>('none')
   const [groupValue, setGroupValue] = useState<string | null>(null)
+  const [rankYearOptionsVisible, setRankYearOptionsVisible] = useState(true)
   const [checked, setChecked] = useState<Set<string>>(() => new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [records, setRecords] = useState<TrainingRecord[]>([])
@@ -361,6 +373,7 @@ export default function ResourceRosterPage({ revision, onDataChanged, copilotFil
   const selectGroupTab = (tab: GroupTab) => {
     setGroupTab(tab)
     setPage(1)
+    if (tab === 'rankYear') setRankYearOptionsVisible(true)
     if (tab === 'none') { setGroupValue(null); return }
     const values = sortGroupValues([...new Set(searchFiltered.map(person => groupKeyFor(person, tab)))], tab)
     setGroupValue(values[0] ?? null)
@@ -609,12 +622,36 @@ export default function ResourceRosterPage({ revision, onDataChanged, copilotFil
             aria-current={groupTab === tab.key ? 'page' : undefined}
             onClick={() => selectGroupTab(tab.key)}>{tab.label}</button>)}
         </nav>
-        {groupTab !== 'none' && <nav className="rm-group-options" aria-label="세부 목록 선택">
+        {groupTab === 'rankYear' && <button type="button" className="rm-rank-year-toggle"
+          aria-expanded={rankYearOptionsVisible} aria-controls="rm-rank-year-options"
+          onClick={() => setRankYearOptionsVisible(visible => !visible)}>
+          <span>계급/연차별 목록</span>
+          <span className="rm-rank-year-toggle-current">{groupValue ?? '조건 선택'}</span>
+          <strong>{rankYearOptionsVisible ? '숨기기' : '보기'}</strong>
+          <span className="rm-rank-year-toggle-icon" aria-hidden="true">{rankYearOptionsVisible ? '⌃' : '⌄'}</span>
+        </button>}
+        {groupTab !== 'none' && <nav
+          id={groupTab === 'rankYear' ? 'rm-rank-year-options' : undefined}
+          hidden={groupTab === 'rankYear' && !rankYearOptionsVisible}
+          className={`rm-group-options${groupTab === 'rankYear' ? ' is-rank-year' : ''}`}
+          aria-label="세부 목록 선택">
           {groupOptions.length === 0 ? <span className="rm-group-options-empty">해당 조건의 목록이 없습니다.</span>
-            : groupOptions.map(value => <button key={value} type="button"
-              className={groupValue === value ? 'is-active' : ''}
-              aria-current={groupValue === value ? 'page' : undefined}
-              onClick={() => selectGroupValue(value)}>{value}</button>)}
+            : groupTab === 'rankYear'
+              ? rankCategoryOrder.map(category => {
+                const prefix = `${category} · `
+                const categoryOptions = groupOptions.filter(value => value.startsWith(prefix))
+                return categoryOptions.length === 0 ? null : <div className="rm-rank-year-column" key={category}>
+                  <strong className="rm-rank-year-column-title">{category}</strong>
+                  <div className="rm-rank-year-column-options">{categoryOptions.map(value => <button key={value} type="button"
+                    className={groupValue === value ? 'is-active' : ''}
+                    aria-current={groupValue === value ? 'page' : undefined}
+                    onClick={() => selectGroupValue(value)}>{value.slice(prefix.length)}</button>)}</div>
+                </div>
+              })
+              : groupOptions.map(value => <button key={value} type="button"
+                className={groupValue === value ? 'is-active' : ''}
+                aria-current={groupValue === value ? 'page' : undefined}
+                onClick={() => selectGroupValue(value)}>{value}</button>)}
         </nav>}
         <div className="rm-person-list-toolbar">
           <label><input type="checkbox" checked={checkedOnPage} disabled={pageRows.length === 0}
@@ -639,7 +676,7 @@ export default function ResourceRosterPage({ revision, onDataChanged, copilotFil
         {loading ? <p className="rm-list-message">인원 목록을 불러오는 중입니다.</p>
           : error ? <p className="rm-list-message rm-error">{error}</p>
           : <div className="rm-list-scroll"><table className="rm-person-table">
-            <colgroup>{[4, 3.4, 8.4, 10.1, 5.1, 5.1, 8.4, 13.5, 8.4, 11.8, 6.8, 15].map((width, index) => <col key={rosterColumns[index].key} style={{ width: `${width}%` }} />)}</colgroup>
+            <colgroup>{[3.5, 2.5, 7, 9, 4, 4, 6, 9, 6, 8.5, 5.5, 35].map((width, index) => <col key={rosterColumns[index].key} style={{ width: `${width}%` }} />)}</colgroup>
             <thead><tr>{rosterColumns.map(column => <th key={column.key} scope="col"
               aria-sort={sort.key === column.key ? sort.direction : 'none'}>
               <button type="button" className="rm-sort-button" onClick={() => changeSort(column.key)}
@@ -693,7 +730,7 @@ export default function ResourceRosterPage({ revision, onDataChanged, copilotFil
         <nav className="rm-detail-tabs" aria-label="훈련 상세 메뉴">
           <button type="button" className={detailTab === 'progress' ? 'is-active' : ''} onClick={() => setDetailTab('progress')}>훈련 현황</button>
           <button type="button" className={detailTab === 'results' ? 'is-active' : ''} onClick={() => setDetailTab('results')}>훈련 결과</button>
-          <button type="button" className={detailTab === 'records' ? 'is-active' : ''} onClick={() => setDetailTab('records')}>훈련 기록 ({records.length})</button>
+          <button type="button" className={`rm-detail-tab--records${detailTab === 'records' ? ' is-active' : ''}`} onClick={() => setDetailTab('records')}>훈련 기록 ({records.length})</button>
         </nav>
         {actionError && <p className="rm-detail-note rm-error">{actionError}</p>}
         {detailLoading ? <p className="rm-detail-note">훈련 정보를 불러오는 중입니다.</p>
@@ -753,11 +790,10 @@ function TrainingProgressPanel({ currentYear, progress, records, audit, onOpenTr
   const years = progress.filter(item => item.service_year > 0 && (currentYear === null || item.service_year <= currentYear))
   return <div className="rm-training-panel rm-training-panel--full">
     <div className="rm-training-panel-heading"><h4>연차별 현황</h4><span>현재 및 과거 연차</span></div>
-    <div className="training-hours-legend" aria-label="훈련시간 표시 범례">
-      <span><i className="is-counted" />이수/참석</span>
-      <span><i className="is-credited" />보류 인정</span>
-      <span><i className="is-carryover" />이월</span>
-      <span><i className="is-remaining" />잔여</span>
+    <div className="training-hours-legend" aria-label="훈련 달성률 색상 범례">
+      <span><i className="is-low" />0% 미이수</span>
+      <span><i className="is-mid" />50% 진행</span>
+      <span><i className="is-high" />100% 이수</span>
     </div>
     {years.map(item => {
       const summary: TrainingHoursSummary = {
@@ -978,7 +1014,7 @@ function TrainingRecordsPanel({
   const update = (key: keyof TrainingRecordForm, value: string | number) => {
     if (form) onChange({ ...form, [key]: value })
   }
-  return <div className="rm-training-panel">
+  return <div className="rm-training-panel rm-training-panel--records">
     <div className="rm-training-panel-heading"><h4>훈련 기록</h4><button type="button" className="rm-btn rm-btn-primary" onClick={onAdd}>+ 기록 추가</button></div>
     {form && <div className="rm-record-editor">
       <label>복무연차<input type="number" min="1" max="8" value={form.service_year} onChange={event => update('service_year', Number(event.target.value))} /></label>

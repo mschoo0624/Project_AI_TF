@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import './TrainingHoursBar.css'
 
 export type TrainingHoursSummary = {
@@ -42,27 +43,46 @@ function accessibleSummary(summary: TrainingHoursSummary) {
 function VisualBar({ summary, size }: { summary: TrainingHoursSummary; size: Props['size'] }) {
   const denominator = summary.required_hours + summary.carryover_hours
   const scale = denominator > 0 ? denominator : Math.max(summary.recognized_hours, summary.remaining_hours, 1)
+  const completion = summary.required_hours > 0
+    ? Math.min(1, Math.max(0, summary.recognized_hours / summary.required_hours))
+    : 1
+  const progressPercent = summary.required_hours > 0 ? completion * 100 : null
+  const showProgressScale = size === 'full' && progressPercent !== null && !needsReview(summary)
+  const progressHue = completion * 120
   const segments = [
     ['counted', summary.counted_hours],
     ['credited', summary.credited_hours],
     ['carryover', summary.carryover_hours],
     ['remaining', summary.unmet_required_hours],
   ] as const
-  const ariaLabel = accessibleSummary(summary)
-  return <div
-    className={`training-hours-track training-hours-track--${size}${needsReview(summary) ? ' is-review' : ''}${summary.over_limit ? ' is-over-limit' : ''}`}
+  const ariaLabel = `${accessibleSummary(summary)}${progressPercent === null ? '' : `, 달성률 ${progressPercent.toFixed(1)}%`}`
+  const track = <div
+    className={`training-hours-track training-hours-track--${size}${needsReview(summary) ? ' is-review' : ''}${summary.training_status === '훈련 미이수' ? ' is-incomplete' : ''}${summary.over_limit ? ' is-over-limit' : ''}${showProgressScale ? ' is-progress-scale' : ''}`}
+    style={{
+      '--training-progress-hue': `${progressHue}deg`,
+      ...(progressPercent === null ? {} : { '--training-progress-percent': `${progressPercent}%` }),
+    } as CSSProperties}
     role="img"
     aria-label={ariaLabel}
   >
-    {needsReview(summary) ? <span className="training-hours-review-fill" /> : <>
-      {segments.map(([kind, hours]) => hours > 0 && <span
-        key={kind}
-        className={`training-hours-segment training-hours-segment--${kind}`}
-        style={{ width: `${hours / scale * 100}%` }}
-      />)}
-      {summary.over_limit && <span className="training-hours-overflow" aria-hidden="true">초과</span>}
-    </>}
+    {needsReview(summary) ? <span className="training-hours-review-fill" /> : showProgressScale
+      ? <span className="training-hours-progress-marker" aria-hidden="true" />
+      : <>
+        {segments.map(([kind, hours]) => hours > 0 && <span
+          key={kind}
+          className={`training-hours-segment training-hours-segment--${kind}`}
+          style={{ width: `${hours / scale * 100}%` }}
+        />)}
+        {summary.over_limit && <span className="training-hours-overflow" aria-hidden="true">초과</span>}
+      </>}
   </div>
+  const visual = showProgressScale
+    ? <div className={`training-hours-scale${progressPercent === 0 ? ' is-start' : ''}${progressPercent === 100 ? ' is-end' : ''}`}>
+      {track}
+      <span className="training-hours-percent" style={{ left: `${progressPercent}%` }}>{progressPercent.toFixed(1)}%</span>
+    </div>
+    : track
+  return visual
 }
 
 function StatusChip({ summary, statusLabel }: Pick<Props, 'summary' | 'statusLabel'>) {
