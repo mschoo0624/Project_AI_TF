@@ -16,7 +16,8 @@ def test_review_only_fields_are_read_from_layout_not_sent_to_model():
     result = ex.extract_application(path, 'postponement.illness', client=client)
     direct = {'onset_date', 'medical_institution', 'doctor_name', 'doctor_license', 'doctor_kind'}
     assert not (direct & requested)
-    assert len(requested) == 9
+    assert len(requested) == 9  # The explicit document title is resolved without a model call.
+    assert result['fields']['document_title']['value'] == '진단서'
     assert result['fields']['onset_date']['value'] == '2026-04-16'
     assert '비호정형외과의원' == ''.join(result['fields']['medical_institution']['value'].split())
     assert result['fields']['doctor_name']['value'] == '한의사'

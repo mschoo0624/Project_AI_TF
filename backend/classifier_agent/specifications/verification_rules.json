@@ -1,5 +1,5 @@
 {
-  "version": "1.4.1",
+  "version": "1.4.2",
   "basis": "provided_pdf",
   "common": [
     {
@@ -2626,13 +2626,12 @@
           ]
         },
         {
-          "id": "eligibility",
-          "label": "보류/연기 사유 포함 여부",
+          "id": "document_type",
+          "label": "증빙서류 종류 확인",
           "fields": [
-            "diagnosis",
-            "secondary_diagnosis",
-            "treatment_opinion"
-          ]
+            "document_title"
+          ],
+          "description": "의사 진단서가 제출되었는지 확인하세요. 질병 내용과 훈련 일정은 별도 항목에서 확인합니다."
         },
         {
           "id": "issuer",
@@ -3058,13 +3057,12 @@
           ]
         },
         {
-          "id": "eligibility",
-          "label": "보류/연기 사유 포함 여부",
+          "id": "document_type",
+          "label": "증빙서류 종류 확인",
           "fields": [
-            "diagnosis",
-            "secondary_diagnosis",
-            "treatment_opinion"
-          ]
+            "document_title"
+          ],
+          "description": "신청 유형에 필요한 증빙서류인지 확인하세요. 병역의무 변경은 공적 병역 이력 자료도 확인해야 합니다."
         },
         {
           "id": "issuer",
@@ -5400,13 +5398,12 @@
           ]
         },
         {
-          "id": "eligibility",
-          "label": "보류/연기 사유 포함 여부",
+          "id": "document_type",
+          "label": "증빙서류 종류 확인",
           "fields": [
-            "diagnosis",
-            "secondary_diagnosis",
-            "treatment_opinion"
-          ]
+            "document_title"
+          ],
+          "description": "의사 진단서가 제출되었는지 확인하세요. 질병 내용과 훈련 일정은 별도 항목에서 확인합니다."
         },
         {
           "id": "issuer",

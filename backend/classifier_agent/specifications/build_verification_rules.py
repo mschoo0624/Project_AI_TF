@@ -244,7 +244,7 @@ def build():
         eq('context.medical_service_history_confirmed', True,
            '공적 병역 이력 확인: 현역→보충역 복무 후 예비군, 간부 심신장애 1~9급 전역, 정신과 4급 이력 중 해당 요건 및 관련 공문 확인'), coverage='partial')
 
-    result = {'version': '1.4.1', 'basis': 'provided_pdf', 'common': [
+    result = {'version': '1.4.2', 'basis': 'provided_pdf', 'common': [
         group('identity', '신청자와 증빙 대상자 일치', 'all',
               leaf('name_match', '성명 대조', 'equal_fields', ['subject_name', 'context.applicant_name']),
               group('identity_number', '군번 또는 생년월일 대조', 'any',
@@ -269,7 +269,8 @@ def build():
     for kind in ('postponement.illness', 'policy.long_illness', 'policy.medical_service_change'):
         types[kind]['review_items'] = [
             dict(id='identity', label='본인확인', fields=['subject_name', 'subject_birth_date'], person_fields=['name', 'military_number']),
-            dict(id='eligibility', label='보류/연기 사유 포함 여부', fields=['diagnosis', 'secondary_diagnosis', 'treatment_opinion']),
+            dict(id='document_type', label='증빙서류 종류 확인', fields=['document_title'],
+                 description='신청 유형에 필요한 증빙서류인지 확인하세요. 병역의무 변경은 공적 병역 이력 자료도 확인해야 합니다.' if kind == 'policy.medical_service_change' else '의사 진단서가 제출되었는지 확인하세요. 질병 내용과 훈련 일정은 별도 항목에서 확인합니다.'),
             dict(id='issuer', label='발급주체 확인', fields=['medical_institution', 'doctor_name', 'doctor_license', 'doctor_kind']),
             dict(id='injury', label='부상·질병 내용', fields=['diagnosis', 'secondary_diagnosis', 'treatment_opinion']),
             dict(id='dates', label='발병 시기와 훈련 날짜', fields=['onset_date'] + (['diagnosis_date', 'admission_date', 'discharge_date'] if kind == 'postponement.illness' else []), context_fields=['training_start', 'training_end']),

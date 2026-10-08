@@ -5,7 +5,7 @@ function Condition({ check }: { check: Check }) {
   return <li className={check.required_for_result === false ? 'review-condition-optional' : ''}>
     <strong>{check.label}</strong> <span className={`review-check-${check.status}`}>{labels[check.status]}</span>
     {check.required_for_result === false && <small> · 다른 대체 요건 충족</small>}
-    {check.message && check.message !== check.label && <p>{check.message}</p>}
+    {check.message && check.message !== check.label && !(check.id === 'birth_information_link' && check.status === 'pass') && <p>{check.message}</p>}
     {check.evidence?.map((proof, i) => <p key={i} className="review-proof">{proof.page ? `${proof.page}쪽 · ` : ''}{proof.quote ?? proof.source}</p>)}
     {check.children && <ul>{check.children.map((child, i) => <Condition key={`${child.id}-${i}`} check={child} />)}</ul>}
   </li>
