@@ -26,6 +26,36 @@ def context(**kwargs):
     return {k: {'value': v, 'source': 'synthetic test fixture'} for k, v in (base | kwargs).items()}
 
 
+@pytest.mark.parametrize('number,expected', [
+    ('010203-3******', '2001-02-03'), ('010203-*******', '??01-02-03'),
+    ('010203', '??01-02-03'), ('000229-*******', '??00-02-29'),
+])
+def test_resident_number_links_birth_without_inventing_century(number, expected):
+    doc = document('postponement.exam', {'patient_resident_number': number})
+    evaluation = Evaluation([doc], context(applicant_birth_date='2001-02-03'))
+    value, state, proof = evaluation.read('subject_birth_date')
+    assert (value, state) == (expected, 'pass')
+    assert proof and doc['fields']['patient_resident_number']['value'] == number
+    if number.startswith('010203'):
+        check = evaluation.evaluate(dict(id='birth', label='생년월일', op='equal_fields', fields=['subject_birth_date', 'context.applicant_birth_date']))
+        assert check['status'] == 'pass'
+
+
+def test_birth_link_keeps_both_proofs_and_warns_on_disagreement():
+    doc = document('postponement.exam', {'subject_birth_date': '2001-02-03', 'patient_resident_number': '010203-*******'})
+    value, state, proof = Evaluation([doc], {}).read('subject_birth_date')
+    assert (value, state, len(proof)) == ('2001-02-03', 'pass', 2)
+    conflict = document('postponement.exam', {'subject_birth_date': '2001-02-04', 'patient_resident_number': '010203-*******'})
+    check = next(c for c in verify_application([conflict], context())['checks'] if c['id'] == 'birth_information_link')
+    assert check['status'] == 'review' and len(check['evidence']) == 2
+    assert '불일치' in check['message']
+
+
+@pytest.mark.parametrize('number', ['011332', '010230-*******', '010203-abc'])
+def test_invalid_resident_birth_needs_review(number):
+    assert Evaluation([document('postponement.exam', {'patient_resident_number': number})], {}).read('subject_birth_date')[1] == 'review'
+
+
 def illness(**kwargs):
     return document('postponement.illness', {
         'subject_name': '홍길동', 'subject_service_number': '22-1', 'document_title': '입원확인서',
@@ -74,7 +104,7 @@ def test_death_has_no_caregiver_requirement():
 
 def test_counts_missing_and_limit():
     doc = document('postponement.exam', {'subject_name': '홍길동', 'subject_service_number': '22-1',
-        'exam_name': '기사시험', 'registration_date': '2026-05-01', 'exam_end': '2026-05-10'})
+        'exam_name': '기사시험', 'registration_date': '2026-05-01', 'exam_date': '2026-05-10'})
     assert verify_application([doc], context(exam_document_confirmed=True, exam_lifetime_count=5))['result'] == 'sufficient'
     assert verify_application([doc], context(exam_document_confirmed=True, exam_lifetime_count=6))['result'] == 'not_met'
     assert verify_application([doc], context(exam_document_confirmed=True))['result'] == 'insufficient'

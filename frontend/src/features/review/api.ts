@@ -66,6 +66,7 @@ export type Bootstrap = {
   verify_reasons: ReasonOption[]
   people: Person[]
   queue: QueueItem[]
+  completed: QueueItem[]
 }
 
 export function reviewReason(item: QueueItem): string {
@@ -113,12 +114,14 @@ export async function fetchBootstrap(signal?: AbortSignal): Promise<Bootstrap> {
       reasons: approved.map(r => `승인된 신청: ${r.reason}`), alerts: approved.length ? ['승인 기록 기준입니다. 실제 적용 기간과 훈련 범위를 확인하세요.'] : [],
       pending_count: docs.filter(s => s.status === 'pending').length, documents: docs.map(toDocument) }
   })
-  const queue: QueueItem[] = submissions.filter(s => s.status === 'pending').map(s => ({ ...toDocument(s), submission: s,
+  const documents: QueueItem[] = submissions.map(s => ({ ...toDocument(s), submission: s,
     person_id: s.military_number || '대상자 미연결', person_name: byId.get(s.military_number)?.name ?? (s.applicant_name || '성명 미확인'),
     occupation: byId.get(s.military_number)?.position ?? null, waiting_days: Math.max(0, Math.floor((Date.now() - Date.parse(s.created_at)) / 86400000)),
     current_classification: people.find(p => p.person_id === s.military_number)?.classification ?? '일반',
     if_accepted_classification: classification(s.application_type), application_date: s.created_at }))
-  return { as_of: new Date().toISOString(), training_date: '—', people, queue,
+  const queue = documents.filter(item => item.submission.status === 'pending')
+  const completed = documents.filter(item => item.submission.status === 'approved' || item.submission.status === 'declined')
+  return { as_of: new Date().toISOString(), training_date: '—', people, queue, completed,
     reject_reasons: [{ code: 'INSUFFICIENT', label: '근거 자료 부족', can_resubmit: true, message: '필요한 증빙 자료를 보완해 주세요.' }, { code: 'NOT_MET', label: '요건 불충족', can_resubmit: false }, { code: 'OTHER', label: '기타', can_resubmit: true }],
     verify_reasons: [{ code: 'DOCUMENT', label: '발급기관·문서 진위 확인' }, { code: 'EVIDENCE', label: '추가 근거 확인' }, { code: 'OTHER', label: '기타' }] }
 }

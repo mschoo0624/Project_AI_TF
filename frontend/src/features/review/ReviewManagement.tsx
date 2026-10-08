@@ -142,7 +142,10 @@ function RosterView({ people, onSelect }: { people: Person[]; onSelect: (person:
   </section>
 }
 
-function InboxView({ queue, onOpenAnalysis }: { queue: QueueItem[]; onOpenAnalysis: (id: string) => void }) {
+function InboxView({ queue, completed, onOpenAnalysis }: { queue: QueueItem[]; completed: QueueItem[]; onOpenAnalysis: (id: string) => void }) {
+  const [view, setView] = useState<'pending' | 'completed'>('pending')
+  const source = view === 'pending' ? queue : completed
+  const listTitle = view === 'pending' ? '검토 대상자 목록' : '처리 완료 문서'
   const [items, setItems] = useState<QueuedRow[]>(() => queue.map(item => ({ ...item, done: null })))
   const [selectedId, setSelectedId] = useState<string | null>(queue[0]?.id ?? null)
   const [search, setSearch] = useState('')
@@ -151,9 +154,9 @@ function InboxView({ queue, onOpenAnalysis }: { queue: QueueItem[]; onOpenAnalys
   const [showReview, setShowReview] = useState(false)
   const [highlights, setHighlights] = useState<Proof[]>([])
   useEffect(() => {
-    setItems(previous => queue.map(item => ({ ...item, done: previous.find(row => row.id === item.id)?.done ?? null })))
-    setSelectedId(current => queue.some(item => item.id === current) ? current : queue[0]?.id ?? null)
-  }, [queue])
+    setItems(previous => source.map(item => ({ ...item, done: previous.find(row => row.id === item.id)?.done ?? null })))
+    setSelectedId(current => source.some(item => item.id === current) ? current : source[0]?.id ?? null)
+  }, [source])
   const pageSize = 20
   const selected = items.find(item => item.id === selectedId) ?? null
   const filtered = useMemo(() => {
@@ -169,17 +172,26 @@ function InboxView({ queue, onOpenAnalysis }: { queue: QueueItem[]; onOpenAnalys
     if (!selectedId) return
     setItems(prev => prev.map(item => item.id === selectedId ? { ...item, done: label } : item))
     const next = items.find(item => item.id !== selectedId && !item.done)
-    window.setTimeout(() => setSelectedId(next?.id ?? null), 700)
+    setSelectedId(next?.id ?? null)
     void message
     void changed
   }
   const chooseRow = (id: string) => { setSelectedId(id); setShowReview(true); setHighlights([]) }
+  const changeView = (next: 'pending' | 'completed') => {
+    if (next === view) return
+    const rows = next === 'pending' ? queue : completed
+    setView(next); setItems(rows.map(item => ({ ...item, done: null })))
+    setSelectedId(rows[0]?.id ?? null); setCheckedIds([]); setPage(1); setHighlights([])
+  }
 
   return <div className="review-inbox-grid">
-    <section className="review-list-panel" aria-label="검토 대상자 목록">
+    <section className="review-list-panel" aria-label={listTitle}>
       <header className="review-list-title">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="3" width="19" height="18" rx="1.5"/><path d="M3 16h5l2 3h4l2-3h5"/></svg>
-        <h2>검토 대상자 목록</h2>
+        <div className="review-inbox-tabs" role="tablist" aria-label="문서 처리 상태">
+          <button type="button" role="tab" aria-selected={view === 'pending'} onClick={() => changeView('pending')}>검토 대상자 목록</button>
+          <button type="button" role="tab" aria-selected={view === 'completed'} onClick={() => changeView('completed')}>처리 완료 문서</button>
+        </div>
       </header>
       <label className="review-search-box">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><circle cx="10.8" cy="10.8" r="6.2"/><path d="m15.7 15.7 4.5 4.5"/></svg>
@@ -200,7 +212,7 @@ function InboxView({ queue, onOpenAnalysis }: { queue: QueueItem[]; onOpenAnalys
           <td title={reviewReason(item)}>{reviewReason(item)}</td>
           <td title={applicationDate(item)}>{applicationDate(item)}</td>
         </tr>)}</tbody>
-      </table>{!pageRows.length && <p className="review-empty-state">{items.length ? '검색 결과가 없습니다.' : '검토 대기 중인 서류가 없습니다.'}</p>}</div>
+      </table>{!pageRows.length && <p className="review-empty-state">{items.length ? '검색 결과가 없습니다.' : view === 'pending' ? '검토 대기 중인 서류가 없습니다.' : '처리 완료된 서류가 없습니다.'}</p>}</div>
       <footer className="review-list-footer"><span>전체 {filtered.length}명{checkedIds.length ? ` · 선택 ${checkedIds.length}명` : ''}</span>
         <nav aria-label="검토 목록 페이지"><button type="button" aria-label="이전 페이지" disabled={currentPage === 1} onClick={() => setPage(current => current - 1)}>‹</button>
           <span className="review-page-number">{currentPage}</span>
@@ -212,15 +224,19 @@ function InboxView({ queue, onOpenAnalysis }: { queue: QueueItem[]; onOpenAnalys
       {selected?.file_path ? <EvidencePdf key={selected.id} item={selected.submission} highlights={highlights} /> :
         <div className="review-pdf-empty">{selected ? '이 서류에는 PDF 경로가 등록되어 있지 않습니다.' : '왼쪽에서 서류를 선택하세요.'}</div>}
     </section>
-    <aside className="review-confirm-panel" aria-label="검토 대상자 확인">
+    <aside className="review-confirm-panel" aria-label={view === 'pending' ? '검토 대상자 확인' : '검토결과'}>
       <button type="button" className="review-confirm-title" aria-expanded={showReview} onClick={() => setShowReview(current => !current)}>
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M6 2.5h8l5 5V21H6z"/><path d="M14 2.5V8h5M9 14l2 2 4-5"/></svg>
-        <span>검토대상자확인</span><small>{showReview ? '접기 ▲' : '펼치기 ▼'}</small>
+        <span>{view === 'pending' ? '검토대상자확인' : '검토결과'}</span><small>{showReview ? '접기 ▲' : '펼치기 ▼'}</small>
       </button>
-      {showReview && (selected ? <EvidenceReviewPanel key={selected.id} submission={selected.submission} onHighlight={setHighlights} onDone={onDone} onOpenAnalysis={onOpenAnalysis} /> :
-        <p className="review-empty-state">검토 대기 서류가 없습니다.</p>)}
+      {showReview && (selected ? view === 'completed' ? <div className="review-decision-result">
+        <strong className={selected.submission.status}>{selected.status}</strong>
+        {selected.reviewed_at && <p>처리 일시: {formatApprovalTime(selected.reviewed_at)} (한국시간)</p>}
+        {selected.submission.note && <p>{selected.submission.note}</p>}
+      </div> : <EvidenceReviewPanel key={selected.id} submission={selected.submission} onHighlight={setHighlights} onDone={onDone} onOpenAnalysis={onOpenAnalysis} /> :
+        <p className="review-empty-state">서류를 선택하세요.</p>)}
     </aside>
-    <span className="review-visually-hidden" aria-live="polite">검토 대기 {left}건</span>
+    <span className="review-visually-hidden" aria-live="polite">{listTitle} {view === 'pending' ? left : items.length}건</span>
   </div>
 }
 
@@ -248,7 +264,7 @@ export default function ReviewManagement() {
   return <div className="review-management">
     <Tabs tab={tab} setTab={setTab} />
     <main className="review-main-content">
-      {tab === 'ai' ? <PostponementModule initialSelectedId={analysisId} /> : error ? <div role="alert" className="review-load-error"><strong>데이터를 불러오지 못했습니다</strong><p>{error}</p><button type="button" onClick={() => setRevision(value => value + 1)}>다시 불러오기</button></div> : !data ? <div className="review-loading">불러오는 중…</div> : tab === 'roster' ? <RosterView people={data.people} onSelect={setSelectedPerson} /> : <InboxView queue={data.queue} onOpenAnalysis={id => { setAnalysisId(id); setTab('ai') }} />}
+      {tab === 'ai' ? <PostponementModule initialSelectedId={analysisId} /> : error ? <div role="alert" className="review-load-error"><strong>데이터를 불러오지 못했습니다</strong><p>{error}</p><button type="button" onClick={() => setRevision(value => value + 1)}>다시 불러오기</button></div> : !data ? <div className="review-loading">불러오는 중…</div> : tab === 'roster' ? <RosterView people={data.people} onSelect={setSelectedPerson} /> : <InboxView queue={data.queue} completed={data.completed} onOpenAnalysis={id => { setAnalysisId(id); setTab('ai') }} />}
     </main>
     {selectedPerson && <PersonDetail person={selectedPerson} onClose={() => setSelectedPerson(null)} />}
   </div>

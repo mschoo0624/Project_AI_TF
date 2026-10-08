@@ -44,15 +44,20 @@ def test_every_type_extracts_exactly_rule_references():
     used = set()
     for kind in types:
         required = ex.rule_fields(rules['types'][kind].get('common', rules['common'])) | ex.rule_fields(rules['types'][kind]['checks']) | ex.rule_fields(rules['types'][kind].get('review_items', []))
+        required = ex.extraction_dependencies(required, common)
         selected = ex.selected_fields(kind)[1]
         assert set(selected) == required, kind
         assert not any(k.startswith('context.') for k in selected)
         used.update(required)
     assert set(common['fields']) == used
     assert all(set(keys) <= used for keys in common['field_groups'].values())
-    assert len(ex.selected_fields('postponement.illness')[1]) == 13
-    assert sum(f.get('extraction') != 'layout' for f in ex.selected_fields('postponement.illness')[1].values()) == 8
-    assert len(ex.selected_fields('postponement.exam')[1]) == 10
+    assert len(ex.selected_fields('postponement.illness')[1]) == 14
+    assert sum(f.get('extraction') != 'layout' for f in ex.selected_fields('postponement.illness')[1].values()) == 9
+    exam = ex.selected_fields('postponement.exam')[1]
+    assert len(exam) == 8
+    assert 'exam_date' in exam
+    assert not {'exam_end', 'previous_stage_result', 'result_date', 'next_stage_date'} & exam.keys()
+    assert all('patient_resident_number' in ex.selected_fields(kind)[1] for kind in types)
     assert 'treatment_duration' not in ex.selected_fields('postponement.illness')[1]
     assert 'treatment_opinion' in ex.selected_fields('policy.long_illness')[1]
 

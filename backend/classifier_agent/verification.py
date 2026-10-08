@@ -26,6 +26,26 @@ def _same(a, b):
     return type(a) is type(b) and a == b
 
 
+def _birth_matches(a, b):
+    # A masked century can establish YY/MM/DD agreement, never a full identity.
+    if isinstance(a, str) and isinstance(b, str) and (a.startswith('??') or b.startswith('??')):
+        return a[2:] == b[2:]
+    return _same(a, b)
+
+
+def _resident_birth(value):
+    match = re.fullmatch(r'(\d{2})(\d{2})(\d{2})(?:-?([0-9*xX●•○ㅇ?＿_＊]{1,7}))?', re.sub(r'\s', '', str(value)))
+    if not match:
+        raise ValueError('주민등록번호 형식 확인 필요')
+    yy, mm, dd, suffix = match.groups()
+    century = {'1': 1900, '2': 1900, '3': 2000, '4': 2000, '5': 1900, '6': 1900, '7': 2000, '8': 2000, '9': 1800, '0': 1800}.get((suffix or '')[:1])
+    if century is not None:
+        return date(century + int(yy), int(mm), int(dd)).isoformat()
+    # Validate calendar components without arbitrarily choosing a century.
+    date(2000 + int(yy), int(mm), int(dd))
+    return f'??{yy}-{mm}-{dd}'
+
+
 def _duration_days(value, rule):
     """Read an unambiguous duration using the pattern and units in the rule."""
     if not isinstance(value, str):
@@ -64,6 +84,28 @@ class Evaluation:
         self.definitions = catalog()[0]['fields']
 
     def read(self, key):
+        spec = self.definitions.get(key, {})
+        if spec.get('link_method') == 'resident_birth_date':
+            direct, state, evidence = self.read_raw(key)
+            values = [direct] if state == 'pass' else []
+            invalid = state == 'review'
+            for source in spec['source_fields']:
+                raw, source_state, proof = self.read_raw(source)
+                evidence.extend(proof)
+                invalid |= source_state == 'review'
+                if source_state == 'pass':
+                    try:
+                        values.append(_resident_birth(raw))
+                    except ValueError:
+                        invalid = True
+            if invalid or any(not _birth_matches(a, b) for a in values for b in values):
+                return None, 'review', evidence
+            if not values:
+                return None, 'missing', evidence
+            return next((v for v in values if not v.startswith('??')), values[0]), 'pass', evidence
+        return self.read_raw(key)
+
+    def read_raw(self, key):
         if key.startswith('context.'):
             entry = self.context.get(key[8:])
             if entry is None:
@@ -142,7 +184,9 @@ class Evaluation:
         try:
             passed = None
             if op == 'present': passed = True
-            elif op == 'equal_fields': passed = _same(values[0], values[1])
+            elif op == 'equal_fields':
+                compare = _birth_matches if any(self.definitions.get(k, {}).get('link_method') == 'resident_birth_date' for k in rule['fields']) else _same
+                passed = compare(values[0], values[1])
             elif op == 'equals':
                 if type(values[0]) is type(rule['value']): passed = values[0] == rule['value']
             elif op == 'enum':
@@ -211,6 +255,13 @@ def verify_application(documents, context=None):
     entry = config['types'][kind]
     evaluator = Evaluation(documents, context or {})
     checks = [evaluator.evaluate(r) for r in entry.get('common', config['common']) + entry['checks']]
+    birth, birth_state, birth_proof = evaluator.read('subject_birth_date')
+    if birth_proof:
+        checks.append({'id': 'birth_information_link', 'label': '생년월일·주민등록번호 정보 연결',
+                       'status': birth_state, 'values': {'subject_birth_date': birth}, 'evidence': birth_proof,
+                       'required_fields': ['subject_birth_date'],
+                       'message': '생년월일과 주민등록번호상 날짜가 불일치하거나 근거가 유효하지 않습니다. 원본을 확인하세요.' if birth_state == 'review' else
+                                  '주민번호 앞 6자리로 연·월·일을 대조합니다. 출생 세기는 미확인입니다.' if str(birth).startswith('??') else '생년월일과 주민등록번호 근거를 연결했습니다.'})
     for document in documents:
         for issue in document.get('consistency_issues', []):
             checks.append({**issue, 'status': 'review', 'required_fields': []})
@@ -219,7 +270,8 @@ def verify_application(documents, context=None):
                                ('subject_birth_date', 'context.applicant_birth_date')]:
         left, ls, _ = evaluator.read(field)
         right, rs, _ = evaluator.read(context_key)
-        if ls == rs == 'pass' and not _same(left, right):
+        matches = _birth_matches(left, right) if field == 'subject_birth_date' else _same(left, right)
+        if ls == rs == 'pass' and not matches:
             checks.append({'id': 'identity_mismatch', 'label': '본인 식별정보 불일치', 'status': 'fail',
                            'message': '다른 식별항목이 일치해도 명시적 불일치를 무시하지 않습니다.',
                            'required_fields': [field, context_key], 'evidence': []})

@@ -54,6 +54,7 @@ def selected_fields(application_type):
     rules = json.loads((BASE / 'verification_rules.json').read_text(encoding='utf-8'))
     entry = rules['types'][application_type]
     needed = rule_fields(entry.get('common', rules['common'])) | rule_fields(entry['checks']) | rule_fields(entry.get('review_items', []))
+    needed = extraction_dependencies(needed, common)
     unknown = needed - common['fields'].keys()
     if unknown:
         raise ValueError('검증 규칙의 추출 항목 정의가 없습니다: ' + ', '.join(sorted(unknown)))
@@ -68,6 +69,16 @@ def rule_fields(value):
     if isinstance(value, dict):
         return {k for k in value.get('fields', []) + value.get('supporting_fields', []) if not k.startswith('context.')} | rule_fields(value.get('children', []))
     return set()
+
+
+def extraction_dependencies(needed, common):
+    """Keep alternative evidence even when only the canonical field is in rules."""
+    needed = set(needed)
+    while True:
+        expanded = needed | {source for key in needed for source in common['fields'].get(key, {}).get('source_fields', [])}
+        if expanded == needed:
+            return needed
+        needed = expanded
 
 
 def ask_qwen(messages):
@@ -205,8 +216,7 @@ def validate_role(key, result, allowed):
         error = 'field_role_not_supported'
     roles = {'registration_date': r'접수|등록일|신청일',
              'treatment_start': r'치료\s*(?:시작|개시)|치료기간|가료기간',
-             'treatment_end': r'치료\s*(?:종료|완료)|치료기간|가료기간',
-             'next_stage_date': r'다음|차기|차회|후속'}
+             'treatment_end': r'치료\s*(?:종료|완료)|치료기간|가료기간'}
     if key in roles and not any(re.search(roles[key], text) for text in contexts):
         error = 'date_role_not_supported'
     if key == 'treatment_duration':

@@ -1,5 +1,5 @@
 {
-  "version": "1.3.0",
+  "version": "1.4.1",
   "basis": "provided_pdf",
   "common": [
     {
@@ -2583,7 +2583,7 @@
               ],
               "value": true,
               "supporting_fields": [
-                "patient_resident_number"
+                "subject_birth_date"
               ]
             }
           ]
@@ -2618,7 +2618,7 @@
           "label": "본인확인",
           "fields": [
             "subject_name",
-            "patient_resident_number"
+            "subject_birth_date"
           ],
           "person_fields": [
             "name",
@@ -3015,7 +3015,7 @@
               ],
               "value": true,
               "supporting_fields": [
-                "patient_resident_number"
+                "subject_birth_date"
               ]
             }
           ]
@@ -3050,7 +3050,7 @@
           "label": "본인확인",
           "fields": [
             "subject_name",
-            "patient_resident_number"
+            "subject_birth_date"
           ],
           "person_fields": [
             "name",
@@ -5357,7 +5357,7 @@
               ],
               "value": true,
               "supporting_fields": [
-                "patient_resident_number"
+                "subject_birth_date"
               ]
             }
           ]
@@ -5392,7 +5392,7 @@
           "label": "본인확인",
           "fields": [
             "subject_name",
-            "patient_resident_number"
+            "subject_birth_date"
           ],
           "person_fields": [
             "name",
@@ -5896,20 +5896,17 @@
               "op": "overlap",
               "fields": [
                 "registration_date",
-                "exam_end",
+                "exam_date",
                 "context.training_start",
                 "context.training_end"
               ]
             },
             {
               "id": "multi_stage_exam",
-              "label": "다단계 시험 합격/발표 대기 및 최초 부과일 기준 다음 시험 6개월 제한 확인",
+              "label": "다단계 시험 합격/발표 대기 및 최초 부과일 기준 다음 시험 6개월 제한은 담당자가 원본으로 확인",
               "op": "manual",
               "fields": [
-                "exam_stage",
-                "previous_stage_result",
-                "result_date",
-                "next_stage_date"
+                "exam_stage"
               ]
             }
           ]
@@ -5956,13 +5953,10 @@
           "id": "eligibility",
           "label": "보류/연기 사유 포함 여부",
           "fields": [
-            "exam_end",
+            "exam_date",
             "exam_name",
             "exam_stage",
-            "next_stage_date",
-            "previous_stage_result",
-            "registration_date",
-            "result_date"
+            "registration_date"
           ],
           "context_fields": []
         },

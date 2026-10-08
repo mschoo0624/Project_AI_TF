@@ -68,6 +68,10 @@
       "nullable": true
     },
     "subject_birth_date": {
+      "source_fields": [
+        "patient_resident_number"
+      ],
+      "link_method": "resident_birth_date",
       "label": "대상자 생년월일",
       "type": "date",
       "instruction": "대상자 생년월일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
@@ -367,34 +371,16 @@
       "instruction": "접수일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
-    "exam_end": {
-      "label": "시험 종료일",
+    "exam_date": {
+      "label": "시험일",
       "type": "date",
-      "instruction": "시험 종료일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
+      "instruction": "응시할 시험일을 문서에서 근거와 함께 추출한다. 접수일·발표일·발급일과 구분한다. 여러 시험일 중 하나로 특정할 수 없으면 null로 하고 근거를 모두 남긴다.",
       "nullable": true
     },
     "exam_stage": {
       "label": "응시 단계",
       "type": "string",
       "instruction": "응시 단계을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "previous_stage_result": {
-      "label": "이전 단계 결과",
-      "type": "string",
-      "instruction": "이전 단계 결과을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "result_date": {
-      "label": "결과 발표일",
-      "type": "date",
-      "instruction": "결과 발표일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
-      "nullable": true
-    },
-    "next_stage_date": {
-      "label": "다음 단계 시험일",
-      "type": "date",
-      "instruction": "다음 단계 시험일을 문서에서 근거와 함께 추출한다. 명시되지 않았거나 특정할 수 없으면 null.",
       "nullable": true
     },
     "disaster_kind": {
@@ -554,9 +540,9 @@
       "instruction": "가구주 또는 가장 지위을 원문 근거와 함께 추출한다. 없으면 null."
     },
     "patient_resident_number": {
-      "label": "환자의 주민등록번호",
+      "label": "대상자 주민등록번호",
       "type": "string",
-      "instruction": "환자의 주민등록번호를 기재된 그대로 추출. 가림 처리를 복원하거나 생년월일로 변환하지 않는다.",
+      "instruction": "신청 대상자(환자)의 주민등록번호를 기재된 그대로 추출. 앞 6자리만 있거나 뒷자리가 가려져 있어도 추출한다. 다른 사람의 번호는 제외한다. 가림 처리를 복원하거나 생년월일로 변환하지 않는다.",
       "nullable": true,
       "literal": true
     },
@@ -668,11 +654,8 @@
     "exam": [
       "exam_name",
       "registration_date",
-      "exam_end",
-      "exam_stage",
-      "previous_stage_result",
-      "result_date",
-      "next_stage_date"
+      "exam_date",
+      "exam_stage"
     ],
     "disaster": [
       "disaster_kind",

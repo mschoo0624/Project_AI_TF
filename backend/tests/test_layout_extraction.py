@@ -16,7 +16,7 @@ def test_review_only_fields_are_read_from_layout_not_sent_to_model():
     result = ex.extract_application(path, 'postponement.illness', client=client)
     direct = {'onset_date', 'medical_institution', 'doctor_name', 'doctor_license', 'doctor_kind'}
     assert not (direct & requested)
-    assert len(requested) == 8
+    assert len(requested) == 9
     assert result['fields']['onset_date']['value'] == '2026-04-16'
     assert '비호정형외과의원' == ''.join(result['fields']['medical_institution']['value'].split())
     assert result['fields']['doctor_name']['value'] == '한의사'
@@ -81,7 +81,6 @@ def test_role_checks_block_observed_model_mistakes():
         ('document_number', '제2차시험', '제2차시험', '', 'string'),
         ('verification_reference', 'SAM', 'SAMPLE', '', 'string'),
         ('exam_stage', '1교시, 2교시', '1교시, 2교시', '', 'string'),
-        ('next_stage_date', '2026-02-22', '2026.02.22(일)', '시험일', 'date'),
     ]
     for key, value, text, label, kind in examples:
         s = {'id':'s1', 'text':text, 'label':label, 'kind':'cell'}

@@ -77,6 +77,10 @@ function SubmissionDetails({ item, rules, definitions, refresh }: { item: Submis
   </section>
 }
 
+async function loadPendingSubmissions() {
+  return (await loadSubmissions()).filter(item => item.status === 'pending')
+}
+
 export default function PostponementModule({ initialSelectedId }: { initialSelectedId?: string | null }) {
   const [file, setFile] = useState<File | null>(null)
   const [militaryNumber, setMilitaryNumber] = useState('')
@@ -96,20 +100,23 @@ export default function PostponementModule({ initialSelectedId }: { initialSelec
   const fileInput = useRef<HTMLInputElement>(null)
   const selected = items.find(item => item.id === selectedId)
   const refresh = useCallback(async () => {
-    const [loaded, types, rules, definitions] = await Promise.all([loadSubmissions(), request<ApplicationType[]>(`${CLASSIFIER_BASE}/application-types`), request<RuleCatalog>(`${CLASSIFIER_BASE}/verification-rules`), request<FieldDefinitions>(`${CLASSIFIER_BASE}/field-definitions`)])
+    const [loaded, types, rules, definitions] = await Promise.all([loadPendingSubmissions(), request<ApplicationType[]>(`${CLASSIFIER_BASE}/application-types`), request<RuleCatalog>(`${CLASSIFIER_BASE}/verification-rules`), request<FieldDefinitions>(`${CLASSIFIER_BASE}/field-definitions`)])
     setItems(loaded); setTypes(types); setRules(rules); setDefinitions(definitions)
     setSelectedId(current => loaded.some(item => item.id === current) ? current : loaded[0]?.id ?? null)
   }, [])
   useEffect(() => {
     let active = true
     const timer = window.setInterval(() => {
-      loadSubmissions().then(loaded => { if (active) setItems(loaded) }).catch(() => { /* the next poll or manual refresh can recover */ })
+      loadPendingSubmissions().then(loaded => { if (active) {
+        setItems(loaded)
+        setSelectedId(current => loaded.some(item => item.id === current) ? current : loaded[0]?.id ?? null)
+      } }).catch(() => { /* the next poll or manual refresh can recover */ })
     }, 3000)
     return () => { active = false; window.clearInterval(timer) }
   }, [])
   useEffect(() => {
     let cancelled = false
-    Promise.all([loadSubmissions(), request<ApplicationType[]>(`${CLASSIFIER_BASE}/application-types`), request<RuleCatalog>(`${CLASSIFIER_BASE}/verification-rules`), request<FieldDefinitions>(`${CLASSIFIER_BASE}/field-definitions`)]).then(([submissions, types, rules, definitions]) => {
+    Promise.all([loadPendingSubmissions(), request<ApplicationType[]>(`${CLASSIFIER_BASE}/application-types`), request<RuleCatalog>(`${CLASSIFIER_BASE}/verification-rules`), request<FieldDefinitions>(`${CLASSIFIER_BASE}/field-definitions`)]).then(([submissions, types, rules, definitions]) => {
       if (cancelled) return
       setItems(submissions); setSelectedId(submissions.find(item => item.id === initialSelectedId)?.id ?? submissions[0]?.id ?? null); setTypes(types); setRules(rules); setDefinitions(definitions)
     }).catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : '연결 실패') }).finally(() => { if (!cancelled) setLoading(false) })

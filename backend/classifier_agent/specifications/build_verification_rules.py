@@ -3,6 +3,7 @@ import hashlib
 import json
 from pathlib import Path
 import pdfplumber
+from backend.classifier_agent.extraction import extraction_dependencies
 
 BASE = Path(__file__).parent
 
@@ -111,8 +112,8 @@ def build():
                 eq('context.immigration_records_confirmed', True, '공적 출입국 기록과 실제 체류기간 확인'),
                 manual('overseas_scope', '미귀국의 종료일·예정 출국의 사후 확인 및 훈련종류별 적용 범위 검토', ['travel_status']), coverage='partial')
     setrule('postponement.exam', present('exam_name', '응시 시험'),
-            group('exam_period', '일반 시험 또는 단계별 시험', 'any', overlap('registration_date', 'exam_end'),
-                  manual('multi_stage_exam', '다단계 시험 합격/발표 대기 및 최초 부과일 기준 다음 시험 6개월 제한 확인', ['exam_stage', 'previous_stage_result', 'result_date', 'next_stage_date'])),
+            group('exam_period', '일반 시험 또는 단계별 시험', 'any', overlap('registration_date', 'exam_date'),
+                  manual('multi_stage_exam', '다단계 시험 합격/발표 대기 및 최초 부과일 기준 다음 시험 6개월 제한은 담당자가 원본으로 확인', ['exam_stage'])),
             leaf('exam_limit', '병무청 포함 통산 시험 연기 6회 미만', 'less_than', ['context.exam_lifetime_count'], limit=6),
             eq('context.exam_document_confirmed', True, '시험일·응시 증빙 확인(필요 시 시행기관 조회)'), coverage='partial')
     setrule('postponement.distance_attendance',
@@ -243,7 +244,7 @@ def build():
         eq('context.medical_service_history_confirmed', True,
            '공적 병역 이력 확인: 현역→보충역 복무 후 예비군, 간부 심신장애 1~9급 전역, 정신과 4급 이력 중 해당 요건 및 관련 공문 확인'), coverage='partial')
 
-    result = {'version': '1.3.0', 'basis': 'provided_pdf', 'common': [
+    result = {'version': '1.4.1', 'basis': 'provided_pdf', 'common': [
         group('identity', '신청자와 증빙 대상자 일치', 'all',
               leaf('name_match', '성명 대조', 'equal_fields', ['subject_name', 'context.applicant_name']),
               group('identity_number', '군번 또는 생년월일 대조', 'any',
@@ -256,7 +257,7 @@ def build():
             group('identity', '환자와 신청자 본인 확인', 'all',
                   leaf('name_match', '환자 성명 대조', 'equal_fields', ['subject_name', 'context.applicant_name']),
                   leaf('patient_identity', '원본 신원 자료와 신청자 일치 확인', 'equals',
-                       ['context.patient_identity_confirmed'], value=True, supporting_fields=['patient_resident_number'])),
+                       ['context.patient_identity_confirmed'], value=True, supporting_fields=['subject_birth_date'])),
             {**result['common'][1], 'supporting_fields': ['diagnosis', 'secondary_diagnosis', 'treatment_opinion']},
             result['common'][2]]
     for kind, entry in types.items():
@@ -267,7 +268,7 @@ def build():
         ]
     for kind in ('postponement.illness', 'policy.long_illness', 'policy.medical_service_change'):
         types[kind]['review_items'] = [
-            dict(id='identity', label='본인확인', fields=['subject_name', 'patient_resident_number'], person_fields=['name', 'military_number']),
+            dict(id='identity', label='본인확인', fields=['subject_name', 'subject_birth_date'], person_fields=['name', 'military_number']),
             dict(id='eligibility', label='보류/연기 사유 포함 여부', fields=['diagnosis', 'secondary_diagnosis', 'treatment_opinion']),
             dict(id='issuer', label='발급주체 확인', fields=['medical_institution', 'doctor_name', 'doctor_license', 'doctor_kind']),
             dict(id='injury', label='부상·질병 내용', fields=['diagnosis', 'secondary_diagnosis', 'treatment_opinion']),
@@ -276,6 +277,7 @@ def build():
     used = set()
     for entry in types.values():
         used.update(references(entry.get('common', result['common']) + entry['checks'] + entry['review_items']))
+    used = extraction_dependencies(used, common)
     assert used <= common['fields'].keys(), used - common['fields'].keys()
     common['fields'] = {k: v for k, v in common['fields'].items() if k in used}
     common['field_groups'] = {k: [f for f in v if f in used] for k, v in common['field_groups'].items()}

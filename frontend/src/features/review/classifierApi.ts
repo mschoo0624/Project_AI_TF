@@ -6,7 +6,7 @@ export type ExtractedField = { value: string | boolean | number | null; status: 
 export type Extraction = { application_type: string; fields: Record<string, ExtractedField>; status?: string; pdf?: { pages: { number: number; width: number; height: number }[] } }
 export type ReviewItem = { id: string; label: string; fields: string[]; person_fields?: string[]; context_fields?: string[] }
 export type Citation = { table: number; page: number; item: string; provision: string; page_text: string; source_url: string }
-export type Check = { id: string; label: string; status: 'pass' | 'fail' | 'missing' | 'review'; message?: string; children?: Check[]; evidence?: Proof[]; required_for_result?: boolean }
+export type Check = { id: string; label: string; status: 'pass' | 'fail' | 'missing' | 'review'; message?: string; values?: Record<string, unknown>; children?: Check[]; evidence?: Proof[]; required_for_result?: boolean }
 export type Verification = { result: string; result_label: string; checks: Check[]; missing_information: string[]; related_provisions: Citation[] }
 export type Submission = {
   id: string; filename: string; saved_path: string; military_number: string; applicant_name: string;

@@ -54,10 +54,22 @@ export default function EvidenceReviewPanel({ submission, onHighlight, onDone, o
     })}>대상자 연결</button></div>}
     <p>각 근거를 원본과 대조한 뒤 직접 체크하세요. 항목에 마우스를 올리거나 초점을 두면 PDF의 근거 위치가 표시됩니다.</p>
     {item.review_items.map(entry => {
-      const proofs = entry.fields.flatMap(key => item.extraction.fields[key]?.evidence ?? [])
+      const birthLink = entry.fields.includes('subject_birth_date') ? item.verification?.checks.find(check => check.id === 'birth_information_link') : undefined
+      const fields = entry.fields.includes('subject_birth_date') ? [...entry.fields, 'patient_resident_number'] : entry.fields
+      const proofs = fields.flatMap(key => item.extraction.fields[key]?.evidence ?? [])
       return <section key={entry.id} className="review-evidence-check" onMouseEnter={() => onHighlight(proofs)} onMouseLeave={() => onHighlight([])} onFocus={() => onHighlight(proofs)} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) onHighlight([]) }}>
         <label><input type="checkbox" checked={!!item.review_checks[entry.id]} disabled={busy || item.status !== 'pending'} onChange={e => void check(entry.id, e.target.checked)} />{entry.label}</label>
-        <dl>{entry.fields.map(key => <div key={key} onMouseEnter={e => { e.stopPropagation(); onHighlight(item.extraction.fields[key]?.evidence ?? []) }}><dt>{definitions[key]?.label ?? key}</dt><dd>{fieldValue(item, key)}{['invalid', 'conflicting', 'unresolved'].includes(item.extraction.fields[key]?.status) && ' · 확인 필요'}</dd></div>)}</dl>
+        <table className="review-evidence-table" aria-label={`${entry.label} 근거 대조`}>
+          <colgroup><col style={{ width: '40%' }} /><col style={{ width: '60%' }} /></colgroup>
+          <thead><tr><th scope="col">항목 이름 / 필요 정보</th><th scope="col">문서에서 추출한 정보</th></tr></thead>
+          <tbody>{fields.length ? fields.map(key => <tr key={key} tabIndex={0}
+            onMouseEnter={e => { e.stopPropagation(); onHighlight(key === 'subject_birth_date' ? birthLink?.evidence ?? item.extraction.fields[key]?.evidence ?? [] : item.extraction.fields[key]?.evidence ?? []) }}
+            onFocus={e => { e.stopPropagation(); onHighlight(key === 'subject_birth_date' ? birthLink?.evidence ?? item.extraction.fields[key]?.evidence ?? [] : item.extraction.fields[key]?.evidence ?? []) }}>
+            <th scope="row">{definitions[key]?.label ?? key}</th>
+            <td>{fieldValue(item, key)}{key === 'subject_birth_date' && birthLink?.values?.subject_birth_date != null && <small><br />연결된 생년월일: {String(birthLink.values.subject_birth_date).replace('??', '세기 미확인 · ')} </small>}{['invalid', 'conflicting', 'unresolved'].includes(item.extraction.fields[key]?.status) && <strong className="review-evidence-warning"> · 확인 필요</strong>}</td>
+          </tr>) : <tr><th scope="row">{entry.label}</th><td>별도 추출 정보 없음 — 원본 확인 필요</td></tr>}</tbody>
+        </table>
+        {birthLink && <p className={birthLink.status === 'review' ? 'review-evidence-warning' : ''} role={birthLink.status === 'review' ? 'alert' : undefined}>{birthLink.message}</p>}
         {entry.person_fields && <div className="review-db-comparison"><strong>등록 병사 정보</strong>{comparison?.person ? <p>성명: {comparison.person.name}<br />군번: {comparison.person.military_number}<br />군별: {comparison.person.branch}<br />주민등록번호: DB 제공 정보 없음 — 원본 신원 자료 확인 필요</p> : <p>연결된 병사 정보가 없습니다.</p>}</div>}
         {entry.context_fields?.length ? <div className="review-db-comparison"><strong>확인된 훈련 기간</strong>{entry.context_fields.map(key => <p key={key}>{key === 'training_start' ? '시작일' : '종료일'}: {String(item.context[key]?.value ?? '미확인')}</p>)}<strong>DB 등록 훈련일</strong>{comparison?.trainings.length ? comparison.trainings.map(training => <p key={training.id}>훈련 #{training.id}: {training.scheduled_date ?? '날짜 미등록'}</p>) : <p>등록된 훈련일이 없습니다. 해당 훈련 일정을 별도로 확인하세요.</p>}</div> : null}
         {entry.id === 'eligibility' && <p>신청 사유: {item.reason_category}<br />AI 검증: {item.verification?.result_label ?? '미검증'}</p>}
