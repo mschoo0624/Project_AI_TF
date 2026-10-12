@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Dict, Iterator, List
 
-from legalrag.config import Config
+from .config import Config
 
 
 def _supports_temperature(model: str) -> bool:

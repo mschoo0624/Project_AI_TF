@@ -11,10 +11,10 @@ from __future__ import annotations
 
 from typing import Dict, Iterator, Optional
 
-from legalrag.config import Config
-from legalrag.prompts import DISCLAIMER, build_messages
-from legalrag.retriever import Retriever
-from legalrag.utils import get_logger
+from .config import Config
+from .prompts import DISCLAIMER, build_messages
+from .retriever import Retriever
+from .utils import get_logger
 
 logger = get_logger(__name__)
 
@@ -29,7 +29,7 @@ class RagPipeline:
         self.retriever = Retriever(self.cfg)
         self.llm = None
         if self.cfg.llm_enabled:
-            from legalrag.llm import LLMClient
+            from .llm import LLMClient
 
             self.llm = LLMClient(self.cfg)
             logger.info("LLM: %s (%s)", self.cfg.llm_model, self.cfg.llm_base_url or "OpenAI")

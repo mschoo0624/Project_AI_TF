@@ -14,8 +14,8 @@ from typing import List
 
 import numpy as np
 
-from legalrag.config import Config
-from legalrag.parser import Article
+from .config import Config
+from .parser import Article
 
 _ANNOTATION_RE = re.compile(r"<(?:개정|신설|삭제|본조신설|전문개정|제목개정|종전)[^>]*>|\[(?:전문개정|본조신설|제목개정|종전|시행일)[^\]]*\]|\[[^\]]*이동[^\]]*\]")
 

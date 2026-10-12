@@ -1,7 +1,7 @@
 """
 Start the web UI.
 
-    python main.py                 # http://127.0.0.1:8000 opens in the browser
+    python main.py                 # http://127.0.0.1:8005 opens in the browser
     python main.py --port 8080 --no-browser
 """
 from __future__ import annotations

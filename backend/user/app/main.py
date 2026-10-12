@@ -20,6 +20,8 @@ from user.app.api.training import (
 from user.app.api.training_results import router as training_results_router
 from user.app.api.transfers import router as transfers_router
 from user.app.copilot.router import router as copilot_router
+from classifier_agent.API import router as classifier_router
+from RAG.legalrag import server as rag_server
 from user.app.services.training import reconcile_all_due_training_absences
 from user.app.services.training_recalculation import recalculate_ended_holds, run_jan1_rollover
 
@@ -46,6 +48,8 @@ app.include_router(training_router)
 app.include_router(persons_training_router)
 app.include_router(transfers_router)
 app.include_router(copilot_router)
+app.include_router(classifier_router, prefix="/classifier-api", tags=["classifier"])
+app.include_router(rag_server.router, prefix="/rag-api", tags=["rag"])
 
 def _reconcile_due_training_records() -> None:
     with SessionLocal() as db:
@@ -70,6 +74,7 @@ async def startup() -> None:
     init_db()
     initialize_prediction_cache()
     initialize_attendance_cache()
+    rag_server.start_loading()
     _training_reconciliation_task = asyncio.create_task(_training_reconciliation_loop())
 
 

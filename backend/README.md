@@ -1,16 +1,15 @@
-<<<<<<< HEAD
 ## Security Notice
 Authentication and role enforcement are temporarily disabled across API workflows. Personnel and training data, exports, and write operations are accessible without a token. Do not expose this service to untrusted networks.
-=======
+
 ## Model packages
 
 - `prediction_agent/`: dashboard population and attendance prediction, including datasets and caches.
 - `classifier_agent_old/`: archived legacy PDF extraction/classification server (8001).
-- `classifier_agent/`: Qwen PDF extraction, rule verification and persisted document review API (8003), connected to the UI. The business API remains on 8002.
+- `classifier_agent/`: Qwen PDF extraction, rule verification and persisted document review API, served under `/classifier-api`.
+- `RAG/`: legal chatbot API, served under `/rag-api`.
 
-These packages do not import each other. The dashboard API uses `prediction_agent.cache`.
+The business API, classifier API, and RAG API run together in the main FastAPI process on port 8002. The dashboard API uses `prediction_agent.cache`.
 See [prediction setup](prediction_agent/README.md), [existing classifier setup](classifier_agent_old/README.md), and [new classifier workspace](classifier_agent/README.md).
->>>>>>> origin/frontend
 
 ## Installation Steps
 1. sudo apt update
@@ -164,6 +163,7 @@ cd .\backend
 ```
 
 이미 `backend` 폴더에 있다면 `cd .\backend`는 생략합니다. `backend\.venv`에 의존성이 설치되어 있어야 하며, 가상환경을 별도로 활성화할 필요는 없습니다.
+이 서버 하나가 업무 API, 문서 API(`/classifier-api`), 법령 챗봇 API(`/rag-api`)를 모두 제공합니다. 프런트엔드 기능을 위해 별도의 classifier 또는 RAG Uvicorn 서버를 시작하지 않습니다.
 
 가상환경이나 라이브러리가 아직 준비되지 않았다면 `backend` 폴더에서 한 번만 다음을 실행합니다.
 
@@ -188,10 +188,7 @@ Training writes require an authenticated account. Roles are `viewer` (read), `sc
 
 On the login page, choose **첫 approver 계정 만들기**, then enter the username and password for the first account. The backend only accepts this one-time setup request from a loopback address (`127.0.0.1` or `::1`); the route does not use a bootstrap token. Later accounts are created by a signed-in approver using the header's **계정 생성** action or `POST /auth/users`.
 
-```powershell
-cd .\backend
-.\.venv\Scripts\python.exe main.py --port 8004 --no-browser
-```
+교육훈련 계정·업무 API는 위의 통합 백엔드(8002)를 사용합니다.
 
 | Setting | Default | Behavior |
 | --- | --- | --- |
@@ -221,14 +218,7 @@ Status behavior is configurable in `training_status_policy`; defaults are insert
 
 ## Run Law Chatbot (RAG, Windows PowerShell)
 
-화면 오른쪽 위 **법령 챗봇** 버튼이 사용하는 서버입니다. 메인 백엔드(8002)와 별도로 **새 PowerShell 터미널**에서 실행합니다.
-
-```powershell
-cd .\backend\RAG
-.\.venv\Scripts\python.exe main.py --port 8004 --no-browser
-```
-
-- 시작 후 임베딩 모델(bge-m3)을 불러오는 데 1~2분이 걸리며, 그동안 챗봇에는 "모델을 불러오는 중"이 표시됩니다.
+화면 오른쪽 위 **법령 챗봇**은 통합 백엔드의 `/rag-api` 경로에서 제공됩니다. 앞의 **Run Backend** 명령만 실행하면 되며 별도 포트나 RAG 서버는 필요하지 않습니다. 시작 후 임베딩 모델(bge-m3)을 불러오는 데 1~2분이 걸릴 수 있습니다.
 - 답변 생성에는 Ollama가 실행 중이어야 합니다. 모델은 `backend\RAG\.env`의 `OPENAI_MODEL`에서 정합니다 (예: `ollama pull qwen2.5:7b`). Ollama가 없으면 관련 조문 검색만 동작합니다.
 - 가상환경 준비, 법령 추가, 인덱스 재생성은 [`RAG/README.md`](RAG/README.md)를 참고하세요.
-- `frontend/vite.config.ts`가 `/rag-api` 요청을 `http://127.0.0.1:8004`로 전달합니다.
+- 상태 확인: <http://127.0.0.1:8002/rag-api/api/status>.

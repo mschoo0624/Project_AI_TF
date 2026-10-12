@@ -3,6 +3,9 @@
 예비군 관련 법령(예비군법, 시행령, 시행규칙, 국방부령)에 대해 질문하면, 관련 조문을 찾아서
 그 조문만을 근거로 LLM이 답변하는 RAG(Retrieval-Augmented Generation) 시스템입니다.
 
+프런트엔드용 RAG API는 통합 백엔드(8002)의 `/rag-api` 경로에서 실행됩니다.
+프런트엔드 사용 시에는 별도 RAG 서버를 시작하지 말고 [통합 백엔드 안내](../README.md)를 따르세요.
+
 > [Legal-RAG](https://github.com/Fan-Luo/Legal-RAG) (Apache 2.0, 중국 민법전/미국 UCC용)를 바탕으로
 > 한국어 + 예비군 법령 전용으로 새로 작성했습니다. 원본 파일은 `_old_original/` 폴더에 보관되어 있습니다.
 
@@ -29,9 +32,9 @@ $env:OPENAI_MODEL   = "gpt-4o-mini"
 # $env:OPENAI_BASE_URL = "http://localhost:11434/v1"  # (B) Ollama (무료, 로컬)
 # $env:OPENAI_MODEL    = "qwen2.5:7b" # 현재 우리 메인 모델
 
-# 4-a) 웹 UI
-python -m uvicorn legalrag.server:app --port 8000
-#      -> 브라우저에서 http://127.0.0.1:8000
+# 4-a) (선택) RAG 단독 테스트 서버 — 프런트엔드 통합 실행에는 필요하지 않습니다.
+python -m uvicorn legalrag.server:app --port 8005
+#      -> 브라우저에서 http://127.0.0.1:8005
 
 # 4-b) 또는 터미널에서
 python -m scripts.ask "예비군 훈련은 1년에 최대 며칠까지 받나요?"

@@ -8,3 +8,4 @@ numpy
 pandas
 scikit-learn
 -r classifier_agent/requirements.txt
+-r RAG/requirements.txt

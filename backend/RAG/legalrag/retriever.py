@@ -21,12 +21,12 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from rank_bm25 import BM25Okapi
 
-from legalrag.config import Config
-from legalrag.parser import Article
-from legalrag.references import find_article_mentions
-from legalrag.store import clean_text, load_articles, load_embedding_model, load_embeddings, search_text
-from legalrag.tokenizer import tokenize
-from legalrag.utils import get_logger
+from .config import Config
+from .parser import Article
+from .references import find_article_mentions
+from .store import clean_text, load_articles, load_embedding_model, load_embeddings, search_text
+from .tokenizer import tokenize
+from .utils import get_logger
 
 logger = get_logger(__name__)
 

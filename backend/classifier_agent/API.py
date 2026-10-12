@@ -5,14 +5,14 @@ from threading import BoundedSemaphore
 from uuid import uuid4
 from typing import Literal
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from .extraction import ModelError, catalog, extract_application, selected_fields
 from .verification import BASE, rules_catalog, verify_application
 from . import submissions
 
-app = FastAPI(title='Qwen PDF extraction', version='1.0')
+router = APIRouter()
 busy = BoundedSemaphore(1)
 
 
@@ -28,12 +28,12 @@ class VerificationRequest(BaseModel):
     context: dict[str, ContextFact] = Field(default_factory=dict)
 
 
-@app.get('/verification-rules')
+@router.get('/verification-rules')
 def verification_rules():
     return rules_catalog()
 
 
-@app.get('/verification-sources/{table}')
+@router.get('/verification-sources/{table}')
 def verification_source(table: int):
     if table not in (5, 6, 7):
         raise HTTPException(404, '존재하지 않는 기준표입니다.')
@@ -42,7 +42,7 @@ def verification_source(table: int):
     return FileResponse(BASE/source['path'], media_type='application/pdf')
 
 
-@app.post('/verify')
+@router.post('/verify')
 def verify(payload: VerificationRequest):
     try:
         return verify_application(payload.documents, {k: v.model_dump() for k, v in payload.context.items()})
@@ -50,17 +50,17 @@ def verify(payload: VerificationRequest):
         raise HTTPException(422, '검증 입력을 확인하세요: ' + str(exc)) from exc
 
 
-@app.get('/application-types')
+@router.get('/application-types')
 def application_types():
     return list(catalog()[1].values())
 
 
-@app.get('/field-definitions')
+@router.get('/field-definitions')
 def field_definitions():
     return catalog()[0]['fields']
 
 
-@app.get('/submissions')
+@router.get('/submissions')
 def submission_list():
     return [item for item in submissions.list_all() if not item.get('archived') and not item.get('legacy_source_id')]
 
@@ -70,12 +70,12 @@ def stored(id):
     except KeyError as exc: raise HTTPException(404, '제출 건을 찾을 수 없습니다.') from exc
 
 
-@app.get('/submissions/{id}')
+@router.get('/submissions/{id}')
 def submission_detail(id: str):
     return stored(id)
 
 
-@app.get('/submissions/{id}/pdf')
+@router.get('/submissions/{id}/pdf')
 def submission_pdf(id: str):
     item = stored(id)
     path = submissions.root() / (item['id'] + '.pdf')
@@ -83,7 +83,7 @@ def submission_pdf(id: str):
     return FileResponse(path, media_type='application/pdf')
 
 
-@app.post('/submissions')
+@router.post('/submissions')
 def create_submission(application_type: str = Form(...), military_number: str = Form(''),
                       applicant_name: str = Form(''), file: UploadFile = File(...)):
     try: selected_fields(application_type)
@@ -128,7 +128,7 @@ class IdentityRequest(BaseModel):
     applicant_name: str = Field(min_length=1)
 
 
-@app.post('/submissions/{id}/identity')
+@router.post('/submissions/{id}/identity')
 def set_identity(id: str, payload: IdentityRequest):
     stored(id)
     def mutate(current):
@@ -139,7 +139,7 @@ def set_identity(id: str, payload: IdentityRequest):
     return submissions.update(id, mutate)
 
 
-@app.post('/submissions/{id}/verify')
+@router.post('/submissions/{id}/verify')
 def verify_submission(id: str, payload: StoredVerification):
     item = stored(id)
     context = {k: v.model_dump() for k, v in payload.context.items()}
@@ -158,7 +158,7 @@ class DecisionRequest(BaseModel):
     note: str | None = Field(default=None, max_length=2000)
 
 
-@app.post('/submissions/{id}/decision')
+@router.post('/submissions/{id}/decision')
 def submission_decision(id: str, payload: DecisionRequest):
     stored(id)
     def mutate(current):
@@ -174,7 +174,7 @@ class ConfirmationRequest(BaseModel):
     note: str = Field(min_length=1, max_length=2000)
 
 
-@app.post('/submissions/{id}/request-confirmation')
+@router.post('/submissions/{id}/request-confirmation')
 def request_confirmation(id: str, payload: ConfirmationRequest):
     stored(id)
     def mutate(current):
@@ -183,7 +183,7 @@ def request_confirmation(id: str, payload: ConfirmationRequest):
     return submissions.update(id, mutate)
 
 
-@app.post('/extract-pdf')
+@router.post('/extract-pdf')
 def extract_pdf_endpoint(application_type: str = Form(...), file: UploadFile = File(...),
                          applicant_name: str | None = Form(None)):
     try:
@@ -210,3 +210,7 @@ def extract_pdf_endpoint(application_type: str = Form(...), file: UploadFile = F
     finally:
         file.file.close()
         busy.release()
+
+
+app = FastAPI(title='Qwen PDF extraction', version='1.0')
+app.include_router(router)

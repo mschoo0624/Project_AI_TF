@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from legalrag.store import clean_text
+from .store import clean_text
 
 SYSTEM_PROMPT = """당신은 대한민국 예비군 관련 법령(예비군법, 같은 법 시행령ㆍ시행규칙, 관련 국방부령)을 설명하는 법령 안내 도우미입니다.
 

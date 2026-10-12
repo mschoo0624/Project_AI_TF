@@ -3,8 +3,7 @@ SHELL := /bin/bash
 .PHONY: dev frontend reset-test-db init-test-db randomize-assignment-data test-portal assignment-portal kill-portal stt-dev stt-kill-portal
 
 dev:
-	source venv/bin/activate && uv run uvicorn user.app.main:app --reload --port 8002
-
+	.\.venv\Scripts\python.exe -m uvicorn user.app.main:app --host 127.0.0.1 --port 8002
 stt-dev:
 	source venv/bin/activate && uv run uvicorn stt.app.main:app --reload --port 8003
 

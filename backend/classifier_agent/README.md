@@ -4,33 +4,28 @@
 `qwen3:4b-instruct`로 추출한다. 모델 학습·외부 추론 서비스는 사용하지 않는다.
 기준 목록은 [specifications/README.md](specifications/README.md)를 참고한다.
 
-## 설치 및 실행
-
-Python 3.10 이상, Ollama가 필요하다. 프로젝트 루트에서:
+## 통합 백엔드에서 사용
 
 ```powershell
-python -m venv .\backend\.venv
-.\backend\.venv\Scripts\python.exe -m pip install -r .\backend\classifier_agent\requirements.txt
+cd .\backend
+uv pip install --python .\.venv\Scripts\python.exe -r .\requirements.txt
 ollama pull qwen3:4b-instruct
-# Ollama 앱/서버가 실행 중이어야 한다. 미실행 환경은 별도 터미널에서 ollama serve.
-.\backend\.venv\Scripts\python.exe -m uvicorn backend.classifier_agent.API:app --host 127.0.0.1 --port 8003
+# Ollama는 모델 추출 시에만 필요하며 별도 서비스로 실행한다.
+.\.venv\Scripts\python.exe -m uvicorn user.app.main:app --host 127.0.0.1 --port 8002
 ```
 
-위 명령은 프로젝트 루트에서 실행한다. `backend` 폴더 안에서 실행하려면 앱 경로를
-`classifier_agent.API:app`으로 바꾸고 실행 파일을 `.\.venv\Scripts\python.exe`로 지정한다.
-
-기존 가상환경이 있으면 생성은 생략한다. Linux/macOS는 `Scripts/python.exe` 대신
-`bin/python`을 사용한다. 모델은 Ollama 저장소에 설치되며 Git에 포함하지 않는다.
+문서 API는 통합 백엔드의 `/classifier-api` 경로에서 제공합니다. 기존 가상환경이 있으면 생성은 생략합니다. Linux/macOS는 `Scripts/python.exe` 대신 `bin/python`을 사용합니다. 모델은 Ollama 저장소에 설치되며 Git에 포함하지 않습니다.
 환경 변수 `OLLAMA_URL` 기본값은 `http://127.0.0.1:11434`,
 `CLASSIFIER_MODEL` 기본값은 `qwen3:4b-instruct`다. Qwen 계열만 지원한다.
 환경 변수를 사용하려면 서버를 시작하는 프로세스에 설정한다(.env 자동 로딩 없음).
 
 ## API
 
-- `GET /application-types`: 신청 유형 ID·라벨·명세 목록.
-- `POST /extract-pdf`: multipart `file`(전자 PDF, 최대 20MB), `application_type`(목록의 ID),
+- 통합 백엔드에서 모든 문서 API 경로는 `/classifier-api` 접두사 아래에 있습니다.
+- `GET /classifier-api/application-types`: 신청 유형 ID·라벨·명세 목록.
+- `POST /classifier-api/extract-pdf`: multipart `file`(전자 PDF, 최대 20MB), `application_type`(목록의 ID),
   선택값 `applicant_name`(여러 인물 중 신청자 지정).
-- 대화형 API 문서: `http://127.0.0.1:8003/docs`.
+- 대화형 API 문서: `http://127.0.0.1:8002/docs` (`/classifier-api` 경로 그룹).
 - 잘못된 유형/PDF는 422, 용량 초과는 413, 처리 중 요청은 429, 모델 실패는 503.
 - 한 프로세스에서 한 문서씩 처리한다. 각 요청의 임시 PDF는 종료 시 제거한다.
   기본 localhost 실행용이며 외부 공개 서비스의 인증은 포함하지 않는다.
@@ -85,12 +80,12 @@ JSON 스키마로 출력을 제한하고, 형식·근거 검증이 실패한 항
 **3단계 검증**은 별도 `/verify` API에서 수행한다. [검증 API 안내](VERIFICATION.md)를 참고한다.
 문서 진위는 자동 판정하지 않는다. 프런트엔드의 서류 AI 판정·검토함·명부는 새 제출 저장소를 사용한다.
 담당자 승인·반려는 업무 백엔드와 새 제출 저장소에 반영하며 검증 결과와 별도로 보존한다.
-구형 `classifier_agent_old`(8001)는 과거 코드·기록 보관용이며 새 화면은 8003을 사용한다.
+구형 `classifier_agent_old`(8001)는 과거 코드·기록 보관용이며 새 화면은 통합 백엔드(8002)를 사용한다.
 
 ## 제출·프런트엔드 연결
 
-- 업무 백엔드 8002, 새 Qwen API 8003, Ollama 11434를 실행한다.
-- Vite `/api` → 8002, `/classifier-api` → 8003. 운영 배포에서도 같은 역방향 프록시가 필요하다.
+- 통합 백엔드 8002를 실행한다. Qwen 추출이 필요하면 Ollama 11434도 실행한다.
+- Vite `/api`, `/classifier-api`, `/rag-api` 요청은 모두 8002로 전달된다. 운영 배포에서도 같은 역방향 프록시가 필요하다.
 - `POST /submissions`: multipart file/application_type/military_number/applicant_name. 원본 PDF와 새 추출 결과를 저장한다.
 - `GET /submissions`, `GET /submissions/{id}`, `GET /submissions/{id}/pdf`: 목록·상세·원본 조회.
 - `POST /submissions/{id}/verify`: 저장된 추출 결과를 검증하며 결과와 확인 정보를 저장한다.

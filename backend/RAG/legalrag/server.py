@@ -18,16 +18,17 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from legalrag.pipeline import RagPipeline
-from legalrag.utils import get_logger
+from .pipeline import RagPipeline
+from .utils import get_logger
 
 logger = get_logger(__name__)
 UI_FILE = Path(__file__).resolve().parent.parent / "ui" / "index.html"
 
+router = APIRouter()
 app = FastAPI(title="예비군 법령 챗봇")
 _rag: Optional[RagPipeline] = None
 _load_error: Optional[str] = None
@@ -42,10 +43,14 @@ def _load() -> None:
         _load_error = f"{type(e).__name__}: {e}"
 
 
-@app.on_event("startup")
-def startup() -> None:
+def start_loading() -> None:
     # load models in the background so the page opens immediately
     threading.Thread(target=_load, daemon=True).start()
+
+
+@app.on_event("startup")
+def startup() -> None:
+    start_loading()
 
 
 def _pipeline() -> RagPipeline:
@@ -61,12 +66,12 @@ class Query(BaseModel):
     top_k: Optional[int] = Field(default=None, ge=1, le=20)
 
 
-@app.get("/", include_in_schema=False)
+@router.get("/", include_in_schema=False)
 def index():
     return FileResponse(UI_FILE)
 
 
-@app.get("/api/status")
+@router.get("/api/status")
 def status():
     info = {"ready": _rag is not None, "error": _load_error}
     if _rag is not None:
@@ -80,18 +85,18 @@ def status():
     return info
 
 
-@app.post("/api/search")
+@router.post("/api/search")
 def search(q: Query):
     hits = _pipeline().search(q.question, q.top_k)
     return {"question": q.question, "hits": [h.to_dict() for h in hits]}
 
 
-@app.post("/api/ask")
+@router.post("/api/ask")
 def ask(q: Query):
     return _pipeline().ask(q.question, q.top_k)
 
 
-@app.post("/api/ask/stream")
+@router.post("/api/ask/stream")
 def ask_stream(q: Query):
     rag = _pipeline()
 
@@ -104,3 +109,6 @@ def ask_stream(q: Query):
             yield json.dumps({"type": "error", "text": f"{type(e).__name__}: {e}"}, ensure_ascii=False) + "\n"
 
     return StreamingResponse(gen(), media_type="application/x-ndjson")
+
+
+app.include_router(router)

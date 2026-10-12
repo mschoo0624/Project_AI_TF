@@ -23,7 +23,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from legalrag.references import extract_references
+from .references import extract_references
 
 HEADER_RE = re.compile(
     r"^\[시행\s*(?P<eff>\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.)\]\s*"
@@ -188,7 +188,7 @@ def parse_law_text(text: str, source_file: str = "") -> List[Article]:
 
 
 def parse_law_file(path: str | Path) -> List[Article]:
-    from legalrag.rtf import read_rtf
+    from .rtf import read_rtf
 
     path = Path(path)
     if path.suffix.lower() in (".doc", ".rtf"):
