@@ -6,6 +6,62 @@ from backend.classifier_agent.layout import dates
 from backend.classifier_agent.pdf_extract import extract_pdf
 
 
+def test_review_only_fields_are_read_from_layout_not_sent_to_model():
+    path = Path(__file__).resolve().parents[2]/'frontend/public/pdfs/홍길동.pdf'
+    requested = set()
+    def client(messages):
+        fields = json.loads(messages[-1]['content'])['requested_fields']
+        requested.update(fields)
+        return json.dumps({key: {'value': None, 'evidence_ids': []} for key in fields})
+    result = ex.extract_application(path, 'postponement.illness', client=client)
+    direct = {'onset_date', 'medical_institution', 'doctor_name', 'doctor_license', 'doctor_kind', 'certificate_registration_number', 'certificate_serial_number'}
+    assert not (direct & requested)
+    assert len(requested) == 9  # The explicit document title is resolved without a model call.
+    assert result['fields']['document_title']['value'] == '진단서'
+    assert ''.join(result['fields']['certificate_registration_number']['value'].split()) == '2026-000184'
+    assert ''.join(result['fields']['certificate_serial_number']['value'].split()) == 'D-2026-0416-003'
+    assert result['fields']['onset_date']['value'] == '2026-04-16'
+    assert '비호정형외과의원' == ''.join(result['fields']['medical_institution']['value'].split())
+    assert result['fields']['doctor_name']['value'] == '한의사'
+    assert result['fields']['doctor_kind']['value'] == '의사'
+    assert '123456' in result['fields']['doctor_license']['value'].replace(' ', '')
+    assert all(result['fields'][key]['evidence'][0]['bbox'] for key in direct)
+    from backend.classifier_agent.layout import refine_evidence_boxes
+    original_onset_box = list(result['fields']['onset_date']['evidence'][0]['bbox'])
+    original_registration_box = list(result['fields']['certificate_registration_number']['evidence'][0]['bbox'])
+    refine_evidence_boxes(path, result['fields'])
+    assert result['fields']['onset_date']['evidence'][0]['bbox'] == original_onset_box
+    assert result['fields']['certificate_registration_number']['evidence'][0]['bbox'] == original_registration_box
+    issuer_keys = ('medical_institution', 'doctor_name', 'doctor_license', 'doctor_kind')
+    boxes = [result['fields'][key]['evidence'][0]['bbox'] for key in issuer_keys]
+    assert len({tuple(box) for box in boxes}) == 4
+    assert all(box[3]-box[1] < 25 for box in boxes)
+    import pdfplumber
+    with pdfplumber.open(path) as pdf:
+        for key, box in zip(issuer_keys, boxes):
+            text = ''.join((pdf.pages[0].crop(box).extract_text() or '').split())
+            assert ''.join(result['fields'][key]['value'].split()) in text
+            if key == 'medical_institution': assert '의료기관명칭' in text
+            if key == 'doctor_license': assert '면허번호' in text
+            if key == 'doctor_name': assert '성명' in text
+
+
+def test_cancellation_stops_followup_model_calls():
+    from concurrent.futures import CancelledError
+    import pytest
+    stopped = False
+    calls = []
+    def client(messages):
+        nonlocal stopped
+        calls.append(messages)
+        stopped = True
+        return '{}'
+    path = Path(__file__).resolve().parents[2]/'frontend/public/pdfs/홍길동.pdf'
+    with pytest.raises(CancelledError):
+        ex.extract_application(path, 'postponement.illness', client=client, cancelled=lambda: stopped)
+    assert len(calls) == 1
+
+
 def test_spaced_date_validation_and_no_invented_day():
     assert dates('2 0 2 6 년 0 4 월 1 6 일')[0][0] == '2026-04-16'
     assert dates('2026년 4월') == []
@@ -46,7 +102,6 @@ def test_role_checks_block_observed_model_mistakes():
         ('document_number', '제2차시험', '제2차시험', '', 'string'),
         ('verification_reference', 'SAM', 'SAMPLE', '', 'string'),
         ('exam_stage', '1교시, 2교시', '1교시, 2교시', '', 'string'),
-        ('next_stage_date', '2026-02-22', '2026.02.22(일)', '시험일', 'date'),
     ]
     for key, value, text, label, kind in examples:
         s = {'id':'s1', 'text':text, 'label':label, 'kind':'cell'}
@@ -84,6 +139,7 @@ def test_retry_only_failed_fields(tmp_path, monkeypatch):
     result = ex.extract_application(pdf, 'postponement.illness', client=client)
     retries = [r for r in requests if r.get('retry')]
     assert len(retries) == 1
+    assert len(requests) == 2
     assert list(retries[0]['requested_fields']) == ['subject_name']
     assert result['fields']['subject_name']['value'] == '홍길동'
 
@@ -100,3 +156,18 @@ def test_real_forms_layout_preserves_cells_and_separates_watermark():
     assert any(s['kind'] == 'rotated_text' and 'SAMPLE' in s['text'] for s in exam['sources'])
     issues = ex.consistency_issues({'pages':[medical]}, {'diagnosis':{'value':'우측 무릎 염좌'}})
     assert issues[0]['id'] == 'diagnosis_narrative_difference'
+
+
+def test_compact_full_page_has_no_missing_sources():
+    root = Path(__file__).resolve().parents[2]/'frontend/public/pdfs'
+    for name, kind in [('홍길동.pdf','postponement.illness'), ('홍진호.pdf','postponement.exam')]:
+        requests = []
+        def client(messages):
+            assert sum(len(m['content'].encode()) for m in messages) <= ex.MAX_INPUT_BYTES
+            data = json.loads(messages[-1]['content']); requests.append(data)
+            return json.dumps({k:{'value':None,'evidence_ids':[]} for k in data['requested_fields']})
+        result = ex.extract_application(root/name, kind, client=client)
+        assert len(requests) == 1
+        assert {s['id'] for s in requests[0]['sources']} == {s['id'] for s in result['pdf']['pages'][0]['sources']}
+        assert 'issued_on' not in requests[0]['requested_fields']
+        assert 'issued_on' not in result['fields']

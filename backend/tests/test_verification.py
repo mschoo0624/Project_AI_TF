@@ -21,9 +21,39 @@ def document(kind, values, id='test-document'):
 
 def context(**kwargs):
     base = {'applicant_name': '홍길동', 'applicant_service_number': '22-1',
-            'documents_acceptable': True, 'training_scope_applicable': True,
+            'documents_acceptable': True, 'training_scope_applicable': True, 'patient_identity_confirmed': True,
             'training_start': '2026-05-10', 'training_end': '2026-05-10'}
     return {k: {'value': v, 'source': 'synthetic test fixture'} for k, v in (base | kwargs).items()}
+
+
+@pytest.mark.parametrize('number,expected', [
+    ('010203-3******', '2001-02-03'), ('010203-*******', '??01-02-03'),
+    ('010203', '??01-02-03'), ('000229-*******', '??00-02-29'),
+])
+def test_resident_number_links_birth_without_inventing_century(number, expected):
+    doc = document('postponement.exam', {'patient_resident_number': number})
+    evaluation = Evaluation([doc], context(applicant_birth_date='2001-02-03'))
+    value, state, proof = evaluation.read('subject_birth_date')
+    assert (value, state) == (expected, 'pass')
+    assert proof and doc['fields']['patient_resident_number']['value'] == number
+    if number.startswith('010203'):
+        check = evaluation.evaluate(dict(id='birth', label='생년월일', op='equal_fields', fields=['subject_birth_date', 'context.applicant_birth_date']))
+        assert check['status'] == 'pass'
+
+
+def test_birth_link_keeps_both_proofs_and_warns_on_disagreement():
+    doc = document('postponement.exam', {'subject_birth_date': '2001-02-03', 'patient_resident_number': '010203-*******'})
+    value, state, proof = Evaluation([doc], {}).read('subject_birth_date')
+    assert (value, state, len(proof)) == ('2001-02-03', 'pass', 2)
+    conflict = document('postponement.exam', {'subject_birth_date': '2001-02-04', 'patient_resident_number': '010203-*******'})
+    check = next(c for c in verify_application([conflict], context())['checks'] if c['id'] == 'birth_information_link')
+    assert check['status'] == 'review' and len(check['evidence']) == 2
+    assert '불일치' in check['message']
+
+
+@pytest.mark.parametrize('number', ['011332', '010230-*******', '010203-abc'])
+def test_invalid_resident_birth_needs_review(number):
+    assert Evaluation([document('postponement.exam', {'patient_resident_number': number})], {}).read('subject_birth_date')[1] == 'review'
 
 
 def illness(**kwargs):
@@ -53,7 +83,7 @@ def test_missing_not_false_and_partial_date():
 
 
 def test_tampered_evidence_cannot_pass():
-    doc = illness(); doc['fields']['inpatient_status']['evidence'][0]['quote'] = '없는 근거'
+    doc = illness(); doc['fields']['admission_date']['evidence'][0]['quote'] = '없는 근거'
     assert verify_application([doc], context())['result'] == 'review_required'
 
 
@@ -74,16 +104,16 @@ def test_death_has_no_caregiver_requirement():
 
 def test_counts_missing_and_limit():
     doc = document('postponement.exam', {'subject_name': '홍길동', 'subject_service_number': '22-1',
-        'exam_name': '기사시험', 'registration_date': '2026-05-01', 'exam_end': '2026-05-10'})
+        'exam_name': '기사시험', 'registration_date': '2026-05-01', 'exam_date': '2026-05-10'})
     assert verify_application([doc], context(exam_document_confirmed=True, exam_lifetime_count=5))['result'] == 'sufficient'
     assert verify_application([doc], context(exam_document_confirmed=True, exam_lifetime_count=6))['result'] == 'not_met'
     assert verify_application([doc], context(exam_document_confirmed=True))['result'] == 'insufficient'
 
 
 def test_months_are_not_days():
-    rule = {'id': 'duration', 'label': '기간', 'op': 'days_at_least', 'fields': ['treatment_duration'], 'days': 180}
-    for text, expected in [('179일', 'fail'), ('180일', 'pass'), ('6개월', 'review')]:
-        doc = document('policy.long_illness', {'treatment_duration': text})
+    rule = rules_catalog()['types']['policy.long_illness']['checks'][1]
+    for text, expected in [('179일 치료가 필요함', 'fail'), ('180일 치료가 필요함', 'pass'), ('6개월 치료가 필요함', 'review')]:
+        doc = document('policy.long_illness', {'treatment_opinion': text})
         assert Evaluation([doc], {}).evaluate(rule)['status'] == expected
 
 
@@ -153,6 +183,44 @@ def test_age_uses_calendar_year_and_context_boolean_is_strict():
             'fields': ['event_date', 'context.training_start'], 'days': 14}
     for day, state in [('2026-05-24', 'pass'), ('2026-05-25', 'fail'), ('2026-04-26', 'pass'), ('2026-04-25', 'fail')]:
         assert Evaluation([document('postponement.family_event', {'event_date': day})], context()).evaluate(rule)['status'] == state
+
+
+def test_duration_rules_work_for_nonmedical_training_schedule():
+    settings = dict(duration_pattern=r'교육기간 (?P<count>\d+) (?P<unit>weeks|days)',
+                    unit_days={'weeks': 7, 'days': 1}, split_pattern=r'\n')
+    doc = document('policy.vocational_student', {'course_duration': '교육기간 2 weeks', 'event_start': '2026-05-01'})
+    limit = dict(id='length', label='교육 기간', op='days_at_least', fields=['course_duration'], days=14, **settings)
+    assert Evaluation([doc], {}).evaluate(limit)['status'] == 'pass'
+    period = dict(id='period', label='교육 일정', op='overlap',
+                  fields=['event_start', 'course_duration', 'context.training_start', 'context.training_end'], **settings)
+    for day, state in [('2026-05-14', 'pass'), ('2026-05-15', 'fail')]:
+        result = Evaluation([doc], context(training_start=day, training_end=day)).evaluate(period)
+        assert result['status'] == state
+        assert result['values']['calculated_end'] == '2026-05-14'
+    for text in ['교육기간 2 months', '교육기간 2 weeks\n교육기간 4 weeks']:
+        unknown = document('policy.vocational_student', {'course_duration': text})
+        assert Evaluation([unknown], {}).evaluate(limit)['status'] == 'review'
+
+
+def test_enum_clauses_are_generic_and_conflicts_do_not_pass():
+    rule = dict(id='status', label='학적', op='enum', fields=['academic_status'],
+                accepted=['재학'], rejected=['휴학'], split_pattern=r'\n')
+    for text, status in [('확인서\n재학', 'pass'), ('재학\n휴학', 'review'), ('재학 예정', 'review'), ('휴학', 'fail')]:
+        doc = document('policy.school_student', {'academic_status': text})
+        assert Evaluation([doc], {}).evaluate(rule)['status'] == status
+
+
+def test_rule_catalog_uses_only_shared_operations():
+    allowed = {'all', 'any', 'manual', 'present', 'equal_fields', 'equals', 'enum',
+               'less_than', 'days_at_least', 'overlap', 'window', 'not_after', 'point_window', 'year_age'}
+    def inspect(nodes):
+        for node in nodes:
+            assert node['op'] in allowed
+            inspect(node.get('children', []))
+    rules = rules_catalog()
+    inspect(rules['common'])
+    for entry in rules['types'].values():
+        inspect(entry.get('common', []) + entry['checks'])
 
 
 def test_business_api_reads_db_identity_without_guessing_history(monkeypatch):

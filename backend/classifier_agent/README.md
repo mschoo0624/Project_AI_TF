@@ -6,11 +6,21 @@
 
 ## 통합 백엔드에서 사용
 
+Ollama 프로그램 설치와 전체 실행 순서는 [통합 개발 환경 안내](../README.md#통합-개발-환경-실행-windows-powershell)를 따릅니다. Ollama는 Python requirements로 설치되지 않는 별도 프로그램이며, 모델도 각 작업자의 PC에 다운로드해야 합니다.
+
+먼저 Ollama 앱이 실행 중인지 `ollama list`로 확인합니다. 연결되지 않으면 별도 터미널에서 다음 명령을 실행한 채 유지합니다(이미 실행 중이면 생략).
+
+```powershell
+ollama serve
+```
+
+다른 터미널에서 저장소 루트를 기준으로 실행합니다.
+
 ```powershell
 cd .\backend
 uv pip install --python .\.venv\Scripts\python.exe -r .\requirements.txt
 ollama pull qwen3:4b-instruct
-# Ollama는 모델 추출 시에만 필요하며 별도 서비스로 실행한다.
+# Ollama(11434)를 켜 둔 상태에서 통합 백엔드(8002)를 실행합니다.
 .\.venv\Scripts\python.exe -m uvicorn user.app.main:app --host 127.0.0.1 --port 8002
 ```
 
@@ -56,10 +66,16 @@ CLI도 같은 구현을 사용한다:
 `model_responses`에는 검토용 원문 응답이 있다. 개인정보가 포함될 수 있으므로
 응답은 자동 파일 저장/로그 출력하지 않는다.
 
-신청 유형의 모든 field_groups를 사용한다. 분기는 아직 별도 필터링하지 않으며
+검증 규칙의 공통 조건과 해당 유형 조건이 참조하는 문서 항목만 사용한다. `context.*`는
+DB·담당자 입력으로 처리하고 AI 추출에서 제외한다. 분기는 아직 별도 필터링하지 않으며
 미기재 항목 전체를 승인 필수 요건으로 취급하지 않는다. 페이지별 최대 6000자,
-4개 항목씩 독립 요청하고 이전 대화를 전달하지 않는다. 셀/문장을 통째로 묶어 UTF-8
-6100바이트 이내의 입력으로 나누며, 재시도를 포함한 호출 한도는 6500바이트다.
+한 페이지의 항목을 묶어서 요청하고 이전 대화를 전달하지 않는다. 코드로 확인된 제목은
+모델 요청에서 제외한다. 기본 항목 설명의 중복과 JSON 공백을 줄인다. 모델에 보내는 sources는
+id·text·label만 포함한다. kind·box·size는 보내지 않으며 원본 추출 결과의 좌표 정보는 보존한다.
+셀/문장을 통째로 묶어 UTF-8 9600바이트 이내 입력으로 나누며 재시도 포함 한도는 10000바이트다.
+이는 토큰 수의 직접 측정이 아닌 보수적인 크기 제한이다. 문맥은 16384토큰, 출력은 항목 수에 따라
+1024~4096토큰으로 설정해 입력·출력 공간을 확보한다. 실제 입력/출력 토큰 수와 로딩·총 시간은
+Ollama 응답을 받아 INFO 로그에 기록한다. 모델은 5분간 메모리에 유지하고 대화 이력은 공유하지 않는다.
 단일 셀/문장이 한도를 넘거나 페이지가 6000자를 넘으면 자르지 않고 오류로 반환한다.
 JSON 스키마로 출력을 제한하고, 형식·근거 검증이 실패한 항목만 한 번 재시도한다.
 재시도 후에도 실패하면 해당 항목은 invalid로 남긴다. 미기재 항목은 재시도하지 않는다.
@@ -80,29 +96,30 @@ JSON 스키마로 출력을 제한하고, 형식·근거 검증이 실패한 항
 **3단계 검증**은 별도 `/verify` API에서 수행한다. [검증 API 안내](VERIFICATION.md)를 참고한다.
 문서 진위는 자동 판정하지 않는다. 프런트엔드의 서류 AI 판정·검토함·명부는 새 제출 저장소를 사용한다.
 담당자 승인·반려는 업무 백엔드와 새 제출 저장소에 반영하며 검증 결과와 별도로 보존한다.
-구형 `classifier_agent_old`(8001)는 과거 코드·기록 보관용이며 새 화면은 통합 백엔드(8002)를 사용한다.
+분류 서비스는 통합 백엔드(8002)의 `/classifier-api`에서 제공한다. 구형 저장소의 코드·제출 기록을 가져오는 경로는 없다.
 
 ## 제출·프런트엔드 연결
 
-- 통합 백엔드 8002를 실행한다. Qwen 추출이 필요하면 Ollama 11434도 실행한다.
-- Vite `/api`, `/classifier-api`, `/rag-api` 요청은 모두 8002로 전달된다. 운영 배포에서도 같은 역방향 프록시가 필요하다.
-- `POST /submissions`: multipart file/application_type/military_number/applicant_name. 원본 PDF와 새 추출 결과를 저장한다.
+- 통합 백엔드 8002와 Ollama 11434를 실행한다. 별도 Qwen API 서버는 필요하지 않다.
+- Vite `/api`, `/classifier-api`, `/rag-api` 요청은 모두 8002로 전달한다. 운영 배포에서도 같은 역방향 프록시가 필요하다.
+- `POST /submissions`: multipart file/application_type/military_number/applicant_name. 원본 PDF와 접수 기록을 저장한 뒤 202로 즉시 반환한다. 분석은 서버 작업 큐에서 순서대로 진행한다.
+- 분석 상태: `queued`/`analyzing` → `completed` 또는 `failed`/`cancelled`. 완료된 문서만 검토함에 표시한다. 서버 재시작으로 중단된 작업은 `failed`로 남기며 다시 분석할 수 있다. 이 로컬 작업 큐는 Uvicorn 단일 worker로 실행한다.
+- `POST /submissions/{id}/cancel`, `/retry`: 분석 취소 및 실패 작업 재시도. 취소 상태는 즉시 저장하며, 이미 진행 중인 Qwen 요청은 응답 종료 후 결과를 버리고 후속 호출을 중단한다.
+- `POST /submissions/{id}/reanalyze`: 완료된 원본을 다시 분석한다. 검토함에는 기존 문서를 유지하되 작업 중 확인·결정은 차단하고, 완료 후 체크 항목을 다시 확인한다. 이미 저장된 최종 승인·반려는 자동 취소하지 않는다. 작업 식별자로 취소된 이전 응답이 새 작업 결과를 덮어쓰는 것을 막는다.
+- `BUSINESS_API_URL`(기본 `http://127.0.0.1:8002`)은 분석 후 성명으로 대상자를 연결하고 DB 본인 정보로 재검증할 업무 API 주소다. 연결 실패 시 완료 문서는 유지되며 화면에서 군번으로 연결할 수 있다.
 - `GET /submissions`, `GET /submissions/{id}`, `GET /submissions/{id}/pdf`: 목록·상세·원본 조회.
 - `POST /submissions/{id}/verify`: 저장된 추출 결과를 검증하며 결과와 확인 정보를 저장한다.
   화면은 DB 본인 정보를 사용하는 업무 백엔드 `/postponements/verify`를 통해 호출한다.
 - 승인·반려는 업무 백엔드 `/postponements/{id}/approve|reject`에서 처리한다.
-  검증 결과가 부족/검토 필요여도 담당자가 최종 판단할 수 있다.
+  검증 결과가 부족/검토 필요여도 담당자가 최종 판단할 수 있지만, 승인하려면 해당 유형의 근거 체크 항목을 전부 확인해야 한다. 미연결 문서의 반려는 분류기 제출 기록에 저장한다.
+- `PATCH /submissions/{id}/review-checks`: 근거 항목별 확인 상태를 저장한다. revision으로 오래된 화면의 덮어쓰기를 차단하며 본인 연결·재검증 후에는 체크를 초기화한다. 최종 승인 시 서버에서도 모든 항목을 검사한다.
+- `GET /submissions/{id}/pages/{page}/image`: 원본 페이지 PNG. pdfplumber의 기존 렌더링 의존성을 사용하며, 원본 PDF 좌표에 맞춰 프런트엔드에서 근거 영역을 표시한다.
+- 발병일·발급기관·의사 정보는 필드 명세의 `extraction: layout`에 따라 PDF 표/라벨에서 직접 읽는다. Qwen 요청 항목에는 포함하지 않는다. 명확하지 않은 값은 미확인으로 남긴다.
 - `POST /submissions/{id}/request-confirmation`: 확인요청 의견 저장. 외부 알림 발송은 하지 않는다.
 - 저장 위치: `classifier_agent/data/`의 SQLite 및 PDF. `CLASSIFIER_DATA_DIR`로 변경 가능하며 Git에서 제외된다.
   `/extract-pdf`는 기존처럼 임시 처리이며 `/submissions`만 영구 저장한다.
 
-과거 제출 건은 신청 유형을 담당자가 지정해 새 엔진으로 재처리한다. 기존 분석값·승인 상태를
-새 결과로 복사하지 않는다. 원본 기록은 보존하고 새 기록은 검토대기로 등록한다.
-동일 과거 ID의 중복 실행은 기존 재처리 결과를 반환한다.
-
-```powershell
-backend/.venv/Scripts/python.exe -m backend.classifier_agent.reprocess_legacy --submission-id 과거ID --application-type postponement.illness
-```
+분석할 PDF는 현재 업로드 API에 직접 제출한다. 분석은 해당 PDF와 지정한 신청 유형을 사용한다.
 
 스캔본은 OCR을 하지 않으므로 읽기 불가 상태로 저장되며 Qwen 추론은 수행하지 않는다.
 3단계에서는 읽을 수 있는 근거가 전혀 없으면 ‘근거 부족’으로 판정한다.

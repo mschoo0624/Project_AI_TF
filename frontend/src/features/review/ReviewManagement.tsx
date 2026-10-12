@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  acceptDocument, fetchBootstrap, rejectDocument, verifyDocument, reviewReason,
+  fetchBootstrap, reviewReason,
   type Bootstrap, type Person, type QueueItem,
 } from './api'
 import './ReviewManagement.css'
 import PostponementModule from './PostponementModule'
-import VerificationResult from './VerificationResult'
+import EvidenceReviewPanel from './EvidenceReviewPanel'
+import EvidencePdf from './EvidencePdf'
+import type { Proof } from './classifierApi'
+import { formatApprovalTime } from './classifierApi'
 
 // Shared live submission data is adapted in ./api.ts.
 type ReviewTab = 'roster' | 'inbox' | 'ai'
@@ -81,8 +84,8 @@ function PersonDetail({ person, onClose }: { person: Person; onClose: () => void
           <ReasonList title="알람" items={person.alerts} alert />
           {person.documents.length > 0 && <section className="review-person-documents"><h3>제출 서류</h3>
             <div className="review-document-list">{person.documents.map(doc => <div className="review-document-row" key={doc.id}>
-              <div><strong>{doc.type}</strong><span className="review-muted">{doc.owner}</span></div>
-              <div><span className="review-muted">발급 {doc.issued}</span><span className="review-document-status">{doc.status}</span></div>
+              <div><strong>{doc.type === '—' ? doc.filename : doc.type}</strong><span className="review-muted">{doc.owner}</span>{doc.file_path && <a className="review-document-download" href={`${doc.file_path}?download=true`} download={doc.filename} aria-label={`${doc.filename} 다운로드`}>서류 다운로드</a>}</div>
+              <div><span className="review-muted">발급 {doc.issued}</span><span className="review-document-status">{doc.status}</span>{doc.status === '승인' && <span className="review-muted">승인 일시: {formatApprovalTime(doc.reviewed_at)} (한국시간)</span>}</div>
             </div>)}</div>
           </section>}
         </div>
@@ -139,87 +142,21 @@ function RosterView({ people, onSelect }: { people: Person[]; onSelect: (person:
   </section>
 }
 
-function ReviewPanel({ item, reasons, verifyReasons, onDone, onOpenAnalysis }: {
-  item: QueueItem
-  reasons: Bootstrap['reject_reasons']
-  verifyReasons: Bootstrap['verify_reasons']
-  onDone: (label: string, changed: boolean, message?: string) => void
-  onOpenAnalysis: (id: string) => void
-}) {
-  const [mode, setMode] = useState<'none' | 'reject' | 'verify'>('none')
-  const [note, setNote] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const runAccept = async () => {
-    setBusy(true); setError('')
-    try {
-      await acceptDocument(item.id, {})
-      onDone('승인', item.current_classification !== item.if_accepted_classification)
-    } catch (e) { setError(e instanceof Error ? e.message : '승인하지 못했습니다.') }
-    finally { setBusy(false) }
-  }
-  const runReject = async (code: string, message?: string) => {
-    setBusy(true); setError('')
-    try { await rejectDocument(item.id, code, message); onDone('반려', false, message) }
-    catch (e) { setError(e instanceof Error ? e.message : '반려하지 못했습니다.') }
-    finally { setBusy(false) }
-  }
-  const runVerify = async (code: string, message?: string) => {
-    setBusy(true); setError('')
-    try { await verifyDocument(item.id, code, message); onDone('확인요청', false, message) }
-    catch (e) { setError(e instanceof Error ? e.message : '확인을 요청하지 못했습니다.') }
-    finally { setBusy(false) }
-  }
-
-  return <div className="review-action-body">
-    <dl className="review-person-fields">
-      <dt>성명</dt><dd>{item.person_name}</dd>
-      <dt>군번</dt><dd>{item.person_id}</dd>
-      <dt>직업</dt><dd>{item.occupation ?? '—'}</dd>
-      <dt>구분</dt><dd>{item.owner}</dd>
-      <dt>현재</dt><dd><ClassChip label={item.current_classification} /></dd>
-    </dl>
-    <div className={`review-verify-notice ${item.verify_number ? 'has-number' : 'no-number'}`}>
-      <strong>{item.verify_number ? `문서확인번호 ${item.verify_number}` : '문서확인번호 없음'}</strong>
-      <span>문서번호와 발급기관 정보를 원본과 대조하세요. 문서 진위는 별도 확인이 필요합니다.</span>
-    </div>
-    {item.file_path && <a className="review-document-link" href={item.file_path} target="_blank" rel="noopener noreferrer">원본 서류 열기 ↗</a>}
-    <VerificationResult result={item.verification ?? null} />
-    <button type="button" className="review-document-link" onClick={() => onOpenAnalysis(item.id)}>추출 정보·재검증 열기</button>
-    {item.verify_reason && <p className="review-action-error">확인 요청: {item.verify_reason}</p>}
-    <div className="review-actions">
-      <button type="button" className="approve" disabled={busy} onClick={runAccept}>승인</button>
-      <button type="button" className="reject" disabled={busy} onClick={() => setMode(current => current === 'reject' ? 'none' : 'reject')}>반려</button>
-      <button type="button" className="verify" disabled={busy} onClick={() => setMode(current => current === 'verify' ? 'none' : 'verify')}>확인요청</button>
-    </div>
-    {mode === 'reject' && <div className="review-reason-picker">
-      <p>선택한 사유와 검토 의견을 신청 기록에 저장합니다.</p>
-      {reasons.map(reason => <button type="button" key={reason.code} disabled={busy || reason.code === 'OTHER'}
-        onClick={() => void runReject(reason.code, reason.message)}>
-        <span>{reason.label}</span><small>{reason.can_resubmit ? '재제출 가능' : '재제출 불가'}</small>
-        {reason.message && <em>{reason.message}</em>}
-      </button>)}
-      <textarea rows={2} value={note} onChange={event => setNote(event.target.value)} placeholder="기타 사유 설명" aria-label="기타 반려 사유" />
-      <button type="button" disabled={busy || !note.trim()} onClick={() => void runReject('OTHER', note)}>기타 사유로 반려</button>
-    </div>}
-    {mode === 'verify' && <div className="review-reason-picker">
-      <p>판단하지 않고 발급기관 확인 대상으로 넘깁니다.</p>
-      {verifyReasons.map(reason => <button type="button" key={reason.code} disabled={busy || reason.code === 'OTHER'}
-        onClick={() => void runVerify(reason.code, reason.label)}>{reason.label}</button>)}
-      <textarea rows={2} value={note} onChange={event => setNote(event.target.value)} placeholder="추가 확인 내용" aria-label="추가 확인 내용" />
-      <button type="button" disabled={busy || !note.trim()} onClick={() => void runVerify('OTHER', note)}>확인요청 저장</button>
-    </div>}
-    {error && <p role="alert" className="review-action-error">{error}</p>}
-  </div>
-}
-
-function InboxView({ queue, bootstrap, onOpenAnalysis }: { queue: QueueItem[]; bootstrap: Bootstrap; onOpenAnalysis: (id: string) => void }) {
+function InboxView({ queue, completed, onOpenAnalysis }: { queue: QueueItem[]; completed: QueueItem[]; onOpenAnalysis: (id: string) => void }) {
+  const [view, setView] = useState<'pending' | 'completed'>('pending')
+  const source = view === 'pending' ? queue : completed
+  const listTitle = view === 'pending' ? '검토 대상자 목록' : '처리 완료 문서'
   const [items, setItems] = useState<QueuedRow[]>(() => queue.map(item => ({ ...item, done: null })))
   const [selectedId, setSelectedId] = useState<string | null>(queue[0]?.id ?? null)
   const [search, setSearch] = useState('')
   const [checkedIds, setCheckedIds] = useState<string[]>([])
   const [page, setPage] = useState(1)
   const [showReview, setShowReview] = useState(false)
+  const [highlights, setHighlights] = useState<Proof[]>([])
+  useEffect(() => {
+    setItems(previous => source.map(item => ({ ...item, done: previous.find(row => row.id === item.id)?.done ?? null })))
+    setSelectedId(current => source.some(item => item.id === current) ? current : source[0]?.id ?? null)
+  }, [source])
   const pageSize = 20
   const selected = items.find(item => item.id === selectedId) ?? null
   const filtered = useMemo(() => {
@@ -235,17 +172,26 @@ function InboxView({ queue, bootstrap, onOpenAnalysis }: { queue: QueueItem[]; b
     if (!selectedId) return
     setItems(prev => prev.map(item => item.id === selectedId ? { ...item, done: label } : item))
     const next = items.find(item => item.id !== selectedId && !item.done)
-    window.setTimeout(() => setSelectedId(next?.id ?? null), 700)
+    setSelectedId(next?.id ?? null)
     void message
     void changed
   }
-  const chooseRow = (id: string) => { setSelectedId(id); setShowReview(true) }
+  const chooseRow = (id: string) => { setSelectedId(id); setShowReview(true); setHighlights([]) }
+  const changeView = (next: 'pending' | 'completed') => {
+    if (next === view) return
+    const rows = next === 'pending' ? queue : completed
+    setView(next); setItems(rows.map(item => ({ ...item, done: null })))
+    setSelectedId(rows[0]?.id ?? null); setCheckedIds([]); setPage(1); setHighlights([])
+  }
 
   return <div className="review-inbox-grid">
-    <section className="review-list-panel" aria-label="검토 대상자 목록">
+    <section className="review-list-panel" aria-label={listTitle}>
       <header className="review-list-title">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="3" width="19" height="18" rx="1.5"/><path d="M3 16h5l2 3h4l2-3h5"/></svg>
-        <h2>검토 대상자 목록</h2>
+        <div className="review-inbox-tabs" role="tablist" aria-label="문서 처리 상태">
+          <button type="button" role="tab" aria-selected={view === 'pending'} onClick={() => changeView('pending')}>검토 대상자 목록</button>
+          <button type="button" role="tab" aria-selected={view === 'completed'} onClick={() => changeView('completed')}>처리 완료 문서</button>
+        </div>
       </header>
       <label className="review-search-box">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><circle cx="10.8" cy="10.8" r="6.2"/><path d="m15.7 15.7 4.5 4.5"/></svg>
@@ -266,7 +212,7 @@ function InboxView({ queue, bootstrap, onOpenAnalysis }: { queue: QueueItem[]; b
           <td title={reviewReason(item)}>{reviewReason(item)}</td>
           <td title={applicationDate(item)}>{applicationDate(item)}</td>
         </tr>)}</tbody>
-      </table>{!pageRows.length && <p className="review-empty-state">{items.length ? '검색 결과가 없습니다.' : '검토 대기 중인 서류가 없습니다.'}</p>}</div>
+      </table>{!pageRows.length && <p className="review-empty-state">{items.length ? '검색 결과가 없습니다.' : view === 'pending' ? '검토 대기 중인 서류가 없습니다.' : '처리 완료된 서류가 없습니다.'}</p>}</div>
       <footer className="review-list-footer"><span>전체 {filtered.length}명{checkedIds.length ? ` · 선택 ${checkedIds.length}명` : ''}</span>
         <nav aria-label="검토 목록 페이지"><button type="button" aria-label="이전 페이지" disabled={currentPage === 1} onClick={() => setPage(current => current - 1)}>‹</button>
           <span className="review-page-number">{currentPage}</span>
@@ -275,18 +221,22 @@ function InboxView({ queue, bootstrap, onOpenAnalysis }: { queue: QueueItem[]; b
     </section>
     <section className="review-pdf-panel" aria-label="제출 서류 미리보기">
       <div className="review-pdf-cap" />
-      {selected?.file_path ? <iframe key={selected.id} title={`${selected.person_name} 제출 서류`} src={selected.file_path} /> :
+      {selected?.file_path ? <EvidencePdf key={selected.id} item={selected.submission} highlights={highlights} /> :
         <div className="review-pdf-empty">{selected ? '이 서류에는 PDF 경로가 등록되어 있지 않습니다.' : '왼쪽에서 서류를 선택하세요.'}</div>}
     </section>
-    <aside className="review-confirm-panel" aria-label="검토 대상자 확인">
+    <aside className="review-confirm-panel" aria-label={view === 'pending' ? '검토 대상자 확인' : '검토결과'}>
       <button type="button" className="review-confirm-title" aria-expanded={showReview} onClick={() => setShowReview(current => !current)}>
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M6 2.5h8l5 5V21H6z"/><path d="M14 2.5V8h5M9 14l2 2 4-5"/></svg>
-        <span>검토대상자확인</span><small>{showReview ? '접기 ▲' : '펼치기 ▼'}</small>
+        <span>{view === 'pending' ? '검토대상자확인' : '검토결과'}</span><small>{showReview ? '접기 ▲' : '펼치기 ▼'}</small>
       </button>
-      {showReview && (selected ? <ReviewPanel key={selected.id} item={selected} reasons={bootstrap.reject_reasons} verifyReasons={bootstrap.verify_reasons} onDone={onDone} onOpenAnalysis={onOpenAnalysis} /> :
-        <p className="review-empty-state">검토 대기 서류가 없습니다.</p>)}
+      {showReview && (selected ? view === 'completed' ? <div className="review-decision-result">
+        <strong className={selected.submission.status}>{selected.status}</strong>
+        {selected.reviewed_at && <p>처리 일시: {formatApprovalTime(selected.reviewed_at)} (한국시간)</p>}
+        {selected.submission.note && <p>{selected.submission.note}</p>}
+      </div> : <EvidenceReviewPanel key={selected.id} submission={selected.submission} onHighlight={setHighlights} onDone={onDone} onOpenAnalysis={onOpenAnalysis} /> :
+        <p className="review-empty-state">서류를 선택하세요.</p>)}
     </aside>
-    <span className="review-visually-hidden" aria-live="polite">검토 대기 {left}건</span>
+    <span className="review-visually-hidden" aria-live="polite">{listTitle} {view === 'pending' ? left : items.length}건</span>
   </div>
 }
 
@@ -300,8 +250,9 @@ export default function ReviewManagement() {
 
   useEffect(() => {
     const reload = () => setRevision(value => value + 1)
+    const timer = window.setInterval(reload, 5000)
     window.addEventListener('review-data-changed', reload)
-    return () => window.removeEventListener('review-data-changed', reload)
+    return () => { window.clearInterval(timer); window.removeEventListener('review-data-changed', reload) }
   }, [])
 
   useEffect(() => {
@@ -313,7 +264,7 @@ export default function ReviewManagement() {
   return <div className="review-management">
     <Tabs tab={tab} setTab={setTab} />
     <main className="review-main-content">
-      {tab === 'ai' ? <PostponementModule initialSelectedId={analysisId} /> : error ? <div role="alert" className="review-load-error"><strong>데이터를 불러오지 못했습니다</strong><p>{error}</p><button type="button" onClick={() => setRevision(value => value + 1)}>다시 불러오기</button></div> : !data ? <div className="review-loading">불러오는 중…</div> : tab === 'roster' ? <RosterView people={data.people} onSelect={setSelectedPerson} /> : <InboxView key={data.as_of} queue={data.queue} bootstrap={data} onOpenAnalysis={id => { setAnalysisId(id); setTab('ai') }} />}
+      {tab === 'ai' ? <PostponementModule initialSelectedId={analysisId} /> : error ? <div role="alert" className="review-load-error"><strong>데이터를 불러오지 못했습니다</strong><p>{error}</p><button type="button" onClick={() => setRevision(value => value + 1)}>다시 불러오기</button></div> : !data ? <div className="review-loading">불러오는 중…</div> : tab === 'roster' ? <RosterView people={data.people} onSelect={setSelectedPerson} /> : <InboxView queue={data.queue} completed={data.completed} onOpenAnalysis={id => { setAnalysisId(id); setTab('ai') }} />}
     </main>
     {selectedPerson && <PersonDetail person={selectedPerson} onClose={() => setSelectedPerson(null)} />}
   </div>

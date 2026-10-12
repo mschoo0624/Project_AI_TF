@@ -4,12 +4,73 @@ Authentication and role enforcement are temporarily disabled across API workflow
 ## Model packages
 
 - `prediction_agent/`: dashboard population and attendance prediction, including datasets and caches.
-- `classifier_agent_old/`: archived legacy PDF extraction/classification server (8001).
 - `classifier_agent/`: Qwen PDF extraction, rule verification and persisted document review API, served under `/classifier-api`.
 - `RAG/`: legal chatbot API, served under `/rag-api`.
 
 The business API, classifier API, and RAG API run together in the main FastAPI process on port 8002. The dashboard API uses `prediction_agent.cache`.
-See [prediction setup](prediction_agent/README.md), [existing classifier setup](classifier_agent_old/README.md), and [new classifier workspace](classifier_agent/README.md).
+See [prediction setup](prediction_agent/README.md) and [classifier setup](classifier_agent/README.md).
+
+## 통합 개발 환경 실행 (Windows PowerShell)
+
+**문서 AI 분석에는 8002 백엔드와 별도로 Ollama 서버가 실행 중이어야 합니다.** Ollama는 Python 패키지가 아닌 외부 실행 프로그램이므로 `pip install -r requirements.txt`만으로 설치되지 않습니다. 각 작업자의 PC에서 아래 준비를 진행하세요.
+
+### 최초 설치 및 브랜치 변경 후 의존성 갱신
+
+1. [Ollama 설치 페이지](https://ollama.com/download)에서 운영체제에 맞는 프로그램을 설치하고 새 터미널을 엽니다.
+2. 저장소 루트에서 다음 명령을 실행합니다. 기존 `.venv`가 있다면 생성 명령은 생략합니다. 브랜치 병합 후에는 의존성 설치 명령을 다시 실행합니다. 이 목록에는 classifier와 RAG 패키지도 포함됩니다.
+
+```powershell
+cd .\backend
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r .\requirements.txt
+```
+
+### 실행 순서
+
+1. Ollama 실행 상태를 확인합니다.
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:11434/api/tags
+```
+
+연결되지 않으면 Ollama 앱을 실행하거나 **별도 터미널**에서 아래 명령을 실행한 채 유지합니다. 이미 실행 중이면 중복 실행하지 않습니다.
+
+```powershell
+ollama serve
+```
+
+2. 다른 터미널에서 문서 분석 모델을 다운로드합니다(최초 1회). `ollama list`에 해당 모델이 있으면 다운로드는 생략할 수 있습니다. 모델 파일은 Git에 포함되지 않으므로 각 PC에 설치해야 합니다.
+
+```powershell
+ollama pull qwen3:4b-instruct
+ollama list
+```
+
+3. `backend` 폴더에서 통합 백엔드를 실행합니다. 문서 분석 작업 큐를 위해 단일 worker로 실행합니다.
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn user.app.main:app --host 127.0.0.1 --port 8002
+```
+
+4. 별도 터미널의 `frontend` 폴더에서 화면을 실행합니다.
+
+```powershell
+npm install
+npm run dev
+```
+
+| 구성 | 기본 주소 / 설정 |
+| --- | --- |
+| 통합 백엔드 | `http://127.0.0.1:8002` (문서 API: `/classifier-api`, 법령 챗봇: `/rag-api`) |
+| Ollama | `http://127.0.0.1:11434` — 백엔드와 별도 프로세스 |
+| 문서 분석 모델 | `qwen3:4b-instruct` |
+| 프론트엔드 | `npm run dev`가 출력하는 주소 |
+
+문서 분석의 `OLLAMA_URL` 기본값은 `http://127.0.0.1:11434`, `CLASSIFIER_MODEL` 기본값은 `qwen3:4b-instruct`입니다. 변경할 때는 백엔드를 시작하는 터미널에 환경 변수를 설정합니다(classifier는 `.env`를 자동으로 읽지 않습니다). 별도 classifier 서버(8001/8003)는 실행하지 않습니다.
+
+법령 챗봇의 생성 모델은 문서 분석 모델과 별도 설정입니다. `RAG/.env`의 `OPENAI_MODEL`에 지정한 모델도 설치하세요(예: `ollama pull qwen2.5:7b`). 두 기능은 같은 Ollama 서버를 사용할 수 있습니다. 자세한 설정은 [RAG 안내](RAG/README.md)를 참고하세요.
+
+Ollama가 꺼져 있거나 지정 모델이 없으면 8002 서버가 실행되어도 문서 AI 분석은 실패합니다. 연결 오류는 위 `/api/tags` 요청으로, 모델 누락은 `ollama list`로 확인하세요.
 
 ## Installation Steps
 1. sudo apt update

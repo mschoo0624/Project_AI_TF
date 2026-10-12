@@ -20,7 +20,7 @@ from user.app.api.training import (
 from user.app.api.training_results import router as training_results_router
 from user.app.api.transfers import router as transfers_router
 from user.app.copilot.router import router as copilot_router
-from classifier_agent.API import router as classifier_router
+from classifier_agent.API import router as classifier_router, start_analysis_service, stop_analysis_service
 from RAG.legalrag import server as rag_server
 from user.app.services.training import reconcile_all_due_training_absences
 from user.app.services.training_recalculation import recalculate_ended_holds, run_jan1_rollover
@@ -72,6 +72,7 @@ async def _training_reconciliation_loop() -> None:
 async def startup() -> None:
     global _training_reconciliation_task
     init_db()
+    start_analysis_service()
     initialize_prediction_cache()
     initialize_attendance_cache()
     rag_server.start_loading()
@@ -80,6 +81,7 @@ async def startup() -> None:
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
+    stop_analysis_service()
     if _training_reconciliation_task is not None:
         _training_reconciliation_task.cancel()
         try:
