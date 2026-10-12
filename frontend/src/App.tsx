@@ -27,6 +27,7 @@ import { initialConversations, formatAlertTime } from './features/messenger/mess
 import type { Conversation } from './features/messenger/messengerData'
 import { trainingTabs } from './features/training/trainingtabs'
 import type { TrainingTabId } from './features/training/trainingtabs'
+import PersonQuickSearch from './features/quicksearch/PersonQuickSearch'
 
 
 const featurePages = [
@@ -583,6 +584,8 @@ function Home({ onNavigate, contactAlerts, onOpenMessenger }: {
 
 
   
+    <PersonQuickSearch />
+
   <div className="home-lower-area">
     <div className="home-notify-row">
       <section className="home-panel" aria-label="업무 알림">

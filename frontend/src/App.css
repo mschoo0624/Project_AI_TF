@@ -234,7 +234,7 @@ button { cursor:pointer; }
 .home-notice-cancel { padding:8px 28px; border:1px solid #ccd5e4; border-radius:6px; background:#fff; font-size:14px; }
 
 .home-notify-row {  min-width:0; display:grid; grid-template-columns:minmax(0,1.9fr) minmax(0,1fr); gap:20px; }
-.home-panel { min-width:0; height:350px; display:flex; flex-direction:column; padding:8px 10px 6px; border:1px solid #c9d8ee; border-radius:8px; background:#fff; }
+.home-panel { min-width:0; height:300px; display:flex; flex-direction:column; padding:8px 10px 6px; border:1px solid #c9d8ee; border-radius:8px; background:#fff; }
 .home-panel-chip { align-self:flex-start; display:inline-flex; align-items:center; gap:4px; padding:2px 9px; border-radius:11px; background:#2563eb; color:#fff; font-size:12px; font-weight:600; white-space:nowrap; }
 .home-bubble-list { flex:1; min-height:0; overflow-y:auto; display:grid; align-content:start; gap:6px; margin-top:8px; }
 .home-dashboard .home-bubble { width:100%; display:block; margin:0; padding:6px 11px; border:0; border-radius:12px; background:#3da0f5; color:#fff; text-align:left; font-size:12px; line-height:1.4; }
@@ -243,8 +243,8 @@ button { cursor:pointer; }
 .home-bubble strong { font-weight:700; }
 .home-panel-more { align-self:flex-end; display:grid; place-items:center; color:#43536a; }
 
-.home-shortcuts { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:8px; padding:14px 10px; border:1px solid #e1e7ef; border-radius:10px; background:#fff; }
-.home-dashboard .home-shortcut { display:flex; flex-direction:column; align-items:center; gap:10px; padding:10px 4px; border:0; border-radius:8px; background:none; color:#17251f; }
+.home-shortcuts { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:8px; padding:22px 10px; border:1px solid #e1e7ef; border-radius:10px; background:#fff; }
+.home-dashboard .home-shortcut { display:flex; flex-direction:column; align-items:center; gap:12px; padding:10px 4px; border:0; border-radius:8px; background:none; color:#17251f; }
 .home-dashboard .home-shortcut:hover { background:#f3f6fb; }
 .home-shortcut-icon { height:52px; display:grid; place-items:center; color:#2563eb; }
 .home-shortcut-icon img { width:60px; height:60px; object-fit:contain; }
