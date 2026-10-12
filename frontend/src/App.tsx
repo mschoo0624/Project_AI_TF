@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
-import ministryLogo from './assets/마크 국영문서체 조합형(가로).png'
+import ministryLogo from './assets/국방부 마크_컬러본.png'
 import { forecastThreshold } from './forecastThreshold'
 import ResourceManagement from './features/resource/ResourceManagement'
 import TrainingManagementPage from './features/training/TrainingManagementPage'
@@ -13,6 +13,21 @@ import ChatLauncher from './features/chatbot/ChatLauncher'
 import LegalChatbot from './features/chatbot/LegalChatbot'
 import type { CopilotAction } from './features/chatbot/CopilotChat'
 import type { CopilotView } from './features/resource/ResourceManagement'
+import noticeBannerImg from './assets/배너.png'
+import worklogIcon from './assets/shortcut/worklog.png'
+import travelIcon from './assets/shortcut/travel.png'
+import holdIcon from './assets/shortcut/hold.png'
+import prosecutionIcon from './assets/shortcut/prosecution.png'
+import formationIcon from './assets/shortcut/formation.png'
+import trainingIcon from './assets/shortcut/training.png'
+import noticeIcon from './assets/shortcut/notice.png'
+import myPageIcon from "./assets/shortcut/mypage.png";
+import Messenger, { MessengerLauncher } from './features/messenger/Messenger'
+import { initialConversations, formatAlertTime } from './features/messenger/messengerData'
+import type { Conversation } from './features/messenger/messengerData'
+import { trainingTabs } from './features/training/trainingtabs'
+import type { TrainingTabId } from './features/training/trainingtabs'
+
 
 const featurePages = [
   { id: 'reserve', label: '부대관리', Component: EmptyReservePage },
@@ -22,14 +37,18 @@ const featurePages = [
 ] as const
 
 function EmptyReservePage() {
-  return <section className="empty-reserve-page" aria-label="부대관리" />
+  return <section className="empty-reserve-page" aria-label="부대관리"><HomeForecastSection /></section>
 }
-
+function MyPage() {
+  return <section className="mypage" aria-label="마이페이지"><h2>마이페이지</h2></section>
+}
 type FeaturePageId = typeof featurePages[number]['id']
-type PageId = 'home' | FeaturePageId
+type PageId = 'home' | FeaturePageId | 'mypage'
 type HomeDestination = PageId | 'resource:hold' | 'resource:prosecution' | 'resource:travel'
 
-type IconName = 'person' | 'bell' | 'calendar' | 'check' | 'warning' | 'plus' | 'minus' | 'list' | 'settings' | 'edit' | 'arrow' | 'left' | 'right' | 'inbox'
+type IconName = 'person' | 'bell' | 'calendar' | 'check' | 'warning' | 'plus' | 'minus' | 'list' | 'settings' | 'edit' | 'arrow' | 'left' | 'right' | 'inbox'| 'more' | 'task' | 'travel' | 'clipboard' | 'users' | 'star' | 'dashboard' | 'shield' | 'training' | 'notebook'
+const pageIcons: Record<FeaturePageId, IconName> = { reserve: 'shield', resource: 'users', training: 'training', worklog: 'notebook' }
+
 
 function Icon({ name, size = 19 }: { name: IconName; size?: number }) {
   const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true as const }
@@ -49,7 +68,19 @@ function Icon({ name, size = 19 }: { name: IconName; size?: number }) {
       case 'left': return <path d="m15 6-6 6 6 6" />
       case 'right': return <path d="m9 6 6 6-6 6" />
       case 'inbox': return <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 14h5l2 3h4l2-3h5" /></>
+      case 'more': return <path d="M5 12h.01M12 12h.01M19 12h.01" strokeWidth={3} />
+      case 'task': return <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="m8.5 12 2.5 2.5 4.5-5" /></>
+      case 'travel': return <path d="M4 8h14m-4-4 4 4-4 4M20 16H6m4-4-4 4 4 4" />
+      case 'clipboard': return <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4h6v3H9zM9 12h6m-6 4h4" /></>
+      case 'users': return <><circle cx="9" cy="8" r="3.2" /><path d="M3 20c.4-3.6 2.7-5.5 6-5.5s5.6 1.9 6 5.5" /><circle cx="17.5" cy="9" r="2.5" /><path d="M17 14.5c2.4.2 3.8 1.9 4 4.5" /></>
+      case 'star': return <path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 17l-5.2 2.7 1-5.9-4.3-4.1 5.9-.8Z" />
+      case 'dashboard': return <><rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="3" width="8" height="5" rx="1.5" /><rect x="13" y="11" width="8" height="10" rx="1.5" /><rect x="3" y="14" width="8" height="7" rx="1.5" /></>
+      case 'shield': return <><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3Z" /><path d="m9 12 2 2 4-4" /></>
+      case 'training': return <><path d="M2 9l10-5 10 5-10 5L2 9Z" /><path d="M6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5" /><path d="M22 9v6" /></>
+      case 'notebook': return <><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 3v18M12 8h4M12 12h4" /></>    
+    
     }
+
   })()
   return <svg {...common}>{drawing}</svg>
 }
@@ -64,14 +95,21 @@ const demoDashboard = {
     { label: '훈련 완료', key: 'training_completed', detail: '현재 연차 필요시간 이수 인원', icon: 'check' },
     { label: '미응소', key: 'absent_people', detail: '현재 연차 무단불참 기록 인원', icon: 'warning' },
   ] as const,
-  alerts: [
-    { label: '보류/연기 대상자 처리', reviewKey: 'pending', page: 'resource:hold' },
-    { label: '고발 대상자 처리', count: 17, page: 'resource:prosecution' },
-    { label: '현재 출국자', count: 16, page: 'resource:travel' },
-  ] as const,
-
 
 }
+
+// 예시 데이터 (API 생기면 교체)
+const demoTravelCount = 16
+const demoWorkAlerts: { title: string; body: string; page: HomeDestination }[] = [
+  { title: '교육훈련 일정 관리', body: '10월 5일 1형 훈련 일정 관리가 필요합니다.', page: 'training' },
+  { title: '홍보메일 전송', body: '9월 28일, 훈련 대상자 134명을 대상으로 홍보메일 발송을 완료했습니다.', page: 'training' },
+]
+
+const demoNotices = [
+  { id: 61, type: '긴급공지', title: '12월 31일 ~~~~일정이 있으니 확인 부탁드립니다', author: 'admin01', date: '2026-10-07', writtenAt: '2026-10-07 09:00:00', approver: '승인자 예시', views: 120, content: '12월 31일 일정이 예정되어 있으니 대상자 확인을 부탁드립니다.\n\n자세한 사항은 담당자에게 문의해 주세요.' },
+  ...[41, 23, 22, 21, 20].map(id => ({ id, type: '일반공지', title: '12월 31일 ~~~~일정이 있으니 확인 부탁드립니다', author: 'admin01', date: '2026-10-07', writtenAt: '2026-10-07 09:00:00', approver: '승인자 예시', views: 120, content: '공지사항 내용 예시입니다.\n실제 데이터가 연결되면 이 자리에 본문이 표시됩니다.' })),
+]
+type Notice = typeof demoNotices[number]
 
 type Composition = {
   officers: number
@@ -126,25 +164,52 @@ const initialSchedules: Schedule[] = [
   { id: 2, date: '01/15', title: '월 중간 결산' },
 ]
 
-function HeaderClock() {
+function SidebarClock() {
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000)
     return () => window.clearInterval(timer)
   }, [])
-  const time = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
-  return <time className="system-clock" dateTime={time} aria-label={`현재 시간 ${time}`}>{time}</time>
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const date = `${now.getFullYear()}.${pad(now.getMonth() + 1)}.${pad(now.getDate())} (${weekdayLabels[now.getDay()]})`
+  return <div className="sidebar-clock" role="timer" aria-label={`현재 시각 ${pad(now.getHours())}시 ${pad(now.getMinutes())}분`}>
+    <time dateTime={now.toISOString()}>
+      <span className="sidebar-clock-main">{pad(now.getHours())}:{pad(now.getMinutes())}</span>
+      <span className="sidebar-clock-sec">:{pad(now.getSeconds())}</span>
+    </time>
+    <small>{date}</small>
+  </div>
 }
 
 function App() {
   const [homeRevision, setHomeRevision] = useState(0)
   const [activePage, setActivePage] = useState<PageId>('home')
   const [resourceLanding, setResourceLanding] = useState<ResourceTabId>('organization')
+  const [trainingLanding, setTrainingLanding] = useState<TrainingTabId>('schedule')
   const [expandedMenus, setExpandedMenus] = useState<Set<FeaturePageId>>(() => new Set())
   const [chatOpen, setChatOpen] = useState(false)
   const [copilotView, setCopilotView] = useState<CopilotView | null>(null)
   const [dataRevision, setDataRevision] = useState(0)
-  const [trainingScheduleFocus, setTrainingScheduleFocus] = useState<number | null>(null)
+  const [messengerOpen, setMessengerOpen] = useState(false)
+  const [messengerRoom, setMessengerRoom] = useState<number | null>(null)
+  const [conversations, setConversations] = useState<Conversation[]>(initialConversations)
+  const unreadTotal = conversations.reduce((sum, item) => sum + item.unread, 0)
+  const contactAlerts = conversations.filter(item => item.unread > 0).map(item => ({
+    id: item.id,
+    title: `${item.name}님에게 메시지가 왔습니다.`,
+    time: formatAlertTime(item.messages[item.messages.length - 1].sentAt),
+  }))
+  const changeMessengerRoom = (roomId: number | null) => {
+    setMessengerRoom(roomId)
+    if (roomId !== null) setConversations(list => list.map(item => item.id === roomId ? { ...item, unread: 0 } : item))
+  }
+  const openMessenger = (roomId: number | null = null) => {
+    setChatOpen(false)
+    setMessengerOpen(true)
+    changeMessengerRoom(roomId)
+  }
+  const sendMessengerMessage = (roomId: number, text: string) => setConversations(list => list.map(item =>
+    item.id === roomId ? { ...item, messages: [...item.messages, { id: Date.now(), from: 'me' as const, text, sentAt: Date.now() }] } : item))
   // Copilot의 화면 명령. 응답마다 navigate가 먼저 와서 이전 필터·강조를 지웁니다.
   const runCopilotAction = (action: CopilotAction) => {
     if (action.tab !== 'roster') return
@@ -171,28 +236,32 @@ function App() {
       setActivePage('resource')
     } else {
       setResourceLanding('organization')
+      if (destination === 'training') setTrainingLanding('schedule')
       setActivePage(destination)
     }
   }
   const activeFeature = featurePages.find(page => page.id === activePage)
   const ActiveComponent = activeFeature?.Component
 
-  return <div className={`app ${chatOpen ? 'chat-open' : ''}`}>
+  return <div className={`app ${chatOpen ? 'chat-open' : ''} ${messengerOpen ? 'messenger-open' : ''}`}>
     <header className="system-topbar">
-      <div className="system-brand"><img className="system-brand-logo" src={ministryLogo} alt="대한민국 국방부" /><span>예비군 업무체계</span><HeaderClock /></div>
+      <div className="system-brand"><img className="system-brand-logo" src={ministryLogo} alt="대한민국 국방부" />
+      <div className="system-brand-title"><span>국방동원정보체계 2.0</span><small>DEFENSE MOBILIZATION INFORMATION SYSTEM</small></div>
+    </div>
       <div className="account-area" />
     </header>
     <div className="system-body">
       <aside className="sidebar" aria-label="주 메뉴">
-        <button className={`user-icon ${activePage === 'home' ? 'active' : ''}`} type="button" onClick={() => navigate('home')} aria-label="홈으로 이동" title="홈으로 이동">
-          <span className="user-icon-figure"><Icon name="person" size={28} /></span>
+        <SidebarClock />
+        <button className={`side-button home-button ${activePage === 'home' ? 'active' : ''}`} type="button" onClick={() => navigate('home')} aria-label="대시보드로 이동" title="대시보드로 이동">
+          <Icon name="dashboard" size={20} />대시보드
         </button>
         {featurePages.map(page => {
-          const hasSubmenus = page.id === 'resource' || page.id === 'worklog'
+          const hasSubmenus = page.id === 'resource' || page.id === 'worklog' || page.id === 'training'
           const expanded = expandedMenus.has(page.id)
           return <div key={page.id} className="side-menu-group">
             <div className={`side-menu-row ${activePage === page.id ? 'active' : ''}`}>
-              <button type="button" className="side-button" onClick={() => navigate(page.id)}>{page.label}</button>
+              <button type="button" className="side-button" onClick={() => navigate(page.id)}><Icon name={pageIcons[page.id]} size={20} />{page.label}</button>
               {hasSubmenus && <button type="button" className="side-menu-toggle" aria-label={`${page.label} 하위 메뉴 ${expanded ? '접기' : '펼치기'}`}
                 aria-expanded={expanded} aria-controls={`submenu-${page.id}`}
                 onClick={() => setExpandedMenus(current => { const next = new Set(current); if (next.has(page.id)) next.delete(page.id); else next.add(page.id); return next })}>{expanded ? '▲' : '▼'}</button>}
@@ -201,35 +270,78 @@ function App() {
               {page.id === 'resource' ? resourceTabs.map(tab => <button key={tab.id} type="button"
                 aria-current={activePage === 'resource' && resourceLanding === tab.id ? 'page' : undefined}
                 onClick={() => { setResourceLanding(tab.id); setActivePage('resource') }}>{tab.label}</button>)
+
+                : page.id === 'training' ? trainingTabs.map(tab => <button key={tab.id} type="button"
+                  aria-current={activePage === 'training' && trainingLanding === tab.id ? 'page' : undefined}
+                  onClick={() => { setTrainingLanding(tab.id); setActivePage('training') }}>{tab.label}</button>)
                 : <button type="button" aria-current={activePage === 'worklog' ? 'page' : undefined} onClick={() => navigate('worklog')}>업무일지 목록</button>}
             </div>}
           </div>
         })}
-        <ChatLauncher open={chatOpen} onToggle={() => setChatOpen(value => !value)} />
+        <MessengerLauncher open={messengerOpen} unread={unreadTotal}
+          onToggle={() => messengerOpen ? setMessengerOpen(false) : openMessenger(messengerRoom)} />
+        <ChatLauncher open={chatOpen} onToggle={() => { setMessengerOpen(false); setChatOpen(value => !value) }} />
       </aside>
       <main className="workspace">
         <div className="workspace-content">
           {activePage === 'home'
-            ? <Home key={homeRevision} onNavigate={navigate} />
+            ? <Home key={homeRevision} onNavigate={navigate} contactAlerts={contactAlerts} onOpenMessenger={openMessenger} />
             : activePage === 'resource' ? <ResourceManagement selectedTab={resourceLanding} onTabChange={setResourceLanding}
               copilotView={copilotView} dataRevision={dataRevision}
               onOpenTrainingEvent={scheduleId => { setTrainingScheduleFocus(scheduleId); setActivePage('training') }}
               onClearCopilotFilter={() => setCopilotView(current => current && { ...current, filter: null })} />
-            : activePage === 'training' ? <TrainingManagementPage
-                focusScheduleId={trainingScheduleFocus}
-                onScheduleFocusHandled={() => setTrainingScheduleFocus(null)}
-                onDataChanged={() => setDataRevision(value => value + 1)}
-              />
+  : activePage === 'training' ? <TrainingManagementPage selectedTab={trainingLanding} onTabChange={setTrainingLanding} onDataChanged={() => setDataRevision(value => value + 1)} />
+            : activePage === 'mypage' ? <MyPage />
             : ActiveComponent ? <ActiveComponent key={activePage} /> : null}
         </div>
       </main>
       <LegalChatbot open={chatOpen} onClose={() => setChatOpen(false)}
         onCopilotAction={runCopilotAction} onDataChanged={() => setDataRevision(value => value + 1)} />
+      <Messenger open={messengerOpen} conversations={conversations} roomId={messengerRoom}
+        onRoomChange={changeMessengerRoom} onSend={sendMessengerMessage} onClose={() => setMessengerOpen(false)} />
     </div>
   </div>
 }
 
-function Home({ onNavigate }: { onNavigate: (page: HomeDestination) => void }) {
+const weekdayLabels = ['일', '월', '화', '수', '목', '금', '토']
+
+function MiniCalendar({ schedules, onPickDate }: { schedules: Schedule[]; onPickDate: (date: string) => void }) {
+  const [today] = useState(() => new Date())
+  const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
+  const year = cursor.getFullYear()
+  const month = cursor.getMonth()
+  const leading = new Date(year, month, 1).getDay()
+  const cells = Array.from({ length: 42 }, (_, i) => new Date(year, month, 1 - leading + i))
+  const isToday = (d: Date) => d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()
+  const toKey = (d: Date) => `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+  const dayClass = (d: Date) => ['home-calendar-day', d.getDay() === 0 ? 'is-sun' : d.getDay() === 6 ? 'is-sat' : '', d.getMonth() !== month ? 'is-other' : '', isToday(d) ? 'is-today' : ''].filter(Boolean).join(' ')
+  return <section className="home-calendar-card" aria-label="월간 달력">
+    <div className="home-calendar-head">
+      <button type="button" aria-label="이전 달" onClick={() => setCursor(new Date(year, month - 1, 1))}><Icon name="left" size={15} /></button>
+      <strong>{year}년 {month + 1}월</strong>
+      <button type="button" aria-label="다음 달" onClick={() => setCursor(new Date(year, month + 1, 1))}><Icon name="right" size={15} /></button>
+    </div>
+    <div className="home-calendar-grid" role="grid">
+      {weekdayLabels.map((l, i) => <span key={l} role="columnheader" className={`home-calendar-weekday ${i === 0 ? 'is-sun' : i === 6 ? 'is-sat' : ''}`}>{l}</span>)}
+      {cells.map(d => {
+        const key = toKey(d)
+        const items = schedules.filter(s => s.date === key)
+        return <button type="button" key={d.getTime()} role="gridcell"
+          className={`${dayClass(d)}${items.length ? ' has-schedule' : ''}`}
+          aria-current={isToday(d) ? 'date' : undefined}
+          aria-label={`${d.getMonth() + 1}월 ${d.getDate()}일${items.length ? `, 일정 ${items.length}건` : ''}, 일정 추가`}
+          title={items.length ? items.map(s => s.title).join('\n') : `${key} 일정 추가`}
+          onClick={() => onPickDate(key)}><span>{d.getDate()}</span></button>
+      })}
+      </div>
+  </section>
+}
+
+function Home({ onNavigate, contactAlerts, onOpenMessenger }: {
+  onNavigate: (page: HomeDestination) => void
+  contactAlerts: { id: number; title: string; time: string }[]
+  onOpenMessenger: (roomId?: number | null) => void
+}) {
   const [reviewCounts, setReviewCounts] = useState<number | null>(null)
   const [reviewError, setReviewError] = useState('')
   useEffect(() => {
@@ -276,6 +388,46 @@ function Home({ onNavigate }: { onNavigate: (page: HomeDestination) => void }) {
   const [draftTitle, setDraftTitle] = useState('')
   const [showScheduleList, setShowScheduleList] = useState(true)
   const [showScheduleInfo, setShowScheduleInfo] = useState(false)
+  const [noticeOpen, setNoticeOpen] = useState(false)
+  const [noticeDetail, setNoticeDetail] = useState<Notice | null>(null)
+  const [notices, setNotices] = useState<Notice[]>(demoNotices)
+  const [noticeWriting, setNoticeWriting] = useState(false)
+  const [draftNotice, setDraftNotice] = useState({ type: '일반공지', title: '', author: '', approver: '', content: '' })
+  const openNoticeList = () => { setNoticeDetail(null); setNoticeWriting(false); setNoticeOpen(true) }
+  const openNoticeDetail = (notice: Notice) => { setNoticeDetail(notice); setNoticeWriting(false); setNoticeOpen(true) }
+  const closeNotice = () => { setNoticeOpen(false); setNoticeDetail(null); setNoticeWriting(false) }
+  const openNoticeWrite = () => {
+    setDraftNotice({ type: '일반공지', title: '', author: '', approver: '', content: '' })
+    setNoticeDetail(null)
+    setNoticeWriting(true)
+  }
+  const saveNotice = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!draftNotice.title.trim() || !draftNotice.author.trim() || !draftNotice.content.trim()) return
+    const now = new Date()
+    const pad = (value: number) => String(value).padStart(2, '0')
+    const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+    const writtenAt = `${date} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+    setNotices(prev => [{
+      id: Math.max(0, ...prev.map(n => n.id)) + 1,
+      type: draftNotice.type,
+      title: draftNotice.title.trim(),
+      author: draftNotice.author.trim(),
+      approver: draftNotice.approver.trim() || '-',
+      content: draftNotice.content,
+      date, writtenAt, views: 0,
+    }, ...prev])
+    setNoticeWriting(false)
+  }
+
+  const renderNotice = (n: Notice) => <li key={n.id}>
+    <button type="button" className="home-notice-row" onClick={() => openNoticeDetail(n)}>
+      <span>{n.id}</span>
+      <span className="home-notice-title">{n.type === '긴급공지' && <b className="home-notice-urgent">[긴급] </b>}{n.title}</span>
+      <span>{n.author}</span>
+      <span>{n.date}</span>
+    </button>
+  </li>
 
   const editSchedule = (schedule?: Schedule) => {
     setEditingSchedule(schedule?.id ?? 'new')
@@ -297,6 +449,25 @@ function Home({ onNavigate }: { onNavigate: (page: HomeDestination) => void }) {
     setSchedules(prev => prev.filter(schedule => schedule.id !== selectedSchedule))
     setSelectedSchedule(null)
   }
+  const pickScheduleDate = (date: string) => {
+  setShowScheduleList(true)
+  setShowScheduleInfo(false)
+  setEditingSchedule('new')
+  setDraftDate(date)
+  setDraftTitle('')
+}
+
+
+  const shortcuts: { label: string; icon: string | IconName; page: HomeDestination; onClick?: () => void }[] = [
+    { label: '보류자/연기자', icon: holdIcon, page: 'resource:hold'},
+    { label: '출국자/귀국자', icon: travelIcon, page: 'resource:travel'},
+    { label: '고발대상자', icon: prosecutionIcon, page: 'resource:prosecution'},
+    { label: '업무일지 작성', icon: worklogIcon, page: 'worklog' },
+    { label: '전투편성기구도', icon: formationIcon, page: 'resource' },
+    { label: '교육훈련', icon: trainingIcon, page: 'training' },
+    { label: '공지사항', icon: noticeIcon, page: 'home', onClick: openNoticeList },
+    { label: '마이페이지', icon: myPageIcon, page: 'mypage' },
+  ] 
 
   return <section className="home-dashboard" aria-label="홈 대시보드">
     <div className="home-left-column">
@@ -305,6 +476,8 @@ function Home({ onNavigate }: { onNavigate: (page: HomeDestination) => void }) {
         <span>소속 정보 미연결</span>
         <small>화면 예시 · 실데이터 미연결</small>
       </section>
+
+    <MiniCalendar schedules={schedules} onPickDate={pickScheduleDate} />
 
       <section className="home-schedule-card" aria-label="주요 일정">
         <div className="home-schedule-toolbar">
@@ -339,38 +512,108 @@ function Home({ onNavigate }: { onNavigate: (page: HomeDestination) => void }) {
       <DailyPanel />
     </div>
 
-    <section className="home-metrics-area" aria-label="DB 대상자 통계" aria-busy={!summary && !summaryError}>
-      {summaryError && <p className="home-metrics-error" role="alert">{summaryError}</p>}
-      <div className="home-metrics-grid">
-        {demoDashboard.metrics.map(metric =>
-          <article className="home-metric-card" key={metric.label}>
-            <div className="home-metric-label">
-              <span className={`home-metric-icon icon-${metric.icon}`}><Icon name={metric.icon} size={19} /></span>
-              <strong>{metric.label}</strong>
+    <section className="home-notice-banner" aria-label="공지사항" style={{ backgroundImage: `url("${noticeBannerImg}")` }}>
+      <div className="home-notice-content">
+        <span className="home-panel-chip"><Icon name="calendar" size={14} />공지사항</span>
+        <div className="home-notice-head-row"><span>번호</span><span>제목</span><span>글쓴이</span><span>등록일</span></div>
+        <ul className="home-notice-list">{notices.slice(0, 5).map(renderNotice)}</ul>
+        <button type="button" className="home-notice-more" aria-label="공지사항 전체 보기" onClick={openNoticeList}><Icon name="more" size={16} /></button>
+      </div>
+      {noticeOpen && <div className="home-notice-backdrop" onClick={closeNotice}>
+        <div className="home-notice-modal" role="dialog" aria-modal="true" aria-label="공지사항" onClick={e => e.stopPropagation()}>
+          <button type="button" className="home-notice-close" aria-label="닫기" onClick={closeNotice}>✕</button>
+<h2 className={`home-notice-modal-title${noticeDetail && !noticeWriting ? ' is-detail' : ''}`}>{noticeWriting ? '공지사항 작성' : noticeDetail ? noticeDetail.type : '공지사항'}</h2>
+                    {noticeWriting ? <form className="home-notice-write" onSubmit={saveNotice}>
+            <label>게시형태
+              <select value={draftNotice.type} onChange={e => setDraftNotice(d => ({ ...d, type: e.target.value }))}>
+                <option value="일반공지">일반</option>
+                <option value="긴급공지">긴급</option>
+              </select>
+            </label>
+            <label>제목
+              <input value={draftNotice.title} onChange={e => setDraftNotice(d => ({ ...d, title: e.target.value }))} placeholder="제목을 입력하세요" required />
+            </label>
+            <div className="home-notice-write-row">
+              <label>작성자
+                <input value={draftNotice.author} onChange={e => setDraftNotice(d => ({ ...d, author: e.target.value }))} required />
+              </label>
+              <label>승인자
+                <input value={draftNotice.approver} onChange={e => setDraftNotice(d => ({ ...d, approver: e.target.value }))} />
+              </label>
             </div>
-            <p className="home-metric-number">{summary ? `${summary[metric.key].toLocaleString('ko-KR')}명` : '—'}</p>
-            <p className="home-metric-detail">{metric.detail}</p>
-          </article>
-        )}
-      </div>
+            <label>내용
+              <textarea rows={10} value={draftNotice.content} onChange={e => setDraftNotice(d => ({ ...d, content: e.target.value }))} placeholder="내용을 입력하세요" required />
+            </label>
+            <div className="home-notice-write-actions">
+              <button type="submit" className="home-notice-back">저장</button>
+              <button type="button" className="home-notice-cancel" onClick={() => setNoticeWriting(false)}>취소</button>
+            </div>
+          </form> : noticeDetail ? <article className="home-notice-detail">
+            <header>
+              <h3><span className="home-notice-star"><Icon name="star" size={26} /></span>{noticeDetail.title}</h3>
+              <dl>
+                <div><dt>작성자 :</dt><dd>{noticeDetail.author}</dd></div>
+                <div><dt>작성일 :</dt><dd>{noticeDetail.writtenAt}</dd></div>
+                <div><dt>승인자 :</dt><dd>{noticeDetail.approver}</dd></div>
+                <div><dt>조회수 :</dt><dd>{noticeDetail.views.toLocaleString('ko-KR')}</dd></div>
+                <div><dt>게시형태 :</dt><dd>{noticeDetail.type === '긴급공지' ? '긴급' : '일반'}</dd></div>
+              </dl>
+            </header>
+            <div className="home-notice-body">{noticeDetail.content}</div>
+            <button type="button" className="home-notice-back" onClick={() => setNoticeDetail(null)}>목록</button>
+          </article> : <>
+            <div className="home-notice-table-head"><span>번호</span><span>제목</span><span>글쓴이</span><span>등록일</span></div>
+            <ul className="home-notice-table">{notices.map(n => <li key={n.id}>
+              <button type="button" className="home-notice-table-row" onClick={() => setNoticeDetail(n)}>
+                <span>{n.id}</span>
+                <span className="home-notice-table-title">{n.type === '긴급공지' && <b>[긴급] </b>}{n.title}</span>
+                <span>{n.author}</span>
+                <span>{n.date}</span>
+              </button>
+            </li>)}</ul>
+            <div className="home-notice-actions"><button type="button" className="home-notice-back" onClick={openNoticeWrite}>작성하기</button></div>
+          </>}
+        </div>
+      </div>}
     </section>
 
-    <section className="home-alerts-card" aria-label="알림">
-      <h2><span className="home-alert-icon"><Icon name="bell" size={19} /></span>알림</h2>
-      <div className="home-alert-list">
-        {demoDashboard.alerts.map(alert =>
-          <div className="home-alert-row" key={alert.label}>
-            <span className="home-alert-text"><span className="home-dot" />{alert.label}</span>
-            <span className="home-alert-count">{'reviewKey' in alert ? reviewCounts !== null ? `${reviewCounts}건` : '—' : `${alert.count}명`}</span>
-            <button type="button" className="home-alert-link" title={`${alert.page === 'resource:hold' ? '자원관리 · 보류자/연기자 검토' : alert.page === 'resource:prosecution' ? '자원관리 · 고발대상자' : '자원관리 · 출국자/귀국자'} 화면 열기`} aria-label={`${alert.label}: 관리 화면 열기`} onClick={() => onNavigate(alert.page)}><Icon name="arrow" size={19} /></button>
-          </div>
-        )}
-      </div>
-      {reviewError && <p className="home-data-note" role="alert">{reviewError}</p>}
-    </section>
 
-    <HomeForecastSection />
+  
+  <div className="home-lower-area">
+    <div className="home-notify-row">
+      <section className="home-panel" aria-label="업무 알림">
+        <span className="home-panel-chip"><Icon name="bell" size={14} />업무 알림</span>
+        <div className="home-bubble-list">
+          <button type="button" className="home-bubble" onClick={() => onNavigate('resource:hold')}>
+            <strong>보류자 검토 신청</strong>
+            <span>{reviewCounts === null ? '검토함 서류를 확인하는 중입니다.' : `검토함에 ${reviewCounts}건의 서류가 대기 중입니다.`}</span>
+          </button>
+          {demoWorkAlerts.map(a => <button type="button" className="home-bubble" key={a.title} onClick={() => onNavigate(a.page)}><strong>{a.title}</strong><span>{a.body}</span></button>)}
+        </div>
+        {reviewError && <p className="home-data-note" role="alert">{reviewError}</p>}
+        <span className="home-panel-more" aria-hidden="true"><Icon name="more" size={16} /></span>
+      </section>
+      <section className="home-panel" aria-label="연락 알림">
+        <span className="home-panel-chip"><Icon name="inbox" size={14} />연락 알림</span>
+        <div className="home-bubble-list">
+          {contactAlerts.map(a => <button type="button" className="home-bubble" key={a.id} onClick={() => onOpenMessenger(a.id)}><strong>{a.title}</strong><span>{a.time}</span></button>)}
+          {contactAlerts.length === 0 && <p className="home-data-note">새 메시지가 없습니다.</p>}
+        </div>
+        <button type="button" className="home-panel-more" aria-label="메신저 열기" onClick={() => onOpenMessenger()}><Icon name="more" size={16} /></button>
+      </section>
+    </div>
 
+<nav className="home-shortcuts" aria-label="바로가기">
+  {shortcuts.map(item => <button type="button" className="home-shortcut" key={item.label} onClick={() => item.onClick ? item.onClick() : onNavigate(item.page)}>
+    <span className="home-shortcut-icon">
+      {/[/:]/.test(item.icon)
+        ? <img src={item.icon} alt="" />
+        : <Icon name={item.icon as IconName} size={36} />}
+    </span>
+    <span className="home-shortcut-label">{item.label}</span>
+  </button>)}
+</nav>
+</div>
     <CompositionPanel data={summary?.composition ?? null} error={summaryError} />
   </section>
 }
@@ -591,8 +834,7 @@ function PopulationForecast() {
 }
 export default App
 
-const movementLabels = { transfer_in: '전입자', transfer_out: '전출자', departure: '출국자', arrival: '귀국자' }
-const dailyLabels = { ...movementLabels, hold: '보류자', delay: '연기자' }
+const dailyLabels = { departure: '출국자', arrival: '귀국자', transfer_in: '전입자', transfer_out: '전출자' }
 type DailyPayload = { date: string; counts: Record<'hold' | 'delay', number> }
 
 function koreaDate(offset = 0) {

@@ -190,7 +190,7 @@ On the login page, choose **첫 approver 계정 만들기**, then enter the user
 
 ```powershell
 cd .\backend
-.\.venv\Scripts\python.exe -m uvicorn user.app.main:app --host 127.0.0.1 --port 8002
+.\.venv\Scripts\python.exe main.py --port 8004 --no-browser
 ```
 
 | Setting | Default | Behavior |

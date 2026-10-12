@@ -1,3 +1,4 @@
+import type { TrainingTabId as TrainingTab } from './trainingtabs'
 import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { apiBase, authenticatedFetch } from './auth'
@@ -61,7 +62,6 @@ type PersonHistory = {
 }
 type HistoryRosterPerson = Pick<RosterRow, 'military_number' | 'name'>
 
-type TrainingTab = 'schedule' | 'assignment' | 'results'
 type DayInput = { session_date: string; credited_hours: number }
 type AssignmentGroup = 'all' | 'enlisted' | 'cadre' | 'rank' | 'branch' | 'rankYear' | 'specialty'
 type ResultsGroup = 'all' | 'enlisted' | 'cadre' | 'branch'
@@ -149,31 +149,14 @@ function emptyWorklists(): Worklists {
   }
 }
 
-async function loadPendingAssignmentCandidates(schedules: Schedule[], signal: AbortSignal): Promise<Map<number, string[]>> {
-  const candidatesBySchedule = new Map<number, string[]>()
-  let nextIndex = 0
-  const worker = async () => {
-    while (nextIndex < schedules.length) {
-      const schedule = schedules[nextIndex++]
-      const response = await authenticatedFetch(`${API}/reservists/training-schedules/${schedule.id}/assignment-candidates`, { signal })
-      if (!response.ok) throw new Error(await apiError(response, '훈련부과 대기 인원을 불러오지 못했습니다.'))
-      const payload = await response.json() as { military_numbers?: unknown }
-      if (!Array.isArray(payload.military_numbers) || !payload.military_numbers.every((value): value is string => typeof value === 'string')) {
-        throw new Error('훈련부과 대기 인원 응답을 확인할 수 없습니다.')
-      }
-      candidatesBySchedule.set(schedule.id, payload.military_numbers)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(4, schedules.length) }, () => worker()))
-  return candidatesBySchedule
-}
-
-export default function TrainingManagementPage({ onDataChanged, focusScheduleId = null, onScheduleFocusHandled }: {
+export default function TrainingManagementPage({ onDataChanged, selectedTab, onTabChange }: {
   onDataChanged?: () => void
-  focusScheduleId?: number | null
-  onScheduleFocusHandled?: () => void
+  selectedTab?: TrainingTab
+  onTabChange?: (tab: TrainingTab) => void
 } = {}) {
-  const [tab, setTab] = useState<TrainingTab>('schedule')
+  const [innerTab, setInnerTab] = useState<TrainingTab>('schedule')
+  const tab = selectedTab ?? innerTab
+  const setTab = (next: TrainingTab) => { setInnerTab(next); onTabChange?.(next) }
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [people, setPeople] = useState<Person[]>([])
   const [loading, setLoading] = useState(false)
@@ -1118,13 +1101,4 @@ function WorklistPanel({ worklists, loading, error }: { worklists: Worklists; lo
       </WorklistSection>
     </>}
   </aside>
-}
-
-function WorklistSection({ id, title, count, children }: { id?: string; title: string; count: number; children: ReactNode }) {
-  const [expanded, setExpanded] = useState(count > 0)
-  useEffect(() => { setExpanded(count > 0) }, [count])
-  return <details id={id} className={`training-worklist-group${count === 0 ? ' is-empty' : ''}`} open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
-    <summary><span>{title}</span><span className="training-worklist-count">{count}</span></summary>
-    <div className="training-worklist-content">{count > 0 ? children : <p>현재 확인할 항목이 없습니다.</p>}</div>
-  </details>
 }
