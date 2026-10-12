@@ -149,10 +149,32 @@ function emptyWorklists(): Worklists {
   }
 }
 
-export default function TrainingManagementPage({ onDataChanged, selectedTab, onTabChange }: {
+async function loadPendingAssignmentCandidates(
+  schedules: Schedule[],
+  signal: AbortSignal,
+): Promise<Map<number, string[]>> {
+  const entries = await Promise.all(schedules.map(async schedule => {
+    const response = await authenticatedFetch(
+      `${API}/reservists/training-schedules/${schedule.id}/assignment-candidates`,
+      { signal },
+    )
+    if (!response.ok) {
+      throw new Error(await apiError(response, '훈련부과 대기 인원을 불러오지 못했습니다.'))
+    }
+    const candidates = await response.json() as { military_numbers: string[] }
+    return [schedule.id, candidates.military_numbers] as const
+  }))
+  return new Map(entries)
+}
+
+export default function TrainingManagementPage({
+  onDataChanged, selectedTab, onTabChange, focusScheduleId = null, onScheduleFocusHandled,
+}: {
   onDataChanged?: () => void
   selectedTab?: TrainingTab
   onTabChange?: (tab: TrainingTab) => void
+  focusScheduleId?: number | null
+  onScheduleFocusHandled?: () => void
 } = {}) {
   const [innerTab, setInnerTab] = useState<TrainingTab>('schedule')
   const tab = selectedTab ?? innerTab
@@ -673,7 +695,7 @@ function ResultsWorkspace({ schedules, people, canWrite, onSaved, onNavigateToAs
         return await response.json() as Worklists
       })
       .then(setWorklists)
-      .catch(cause => {
+      .catch((cause: unknown) => {
         if (!controller.signal.aborted) setWorklistsError(cause instanceof Error ? cause.message : '결과 확인 목록을 불러오지 못했습니다.')
       })
       .finally(() => { if (!controller.signal.aborted) setWorklistsLoading(false) })
@@ -687,7 +709,7 @@ function ResultsWorkspace({ schedules, people, canWrite, onSaved, onNavigateToAs
     setPendingAssignmentError('')
     loadPendingAssignmentCandidates(scheduled, controller.signal)
       .then(setPendingAssignmentCandidates)
-      .catch(cause => {
+      .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
           setPendingAssignmentCandidates(null)
           setPendingAssignmentError(cause instanceof Error ? cause.message : '훈련부과 대기 인원을 불러오지 못했습니다.')
@@ -1101,4 +1123,16 @@ function WorklistPanel({ worklists, loading, error }: { worklists: Worklists; lo
       </WorklistSection>
     </>}
   </aside>
+}
+
+function WorklistSection({ id, title, count, children }: {
+  id?: string
+  title: string
+  count: number
+  children: ReactNode
+}) {
+  return <details id={id} className="training-worklist-section" open>
+    <summary><strong>{title}</strong><span>{count}건</span></summary>
+    {count === 0 ? <p className="training-note">확인할 항목이 없습니다.</p> : children}
+  </details>
 }

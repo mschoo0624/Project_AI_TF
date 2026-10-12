@@ -186,6 +186,7 @@ function App() {
   const [activePage, setActivePage] = useState<PageId>('home')
   const [resourceLanding, setResourceLanding] = useState<ResourceTabId>('organization')
   const [trainingLanding, setTrainingLanding] = useState<TrainingTabId>('schedule')
+  const [trainingScheduleFocus, setTrainingScheduleFocus] = useState<number | null>(null)
   const [expandedMenus, setExpandedMenus] = useState<Set<FeaturePageId>>(() => new Set())
   const [chatOpen, setChatOpen] = useState(false)
   const [copilotView, setCopilotView] = useState<CopilotView | null>(null)
@@ -236,6 +237,7 @@ function App() {
       setActivePage('resource')
     } else {
       setResourceLanding('organization')
+      if (destination === 'training') setTrainingScheduleFocus(null)
       if (destination === 'training') setTrainingLanding('schedule')
       setActivePage(destination)
     }
@@ -273,7 +275,7 @@ function App() {
 
                 : page.id === 'training' ? trainingTabs.map(tab => <button key={tab.id} type="button"
                   aria-current={activePage === 'training' && trainingLanding === tab.id ? 'page' : undefined}
-                  onClick={() => { setTrainingLanding(tab.id); setActivePage('training') }}>{tab.label}</button>)
+                  onClick={() => { setTrainingScheduleFocus(null); setTrainingLanding(tab.id); setActivePage('training') }}>{tab.label}</button>)
                 : <button type="button" aria-current={activePage === 'worklog' ? 'page' : undefined} onClick={() => navigate('worklog')}>업무일지 목록</button>}
             </div>}
           </div>
@@ -290,7 +292,9 @@ function App() {
               copilotView={copilotView} dataRevision={dataRevision}
               onOpenTrainingEvent={scheduleId => { setTrainingScheduleFocus(scheduleId); setActivePage('training') }}
               onClearCopilotFilter={() => setCopilotView(current => current && { ...current, filter: null })} />
-  : activePage === 'training' ? <TrainingManagementPage selectedTab={trainingLanding} onTabChange={setTrainingLanding} onDataChanged={() => setDataRevision(value => value + 1)} />
+  : activePage === 'training' ? <TrainingManagementPage selectedTab={trainingLanding} onTabChange={setTrainingLanding}
+              focusScheduleId={trainingScheduleFocus} onScheduleFocusHandled={() => setTrainingScheduleFocus(null)}
+              onDataChanged={() => setDataRevision(value => value + 1)} />
             : activePage === 'mypage' ? <MyPage />
             : ActiveComponent ? <ActiveComponent key={activePage} /> : null}
         </div>

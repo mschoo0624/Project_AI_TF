@@ -73,6 +73,10 @@
 .training-worklists ul { display:grid; gap:5px; margin:0; padding:0; list-style:none; }
 .training-worklists li { display:grid; gap:2px; padding:6px 0; border-bottom:1px solid #edf1ee; font-size:10px; }
 .training-worklists li span,.training-worklists>p { color:#77847d; font-size:10px; }
+.training-worklist-section { margin-top:10px; border-top:1px solid #e7eee9; }
+.training-worklist-section>summary { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 4px; cursor:pointer; }
+.training-worklist-section>summary strong { color:#294d3a; font-size:11px; }
+.training-worklist-section>summary span { color:#718278; font-size:10px; white-space:nowrap; }
 @media(max-width:1100px) { .training-columns,.training-results-layout { grid-template-columns:1fr; } .training-worklists { position:static; } }
 @media(max-width:700px) { .training-workspace { padding:14px 10px 28px; } .training-form { grid-template-columns:1fr 1fr; } .training-person-list>label { grid-template-columns:18px minmax(100px,.9fr) minmax(70px,.8fr); } .training-person-list small { grid-column:2/-1; } .training-day-row { grid-template-columns:38px minmax(100px,1fr) 72px 24px auto; gap:4px; } }
 
