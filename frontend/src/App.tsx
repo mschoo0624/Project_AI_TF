@@ -288,6 +288,7 @@ function App() {
             ? <Home key={homeRevision} onNavigate={navigate} contactAlerts={contactAlerts} onOpenMessenger={openMessenger} />
             : activePage === 'resource' ? <ResourceManagement selectedTab={resourceLanding} onTabChange={setResourceLanding}
               copilotView={copilotView} dataRevision={dataRevision}
+              onOpenTrainingEvent={scheduleId => { setTrainingScheduleFocus(scheduleId); setActivePage('training') }}
               onClearCopilotFilter={() => setCopilotView(current => current && { ...current, filter: null })} />
   : activePage === 'training' ? <TrainingManagementPage selectedTab={trainingLanding} onTabChange={setTrainingLanding} onDataChanged={() => setDataRevision(value => value + 1)} />
             : activePage === 'mypage' ? <MyPage />

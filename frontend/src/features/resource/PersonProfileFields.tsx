@@ -73,7 +73,8 @@ export default function PersonProfileFields({ person, squadName, onSaved }: { pe
     }}>수정</button>}</div>
     {error && <p className="rm-profile-error" role="alert">{error}</p>}
     <dl className="rm-detail-fields">
-      {(['name', 'military_number', 'unit'] as const).map(key => <div key={key}><dt>{labels[key]}</dt><dd>{field(key)}</dd></div>)}
+      {(draft ? ['name', 'military_number', 'unit'] as const : ['unit'] as const)
+        .map(key => <div key={key}><dt>{labels[key]}</dt><dd>{field(key)}</dd></div>)}
       <div><dt>편성 분대</dt><dd>{squadName}{draft && <small className="rm-profile-readonly">수정 불가</small>}</dd></div>
       <div><dt>군별</dt><dd>{field('branch')}</dd></div>
       <div><dt>계급</dt><dd>{person.rank ?? '미등록'}{draft && <small className="rm-profile-readonly">수정 불가</small>}</dd></div>
