@@ -7,17 +7,20 @@ from typing import Literal
 from concurrent.futures import ThreadPoolExecutor, CancelledError
 from contextlib import asynccontextmanager
 from io import BytesIO
+from datetime import date
 import logging
 import pdfplumber
 import os
+import re
 import httpx
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 from .extraction import ModelError, catalog, extract_application, selected_fields
-from .verification import BASE, rules_catalog, verify_application
+from .verification import BASE, Evaluation, rules_catalog, verify_application
 from . import submissions
+from .layout import refine_evidence_boxes
 
 @asynccontextmanager
 async def lifespan(app):
@@ -39,6 +42,11 @@ jobs = ThreadPoolExecutor(max_workers=1, thread_name_prefix='pdf-analysis')
 
 
 def review_item(item):
+    try:
+        refine_evidence_boxes(submissions.root()/(item['id']+'.pdf'), item.get('extraction', {}).get('fields', {}))
+    except Exception:
+        # Coordinate refinement must not prevent review of a damaged original.
+        logging.getLogger(__name__).warning('Could not refine PDF evidence positions for %s', item['id'])
     entry = rules_catalog()['types'][item['application_type']]
     item['review_items'] = entry.get('review_items', [])
     item.setdefault('analysis_state', 'completed')
@@ -126,6 +134,70 @@ def verification_source(table: int):
     entries = rules_catalog()['types'].values()
     source = next(e['citation'] for e in entries if e['citation']['table'] == table)
     return FileResponse(BASE/source['path'], media_type='application/pdf')
+
+
+@app.get('/submissions/{id}/training-overlap')
+def training_overlap(id: str, start: date, end: date):
+    """Read-only date comparison; never replace the persisted training context."""
+    if start > end:
+        raise HTTPException(422, '훈련 시작일이 종료일보다 늦습니다.')
+    item = stored(id)
+    require_complete(item)
+    entry = rules_catalog()['types'][item['application_type']]
+    context = dict(item.get('context', {}))
+    context.update(training_start={'value': start.isoformat(), 'source': '화면 비교 날짜'},
+                   training_end={'value': end.isoformat(), 'source': '화면 비교 날짜'})
+    evaluator = Evaluation([item['extraction']], context)
+    def periods(rules):
+        for rule in rules:
+            if rule.get('op') in ('overlap', 'window', 'point_window') and 'context.training_start' in rule.get('fields', []):
+                yield evaluator.evaluate(rule)
+            yield from periods(rule.get('children', []))
+    checks = list(periods(entry.get('common', []) + entry['checks']))
+    return {'overlaps': any(check['status'] == 'pass' for check in checks), 'checks': checks}
+
+
+@app.get('/verification-view/{application_type}')
+def verification_view(application_type: str):
+    entry = rules_catalog()['types'].get(application_type)
+    if not entry:
+        raise HTTPException(404, '신청 유형을 찾을 수 없습니다.')
+    source = entry['citation']
+    with render_busy, pdfplumber.open(BASE/source['path']) as pdf:
+        page = pdf.pages[source['page']-1]
+        boxes = []
+        reason_numbers = set()
+        tables = page.find_tables()
+        normalize = lambda text: re.sub(r'[^가-힣A-Za-z0-9]', '', text).replace('및', '').replace('또는', '')
+        title = normalize(source['item'])
+        # Only match the item column, not incidental mentions in another rule.
+        for table in tables:
+            for row, cells in zip(table.rows, table.extract()):
+                label = normalize(cells[0] or '')
+                if label.isdigit() and len(cells) > 1:
+                    label = normalize(cells[1] or '')
+                if title and title in label:
+                    boxes.append(list(row.bbox))
+                    number = normalize(cells[0] or '')
+                    if number.isdigit(): reason_numbers.add(number)
+        if not boxes:
+            pattern = r'\W*'.join(map(re.escape, re.sub(r'\W', '', source['item'])))
+            for match in page.search(pattern) if pattern else []:
+                boxes.append([match['x0'], match['top'], match['x1'], match['bottom']])
+        return {**source, 'reason_number': next(iter(reason_numbers)) if len(reason_numbers) == 1 else None,
+                'width': page.width, 'height': page.height, 'boxes': boxes}
+
+
+@app.get('/verification-sources/{table}/pages/{page_number}/image')
+def verification_page_image(table: int, page_number: int):
+    entry = next((e for e in rules_catalog()['types'].values() if e['citation']['table'] == table), None)
+    if not entry: raise HTTPException(404, '기준표를 찾을 수 없습니다.')
+    with render_busy, pdfplumber.open(BASE/entry['citation']['path']) as pdf:
+        if not 1 <= page_number <= len(pdf.pages): raise HTTPException(404, '페이지를 찾을 수 없습니다.')
+        image = pdf.pages[page_number-1].to_image(resolution=300, antialias=True).original
+        output = BytesIO()
+        image.save(output, format='PNG')
+    return Response(output.getvalue(), media_type='image/png')
 
 
 @app.post('/verify')
@@ -243,7 +315,7 @@ def page_image(id: str, page: int):
     stored(id)
     with render_busy, pdfplumber.open(submissions.root()/(id+'.pdf')) as pdf:
         if page < 1 or page > len(pdf.pages): raise HTTPException(404, '해당 페이지가 없습니다.')
-        image = pdf.pages[page-1].to_image(resolution=110).original
+        image = pdf.pages[page-1].to_image(resolution=180, antialias=True).original
         output = BytesIO(); image.save(output, format='PNG')
     return Response(output.getvalue(), media_type='image/png', headers={'Cache-Control': 'private, max-age=3600'})
 

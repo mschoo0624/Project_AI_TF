@@ -1,10 +1,56 @@
 """Traceable layout sources and conservative whitespace/date normalization."""
 import re
+import json
+from pathlib import Path
+from functools import lru_cache
+import pdfplumber
 from datetime import date
 
 
 def compact(text):
     return re.sub(r'\s+', '', text)
+
+
+@lru_cache(maxsize=512)
+def _value_boxes(path, modified, page_number, value, region, value_pattern):
+    """Split a shared region into label-and-value boxes; retain ordinary cells."""
+    if not region or not value_pattern:
+        return ()
+    with pdfplumber.open(path) as pdf:
+        if not 1 <= page_number <= len(pdf.pages): return ()
+        page = pdf.pages[page_number-1]
+        pattern = re.compile(value_pattern.lstrip('^'), re.MULTILINE)
+        # Match the whole labelled phrase, not just the captured value.
+        matches = [m for m in page.search(pattern)
+                   if compact(m['groups'][pattern.groupindex['value']-1]) == compact(value)]
+        if region:
+            a, b, c, d = region
+            matches = [m for m in matches if a-1 <= m['x0'] and m['x1'] <= c+1 and b-1 <= m['top'] and m['bottom'] <= d+1]
+        if len(matches) != 1: return ()
+        match = matches[0]
+        a, b, c, d = region
+        # A single-row cell already supplies the desired enclosing border.
+        if d-b <= 2*(match['bottom']-match['top'])+8:
+            return ()
+        return ((max(a, match['x0']-4), max(b, match['top']-4),
+                 min(c, match['x1']+4), min(d, match['bottom']+4)),)
+
+
+def refine_evidence_boxes(path, fields):
+    """Refine display coordinates without changing extracted values or quotes."""
+    if not path.is_file(): return
+    modified = path.stat().st_mtime_ns
+    definitions = json.loads((Path(__file__).parent/'specifications/common_fields.json').read_text(encoding='utf-8'))['fields']
+    for key, field in fields.items():
+        value = field.get('value')
+        if not isinstance(value, str) or not compact(value): continue
+        refined = []
+        for proof in field.get('evidence', []):
+            if not proof.get('page'):
+                refined.append(proof); continue
+            boxes = _value_boxes(str(path), modified, proof['page'], value, tuple(proof['bbox']) if proof.get('bbox') else None, definitions.get(key, {}).get('value_pattern'))
+            refined.extend([{**proof, 'bbox': list(box)} for box in boxes] if boxes else [proof])
+        field['evidence'] = refined
 
 
 def dates(text):

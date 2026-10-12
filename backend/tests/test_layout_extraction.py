@@ -14,16 +14,36 @@ def test_review_only_fields_are_read_from_layout_not_sent_to_model():
         requested.update(fields)
         return json.dumps({key: {'value': None, 'evidence_ids': []} for key in fields})
     result = ex.extract_application(path, 'postponement.illness', client=client)
-    direct = {'onset_date', 'medical_institution', 'doctor_name', 'doctor_license', 'doctor_kind'}
+    direct = {'onset_date', 'medical_institution', 'doctor_name', 'doctor_license', 'doctor_kind', 'certificate_registration_number', 'certificate_serial_number'}
     assert not (direct & requested)
     assert len(requested) == 9  # The explicit document title is resolved without a model call.
     assert result['fields']['document_title']['value'] == '진단서'
+    assert ''.join(result['fields']['certificate_registration_number']['value'].split()) == '2026-000184'
+    assert ''.join(result['fields']['certificate_serial_number']['value'].split()) == 'D-2026-0416-003'
     assert result['fields']['onset_date']['value'] == '2026-04-16'
     assert '비호정형외과의원' == ''.join(result['fields']['medical_institution']['value'].split())
     assert result['fields']['doctor_name']['value'] == '한의사'
     assert result['fields']['doctor_kind']['value'] == '의사'
     assert '123456' in result['fields']['doctor_license']['value'].replace(' ', '')
     assert all(result['fields'][key]['evidence'][0]['bbox'] for key in direct)
+    from backend.classifier_agent.layout import refine_evidence_boxes
+    original_onset_box = list(result['fields']['onset_date']['evidence'][0]['bbox'])
+    original_registration_box = list(result['fields']['certificate_registration_number']['evidence'][0]['bbox'])
+    refine_evidence_boxes(path, result['fields'])
+    assert result['fields']['onset_date']['evidence'][0]['bbox'] == original_onset_box
+    assert result['fields']['certificate_registration_number']['evidence'][0]['bbox'] == original_registration_box
+    issuer_keys = ('medical_institution', 'doctor_name', 'doctor_license', 'doctor_kind')
+    boxes = [result['fields'][key]['evidence'][0]['bbox'] for key in issuer_keys]
+    assert len({tuple(box) for box in boxes}) == 4
+    assert all(box[3]-box[1] < 25 for box in boxes)
+    import pdfplumber
+    with pdfplumber.open(path) as pdf:
+        for key, box in zip(issuer_keys, boxes):
+            text = ''.join((pdf.pages[0].crop(box).extract_text() or '').split())
+            assert ''.join(result['fields'][key]['value'].split()) in text
+            if key == 'medical_institution': assert '의료기관명칭' in text
+            if key == 'doctor_license': assert '면허번호' in text
+            if key == 'doctor_name': assert '성명' in text
 
 
 def test_cancellation_stops_followup_model_calls():

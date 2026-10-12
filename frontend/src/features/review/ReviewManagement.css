@@ -106,6 +106,25 @@
 .review-evidence-warning { color:#946415; font-weight:500; }
 .review-db-comparison { padding:8px; background:#eff4fa; font-size:12px; }
 .review-db-comparison p { margin:5px 0; }
+.review-institution-unverified, .review-match, .review-mismatch { display:inline-block; font-size:12px; font-weight:600; padding:1px 4px; border-radius:3px; }
+.review-institution-unverified { color:#a87900; background:#fff4bf; }
+.review-evidence-check, .review-evidence-check p, .review-evidence-check small, .review-evidence-check th, .review-evidence-check td, .review-evidence-check strong { font-size:12px; }
+.review-evidence-table td { overflow-x:auto; }
+.review-birth-value { white-space:nowrap; }
+.review-match { color:#07834b; background:#e0f5e9; }
+.review-mismatch { color:#c72e32; background:#ffe7e7; }
+.review-reference-actions { display:flex; justify-content:space-between; gap:8px; align-items:center; }
+.review-reference-actions .review-document-link { font-size:12px; padding:8px 6px; cursor:pointer; background:white; }
+.review-reference-actions .review-document-link:last-child { margin-left:auto; }
+.review-provision-dialog { position:fixed; inset:0; margin:auto; width:min(1000px, 92vw); height:90vh; max-height:90vh; padding:0; border:1px solid #cbd1d8; border-radius:8px; }
+.review-provision-dialog[open] { display:flex; flex-direction:column; }
+.review-provision-dialog::backdrop { background:#0f172a73; }
+.review-provision-dialog header, .review-provision-controls { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; border-bottom:1px solid #d3deeb; }
+.review-provision-dialog button { padding:5px 12px; cursor:pointer; }
+.review-provision-controls { font-size:12px; }
+.review-provision-scroll { overflow:auto; flex:1; min-height:0; padding:12px; background:#edf1f6; }
+.review-provision-sheet { position:relative; margin:0 auto; background:white; }
+.review-provision-sheet img { width:100%; display:block; }
 .review-evidence-pdf { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
 .review-evidence-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; padding:8px; background:#fff; font-size:12px; }
 .review-evidence-zoom { display:flex; align-items:center; gap:4px; }

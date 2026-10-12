@@ -51,7 +51,7 @@ def test_every_type_extracts_exactly_rule_references():
         used.update(required)
     assert set(common['fields']) == used
     assert all(set(keys) <= used for keys in common['field_groups'].values())
-    assert len(ex.selected_fields('postponement.illness')[1]) == 15
+    assert len(ex.selected_fields('postponement.illness')[1]) == 17
     assert sum(f.get('extraction') != 'layout' for f in ex.selected_fields('postponement.illness')[1].values()) == 10
     exam = ex.selected_fields('postponement.exam')[1]
     assert len(exam) == 8

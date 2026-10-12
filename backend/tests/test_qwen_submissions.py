@@ -31,6 +31,44 @@ def upload(client):
     return client.get(f'/submissions/{response.json()["id"]}').json()
 
 
+@pytest.mark.parametrize('start,end,expected', [
+    ('2026-05-01', '2026-05-11', True),
+    ('2026-05-13', '2026-05-20', True),
+    ('2026-05-01', '2026-05-10', False),
+    ('2026-05-14', '2026-05-20', False),
+    ('2026-05-20', '2026-05-01', False),
+    (None, None, False),
+])
+def test_training_overlap_uses_display_dates_without_saving_context(client, start, end, expected):
+    from test_verification import document
+    item = upload(client)
+    values = {} if start is None else {'admission_date': start, 'discharge_date': end}
+    api.submissions.update(item['id'], lambda row: row.update(extraction=document('postponement.illness', values)))
+    before = api.submissions.get(item['id'])
+    response = client.get(f"/submissions/{item['id']}/training-overlap?start=2026-05-11&end=2026-05-13")
+    assert response.status_code == 200
+    assert response.json()['overlaps'] is expected
+    assert api.submissions.get(item['id']) == before
+
+
+@pytest.mark.parametrize('kind', ['postponement.illness', 'postponement.exam', 'policy.long_illness'])
+def test_provision_view_highlights_only_matching_rule_row(client, kind):
+    response = client.get(f'/verification-view/{kind}')
+    assert response.status_code == 200
+    page = response.json()
+    if kind == 'postponement.illness':
+        assert page['page'] == 1 and page['reason_number'] == '1'
+    if kind == 'policy.long_illness':
+        assert page['reason_number'] is None
+    assert len(page['boxes']) == 1
+    x0, y0, x1, y1 = page['boxes'][0]
+    assert 0 <= x0 < x1 <= page['width']
+    assert 0 <= y0 < y1 <= page['height']
+    image = client.get(f"/verification-sources/{page['table']}/pages/{page['page']}/image")
+    assert image.status_code == 200 and image.headers['content-type'] == 'image/png'
+    assert client.get('/verification-view/unknown').status_code == 404
+
+
 def check_all(client, id):
     item = client.get(f'/submissions/{id}').json()
     response = client.patch(f'/submissions/{id}/review-checks', json={

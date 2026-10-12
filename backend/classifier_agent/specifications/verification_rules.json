@@ -1,5 +1,5 @@
 {
-  "version": "1.4.2",
+  "version": "1.4.3",
   "basis": "provided_pdf",
   "common": [
     {
@@ -2629,9 +2629,10 @@
           "id": "document_type",
           "label": "증빙서류 종류 확인",
           "fields": [
-            "document_title"
-          ],
-          "description": "의사 진단서가 제출되었는지 확인하세요. 질병 내용과 훈련 일정은 별도 항목에서 확인합니다."
+            "document_title",
+            "certificate_registration_number",
+            "certificate_serial_number"
+          ]
         },
         {
           "id": "issuer",
@@ -3060,9 +3061,10 @@
           "id": "document_type",
           "label": "증빙서류 종류 확인",
           "fields": [
-            "document_title"
-          ],
-          "description": "신청 유형에 필요한 증빙서류인지 확인하세요. 병역의무 변경은 공적 병역 이력 자료도 확인해야 합니다."
+            "document_title",
+            "certificate_registration_number",
+            "certificate_serial_number"
+          ]
         },
         {
           "id": "issuer",
@@ -5401,9 +5403,10 @@
           "id": "document_type",
           "label": "증빙서류 종류 확인",
           "fields": [
-            "document_title"
-          ],
-          "description": "의사 진단서가 제출되었는지 확인하세요. 질병 내용과 훈련 일정은 별도 항목에서 확인합니다."
+            "document_title",
+            "certificate_registration_number",
+            "certificate_serial_number"
+          ]
         },
         {
           "id": "issuer",
