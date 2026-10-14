@@ -67,8 +67,11 @@ def main():
     resources = stage / 'resources'
     app.mkdir(parents=True)
     resources.mkdir()
+    shutil.copy2(DESKTOP / 'loading.html', resources / 'loading.html')
+    shutil.copy2(ROOT / 'frontend/src/assets/background.png', resources / 'background.png')
+    shutil.copy2(ROOT / 'frontend/src/assets/appicon.png', resources / 'appicon.png')
     # Windows needs a multi-resolution ICO; preserve the source artwork's aspect ratio.
-    with Image.open(ROOT / 'frontend/src/assets/국방부 마크_컬러본.png') as original:
+    with Image.open(ROOT / 'frontend/src/assets/appicon.png') as original:
         icon = ImageOps.pad(original.convert('RGBA'), (256, 256),
                             method=Image.Resampling.LANCZOS, color=(0, 0, 0, 0))
         icon.save(resources / 'app.ico', sizes=[(n, n) for n in (16, 24, 32, 48, 64, 128, 256)])

@@ -10,9 +10,21 @@ const config = JSON.parse(fs.readFileSync(path.join(bundle, 'runtime.json'), 'ut
 const runtime = path.join(app.getPath('appData'), 'OnbitnuriDemo');
 app.setPath('userData', path.join(runtime, 'browser'));
 const children = [];
-let closing = false, gateway, win;
+let closing = false, gateway, win, splash, startupComplete = false;
+const startupProgress = [];
 const smoke = process.argv.includes('--smoke-test');
 function log(message) { fs.appendFileSync(path.join(runtime, 'desktop.log'), `${new Date().toISOString()} ${message}\n`); }
+async function progress(value, label) {
+  if (closing || splash?.isDestroyed()) return;
+  startupProgress.push(value);
+  log(`STARTUP ${value}% ${label}`);
+  await splash.webContents.executeJavaScript(`{
+    document.getElementById('fill').style.width = ${JSON.stringify(value + '%')};
+    document.getElementById('progress').setAttribute('aria-valuenow', ${JSON.stringify(String(value))});
+    document.getElementById('status').textContent = ${JSON.stringify(label)};
+  }`);
+  if (!smoke) win.setProgressBar(value / 100);
+}
 function launch(exe, args, env, cwd) {
   if (closing) throw new Error('Application is closing');
   const child = spawn(exe, args, { env, cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -54,25 +66,33 @@ function shutdown() {
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on('second-instance', () => { win?.show(); win?.focus(); });
+  app.on('second-instance', () => { const current = startupComplete ? win : splash; current?.show(); current?.focus(); });
   app.on('before-quit', shutdown);
   app.on('window-all-closed', () => app.quit());
   process.on('exit', shutdown);
   app.whenReady().then(async () => {
     fs.mkdirSync(runtime, { recursive: true });
     fs.writeFileSync(path.join(runtime, 'desktop.log'), '');
-    win = new BrowserWindow({ width: 1600, height: 920, show: !smoke, title: '온빛누리',
+    win = new BrowserWindow({ width: 1600, height: 920, show: false, title: '온빛누리', backgroundColor: '#c4c4c4',
       icon: path.join(bundle, 'app.ico'),
       webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, partition: 'demo' } });
     win.removeMenu();
     win.on('page-title-updated', event => event.preventDefault());
-    if (!smoke) win.maximize();
+    splash = new BrowserWindow({ width: 1600, height: 920, show: false, frame: true, backgroundColor: '#071225',
+      icon: path.join(bundle, 'app.ico'), title: '온빛누리 시작',
+      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true } });
+    splash.removeMenu();
+    splash.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    splash.webContents.on('will-navigate', event => event.preventDefault());
+    splash.on('closed', () => { if (!startupComplete) app.quit(); });
+    await splash.loadFile(path.join(bundle, 'loading.html'));
+    if (!smoke) splash.show();
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (event, url) => {
       if (!url.startsWith('http://127.0.0.1:')) event.preventDefault();
     });
-    await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent('<meta charset="utf-8"><body style="font:18px sans-serif;padding:60px">온빛누리 시연 환경을 준비하고 있습니다.<br><br>초기 데이터를 복원하고 로컬 서버를 실행합니다.</body>'));
     if (!fs.existsSync(config.python) || !fs.existsSync(config.ollama)) throw new Error('runtime.json의 Python/Ollama 실행 파일 경로를 확인하세요.');
+    await progress(5, '실행 환경 확인 완료');
     const data = path.join(runtime, 'data');
     // Only this app-owned directory may be replaced; never touch source databases.
     if (path.dirname(path.resolve(data)) !== path.resolve(runtime)) throw new Error('Invalid runtime path');
@@ -82,6 +102,7 @@ else {
     const restored = ['business.sqlite3', 'classifier/submissions.sqlite3'].filter(name => fs.existsSync(path.join(bundle, 'seed', name)))
       .every(name => digest(path.join(bundle, 'seed', name)) === digest(path.join(data, name)));
     if (!restored) throw new Error('시연 DB 초기 상태 복원에 실패했습니다.');
+    await progress(20, '초기 데이터 복원 완료');
     const backendPort = await port();
     let ollamaPort = await port();
     while (ollamaPort === backendPort) ollamaPort = await port();
@@ -100,24 +121,51 @@ else {
     const missing = [config.classifierModel, config.chatModel].filter(model => !tags.models.some(item => item.name === model || item.model === model));
     if (missing.includes(config.classifierModel)) throw new Error(`문서 분석 모델을 설치하세요: ollama pull ${config.classifierModel}`);
     if (missing.length) log(`WARNING chatbot model missing: ollama pull ${config.chatModel}`);
+    await progress(35, 'AI 서버 및 모델 설치 확인 완료');
     const backend = launch(config.python, ['-m', 'uvicorn', 'user.app.main:app', '--host', '127.0.0.1', '--port', String(backendPort)], env, path.join(bundle, 'backend'));
     await ready(backendUrl + '/health/db', backend);
     if (closing) return;
+    await progress(60, '백엔드 및 DB 준비 완료');
+    if (smoke) fs.writeFileSync(path.join(runtime, 'loading.png'), (await splash.webContents.capturePage()).toPNG());
+    const ragDeadline = Date.now() + 180000;
+    let ragWarning = '';
+    while (!closing) {
+      const status = await ready(backendUrl + '/rag-api/api/status', backend, 10000);
+      if (status.ready) break;
+      if (status.error || Date.now() > ragDeadline) {
+        ragWarning = status.error || '법령 검색 준비 시간이 초과되었습니다.';
+        log(`WARNING RAG ${ragWarning}`);
+        if (smoke) throw new Error(ragWarning);
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    if (closing) return;
+    await progress(85, ragWarning ? '법령 검색 확인 완료 · 일부 기능 사용 불가' : '법령 검색 준비 완료');
     gateway = createGateway(path.join(bundle, 'frontend'), backendPort);
     await new Promise(resolve => gateway.listen(0, '127.0.0.1', resolve));
     const origin = `http://127.0.0.1:${gateway.address().port}`;
     await session.fromPartition('demo').clearStorageData();
+    await progress(90, '화면 연결 준비 완료');
     await win.loadURL(origin);
+    await progress(100, '화면 로딩 완료');
+    // Let the completed bar paint before switching to the already-loaded application.
+    await new Promise(resolve => setTimeout(resolve, 260));
+    if (closing) return;
+    startupComplete = true;
+    win.setProgressBar(-1);
+    // Keep the size/position and user-selected window state across the handoff.
+    win.setBounds(splash.getNormalBounds());
+    if (!smoke) {
+      if (splash.isMaximized()) win.maximize();
+      if (splash.isMinimized()) { win.showInactive(); win.minimize(); }
+      else win.show();
+    }
+    splash.destroy();
+    if (ragWarning) await dialog.showMessageBox(win, { type: 'warning', title: '법령 검색 준비 확인', message: '법령 검색을 준비하지 못했습니다. 다른 기능은 사용할 수 있습니다.', detail: ragWarning });
     log(`READY ${origin}`);
     if (smoke) {
       await new Promise(resolve => setTimeout(resolve, 2500));
-      const ragDeadline = Date.now() + 180000;
-      while (true) {
-        const status = await (await fetch(origin + '/rag-api/api/status')).json();
-        if (status.ready) break;
-        if (status.error || Date.now() > ragDeadline) throw new Error(status.error || 'RAG loading timeout');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
       const checks = await win.webContents.executeJavaScript(`(async () => {
         const get = async url => { const response = await fetch(url); if (!response.ok) throw new Error(url + ': ' + response.status); return response; };
         const submissions = await (await get('/classifier-api/submissions')).json();
@@ -134,7 +182,7 @@ else {
           rendered: document.body.innerText.length > 100, brokenImages: [...document.images].filter(img => !img.complete || !img.naturalWidth).map(img => img.src)};
       })()`);
       if (!checks.rendered || checks.brokenImages.length) throw new Error('화면/이미지 로딩 검사 실패');
-      fs.writeFileSync(path.join(runtime, 'smoke.json'), JSON.stringify({ ...checks, restored, backendPid: backend.pid, ollamaPid: ollama.pid }, null, 2));
+      fs.writeFileSync(path.join(runtime, 'smoke.json'), JSON.stringify({ ...checks, restored, startupProgress, backendPid: backend.pid, ollamaPid: ollama.pid }, null, 2));
       fs.writeFileSync(path.join(runtime, 'smoke.png'), (await win.webContents.capturePage()).toPNG());
       app.quit();
     }
