@@ -100,7 +100,6 @@ const demoDashboard = {
 }
 
 // 예시 데이터 (API 생기면 교체)
-const demoTravelCount = 16
 const demoWorkAlerts: { title: string; body: string; page: HomeDestination }[] = [
   { title: '교육훈련 일정 관리', body: '10월 5일 1형 훈련 일정 관리가 필요합니다.', page: 'training' },
   { title: '홍보메일 전송', body: '9월 28일, 훈련 대상자 134명을 대상으로 홍보메일 발송을 완료했습니다.', page: 'training' },

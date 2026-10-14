@@ -1,0 +1,4 @@
+{
+  "include": [],
+  "description": "Only for public assets assembled dynamically at runtime. Imported src assets and literal public URLs in the emitted bundle are included automatically."
+}

@@ -1,0 +1,5 @@
+/dist-desktop/
+/desktop/.stage/
+/desktop/node_modules/
+/desktop/runtime.local.json
+/desktop/__pycache__/

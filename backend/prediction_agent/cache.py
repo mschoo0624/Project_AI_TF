@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from threading import Lock
 from typing import Any
 
-CACHE_PATH = Path(__file__).resolve().parent / "forecast_cache.json"
-ATTENDANCE_CACHE_PATH = Path(__file__).resolve().parent / "attendance_forecast_cache.json"
+_cache_dir = Path(os.getenv("PREDICTION_CACHE_DIR", str(Path(__file__).resolve().parent)))
+_cache_dir.mkdir(parents=True, exist_ok=True)
+CACHE_PATH = _cache_dir / "forecast_cache.json"
+ATTENDANCE_CACHE_PATH = _cache_dir / "attendance_forecast_cache.json"
 
 _cache: dict[str, Any] | None = None
 _lock = Lock()

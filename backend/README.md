@@ -1,6 +1,40 @@
 ## Security Notice
 Authentication and role enforcement are temporarily disabled across API workflows. Personnel and training data, exports, and write operations are accessible without a token. Do not expose this service to untrusted networks.
 
+## Windows 시연용 데스크톱 빌드
+
+소스와 빌드 도구는 Git으로 관리하고, `dist-desktop/`의 실행 파일·ZIP·DB는 Git에서 제외합니다. 다른 Windows 개발 PC에서도 아래 순서로 빌드할 수 있습니다. Node.js/npm, Python 가상환경 및 이 문서의 Ollama 설치를 먼저 준비하세요.
+
+저장소 루트에서:
+
+```powershell
+cd frontend
+npm ci
+cd ../desktop
+npm ci
+npm run build
+```
+
+결과는 `dist-desktop/<빌드시간>/Onbitnuri-win32-x64/Onbitnuri.exe`와 같은 위치의 `Onbitnuri-demo.zip`입니다. 폴더 전체가 실행 단위이며, ZIP은 별도 보관·공유용입니다. Python은 `backend/.venv/Scripts/python.exe`, Ollama는 설치 경로를 빌드 시 기록합니다. 다른 PC에서 빌드하려면 그 PC에도 의존성 설치가 필요합니다. 완성된 빌드 폴더를 다른 PC로 옮기는 경우 `resources/runtime.json`에서 설치 경로를 맞추세요.
+
+빌드 전에 `backend/project_ai_tf.db`와 `backend/classifier_agent/data/`의 DB·제출 원본 PDF를 준비하세요. Git에서 제외된 데이터는 다른 작업자에게 별도로 전달해야 합니다. 빌드 당시 현재 기록 전체가 읽기 전용 SQLite 백업으로 복사되며, 원본은 수정하지 않습니다. 실행할 때마다 `%APPDATA%/OnbitnuriDemo/data`를 이 복사본으로 초기화합니다. 시연에서 변경한 기록은 다음 실행 시 사라집니다. 브라우저 저장소도 실행마다 새로 시작합니다.
+
+법령 가공 데이터는 빌드 후 아래에 수동 복사할 수 있습니다. 앱을 재실행하면 반영되며 재빌드할 필요는 없습니다.
+
+```text
+resources/backend/RAG/data/processed/laws.jsonl
+resources/backend/RAG/data/index/embeddings.npy
+resources/backend/RAG/data/index/index_info.json
+```
+
+세 파일은 같은 원본과 임베딩 모델(기본 `BAAI/bge-m3`)로 생성한 세트여야 합니다. 빠진 경우 다른 기능은 실행되지만 법령 검색은 사용할 수 없습니다. 챗봇 기본 모델은 `qwen2.5:7b`, 문서 분석은 `qwen3:4b-instruct`이며 `resources/runtime.json`에서 지정합니다.
+
+앱은 사용 가능한 로컬 포트에 전용 백엔드와 Ollama를 실행하고, 닫을 때 해당 프로세스 트리만 종료합니다. 기존 개발 서버나 기존 Ollama를 종료하지 않습니다. 사용 중인 개발 PC의 모델 저장소를 공유하며 모델 파일 자체는 배포본에 복사하지 않습니다.
+
+이미지는 Vite가 실제 번들에서 참조하는 자산을 포함합니다. `public/`은 통째로 복사하지 않고 빌드된 HTML·JS·CSS 등에 경로가 있는 파일만 복사합니다. 동적으로 조합하는 경로는 `desktop/public-assets.json`의 `include`에 상대 경로를 명시하세요. 포함·제외 목록과 누락된 법령 자료는 `resources/build-manifest.json`에 기록됩니다. 제출 기록에 연결된 PDF와 분류 규칙에서 참조하는 법규 PDF는 별도로 포함합니다.
+
+개발 PC별 경로·모델 설정을 유지하려면 Git에서 제외되는 `desktop/runtime.local.json`에 `python`, `ollama`, `classifierModel`, `chatModel`을 지정할 수 있습니다. 오류 로그는 `%APPDATA%/OnbitnuriDemo/desktop.log`에 남습니다.
+
 ## Model packages
 
 - `prediction_agent/`: dashboard population and attendance prediction, including datasets and caches.

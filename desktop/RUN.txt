@@ -1,0 +1,24 @@
+온빛누리 개발 PC용 시연 빌드
+
+1. Onbitnuri.exe를 실행합니다. 관리자 권한은 필요하지 않습니다.
+2. 매 실행 시 빌드 당시 인원·편성·제출·검토 기록으로 돌아갑니다.
+3. 창을 닫으면 앱이 시작한 백엔드와 전용 Ollama가 종료됩니다.
+   기존에 별도로 실행한 서버와 Ollama는 종료하지 않습니다.
+
+이 폴더 전체를 함께 보관하세요. Python 가상환경과 Ollama는 개발 PC의 기존 설치를 사용합니다.
+실행 파일 위치가 달라지면 resources/runtime.json의 python/ollama 경로를 수정하세요.
+classifierModel은 문서 분석 모델, chatModel은 법령 챗봇과 Copilot 모델입니다.
+필요한 모델: ollama pull qwen3:4b-instruct / ollama pull qwen2.5:7b
+
+법령 검색 데이터는 아래 위치에 수동으로 넣고 앱을 다시 실행하세요. 재빌드는 필요 없습니다.
+resources/backend/RAG/data/processed/laws.jsonl
+resources/backend/RAG/data/index/embeddings.npy
+resources/backend/RAG/data/index/index_info.json
+세 파일은 동일한 법령 데이터로 생성된 세트여야 합니다. 기본 임베딩 모델은 BAAI/bge-m3입니다.
+누락 시 법령 챗봇 검색은 사용할 수 없지만 다른 화면은 실행됩니다.
+
+시연 실행 DB·제출 문서·로그 위치: %APPDATA%/OnbitnuriDemo
+data 폴더는 다음 실행 때 초기화됩니다. 개발용 원본 DB는 변경하지 않습니다.
+resources/seed는 초기화 원본이므로 직접 수정하지 마세요.
+PDF 업로드용 예제는 배포본에 자동 포함하지 않습니다. 필요한 문서를 파일 선택으로 제출하세요.
+빌드 폴더와 ZIP은 Git에서 제외되며, 현재 DB의 개인 정보가 포함될 수 있으므로 공유 범위를 확인하세요.
