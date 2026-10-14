@@ -10,6 +10,34 @@ from legalrag.tokenizer import tokenize
 
 RAW = Path(__file__).resolve().parent.parent / "data" / "raw"
 
+
+def test_index_reuse_rejects_changed_content_model_and_broken_vectors(tmp_path):
+    import hashlib
+    import json
+    from types import SimpleNamespace
+    import numpy as np
+    from scripts.build_index import reusable
+
+    source = tmp_path / 'laws.jsonl'
+    source.write_text('original', encoding='utf-8')
+    cfg = SimpleNamespace(processed_file=source, index_dir=tmp_path, embedding_model='test-model')
+    articles = [SimpleNamespace(id='one')]
+    info = {'ids': ['one'], 'embedding_model': 'test-model',
+            'source_sha256': hashlib.sha256(source.read_bytes()).hexdigest()}
+    (tmp_path / 'index_info.json').write_text(json.dumps(info), encoding='utf-8')
+    np.save(tmp_path / 'embeddings.npy', np.ones((1, 3), dtype='float32'))
+    assert reusable(cfg, articles)
+    source.write_text('changed with same article ID', encoding='utf-8')
+    assert not reusable(cfg, articles)
+    source.write_text('original', encoding='utf-8')
+    cfg.embedding_model = 'different-model'
+    assert not reusable(cfg, articles)
+    cfg.embedding_model = 'test-model'
+    np.save(tmp_path / 'embeddings.npy', np.array([[float('nan')]]))
+    assert not reusable(cfg, articles)
+    (tmp_path / 'embeddings.npy').write_bytes(b'broken')
+    assert not reusable(cfg, articles)
+
 SAMPLE = """예비군법
 [시행 2026. 8. 28.] [법률 제21388호, 2026. 2. 27., 일부개정]
 

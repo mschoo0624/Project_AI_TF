@@ -9,6 +9,7 @@ import sqlite3
 import subprocess
 import sys
 from urllib.parse import quote
+from PIL import Image, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
 DESKTOP = ROOT / 'desktop'
@@ -56,12 +57,21 @@ def referenced_public_files(public, built):
 def main():
     if sys.platform != 'win32':
         raise SystemExit('This build targets the existing Windows development PC.')
+    backend = ROOT / 'backend'
+    # Fail before packaging if legal data cannot be generated. Unchanged vectors are reused.
+    run([sys.executable, '-m', 'scripts.preprocess'], backend / 'RAG')
+    run([sys.executable, '-m', 'scripts.build_index', '--if-needed'], backend / 'RAG')
     stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     stage = DESKTOP / '.stage' / stamp
     app = stage / 'app'
     resources = stage / 'resources'
     app.mkdir(parents=True)
     resources.mkdir()
+    # Windows needs a multi-resolution ICO; preserve the source artwork's aspect ratio.
+    with Image.open(ROOT / 'frontend/src/assets/국방부 마크_컬러본.png') as original:
+        icon = ImageOps.pad(original.convert('RGBA'), (256, 256),
+                            method=Image.Resampling.LANCZOS, color=(0, 0, 0, 0))
+        icon.save(resources / 'app.ico', sizes=[(n, n) for n in (16, 24, 32, 48, 64, 128, 256)])
     for name in ('main.cjs', 'gateway.cjs'):
         shutil.copy2(DESKTOP / name, app / name)
     (app / 'package.json').write_text(json.dumps({'name': 'onbitnuri-demo', 'version': '1.0.0', 'main': 'main.cjs'}), encoding='utf-8')
@@ -69,7 +79,6 @@ def main():
     public = ROOT / 'frontend/public'
     included = referenced_public_files(public, resources / 'frontend')
     excluded = [p.relative_to(public).as_posix() for p in public.rglob('*') if p.is_file() and p.relative_to(public).as_posix() not in included]
-    backend = ROOT / 'backend'
     target = resources / 'backend'
     # Package allowlist: no legacy agent, evaluation runs, source DBs, venvs or caches.
     patterns = {
@@ -125,6 +134,7 @@ def main():
     local = DESKTOP / 'runtime.local.json'
     if local.exists():
         config.update(json.loads(local.read_text(encoding='utf-8')))
+    config['embeddingModel'] = json.loads((backend / 'RAG/data/index/index_info.json').read_text(encoding='utf-8'))['embedding_model']
     if not config['ollama'] or not Path(config['python']).is_file():
         raise RuntimeError('Python/Ollama not installed; set desktop/runtime.local.json')
     (resources / 'runtime.json').write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -133,7 +143,7 @@ def main():
     warnings = []
     for name in ('processed/laws.jsonl', 'index/embeddings.npy', 'index/index_info.json'):
         if not (target / 'RAG/data' / name).exists():
-            warnings.append(f'RAG data missing: resources/backend/RAG/data/{name}')
+            raise RuntimeError(f'RAG data missing: resources/backend/RAG/data/{name}')
     manifest = {'builtAt': stamp, 'initialState': 'snapshot of current business and classifier databases',
                 'includedPublicFiles': included, 'excludedPublicFiles': excluded, 'warnings': warnings}
     (resources / 'build-manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')

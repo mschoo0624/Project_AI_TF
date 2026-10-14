@@ -8,6 +8,7 @@ data/index/index_info.json  which model built the vectors + article ids in the s
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from pathlib import Path
 from typing import List
@@ -67,7 +68,8 @@ def build_embeddings(cfg: Config, articles: List[Article]) -> None:
     vecs = model.encode(texts, batch_size=8, normalize_embeddings=True, show_progress_bar=True)
     cfg.index_dir.mkdir(parents=True, exist_ok=True)
     np.save(cfg.index_dir / "embeddings.npy", np.asarray(vecs, dtype="float32"))
-    info = {"embedding_model": cfg.embedding_model, "ids": [a.id for a in articles]}
+    info = {"embedding_model": cfg.embedding_model, "ids": [a.id for a in articles],
+            "source_sha256": hashlib.sha256(cfg.processed_file.read_bytes()).hexdigest()}
     (cfg.index_dir / "index_info.json").write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
 
 

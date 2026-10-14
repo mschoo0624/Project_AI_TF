@@ -62,6 +62,7 @@ else {
     fs.mkdirSync(runtime, { recursive: true });
     fs.writeFileSync(path.join(runtime, 'desktop.log'), '');
     win = new BrowserWindow({ width: 1600, height: 920, show: !smoke, title: '온빛누리',
+      icon: path.join(bundle, 'app.ico'),
       webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, partition: 'demo' } });
     win.removeMenu();
     win.on('page-title-updated', event => event.preventDefault());
@@ -92,6 +93,7 @@ else {
       VERIFICATION_URL: backendUrl + '/classifier-api', OLLAMA_HOST: ollamaUrl, OLLAMA_URL: ollamaUrl,
       CLASSIFIER_MODEL: config.classifierModel, OPENAI_BASE_URL: ollamaUrl + '/v1', OPENAI_API_KEY: 'ollama',
       OPENAI_MODEL: config.chatModel, COPILOT_MODEL: config.chatModel,
+      RAG_EMBEDDING_MODEL: config.embeddingModel || 'BAAI/bge-m3',
       PREDICTION_CACHE_DIR: path.join(data, 'prediction-cache') };
     const ollama = launch(config.ollama, ['serve'], env, bundle);
     const tags = await ready(ollamaUrl + '/api/tags', ollama, 30000);
@@ -109,6 +111,13 @@ else {
     log(`READY ${origin}`);
     if (smoke) {
       await new Promise(resolve => setTimeout(resolve, 2500));
+      const ragDeadline = Date.now() + 180000;
+      while (true) {
+        const status = await (await fetch(origin + '/rag-api/api/status')).json();
+        if (status.ready) break;
+        if (status.error || Date.now() > ragDeadline) throw new Error(status.error || 'RAG loading timeout');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
       const checks = await win.webContents.executeJavaScript(`(async () => {
         const get = async url => { const response = await fetch(url); if (!response.ok) throw new Error(url + ': ' + response.status); return response; };
         const submissions = await (await get('/classifier-api/submissions')).json();
@@ -116,7 +125,11 @@ else {
         let pdf = null;
         if (submissions.length) { const response = await get('/classifier-api/submissions/' + submissions[0].id + '/pdf'); pdf = {type: response.headers.get('content-type'), bytes: (await response.arrayBuffer()).byteLength}; }
         const provision = await (await get('/classifier-api/verification-view/postponement.illness')).json();
+        const searchResponse = await fetch('/rag-api/api/search', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({question: '예비군 훈련', top_k: 3})});
+        if (!searchResponse.ok) throw new Error('RAG search failed');
+        const search = await searchResponse.json();
         return {db: await (await get('/api/health/db')).json(), submissions: submissions.length, types: types.length, pdf,
+          ragSearch: search,
           provision: !!provision, rag: await (await get('/rag-api/api/status')).json(),
           rendered: document.body.innerText.length > 100, brokenImages: [...document.images].filter(img => !img.complete || !img.naturalWidth).map(img => img.src)};
       })()`);

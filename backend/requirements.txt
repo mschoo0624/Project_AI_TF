@@ -1,4 +1,5 @@
 fastapi
+Pillow>=9.1  # PDF dependency and desktop Windows icon conversion
 argon2-cffi>=23.1.0
 uvicorn
 sqlalchemy

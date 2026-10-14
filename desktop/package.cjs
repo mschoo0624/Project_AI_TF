@@ -4,6 +4,7 @@ const path = require('node:path');
 (async () => {
   const [dir, resources, out] = process.argv.slice(2);
   const results = await packager({ dir, out, name: 'Onbitnuri', executableName: 'Onbitnuri',
+    icon: path.join(resources, 'app.ico'),
     platform: 'win32', arch: 'x64', electronVersion: require('./package.json').devDependencies.electron,
     asar: true, prune: true, overwrite: false });
   for (const result of results) fs.cpSync(resources, path.join(result, 'resources'), { recursive: true });
