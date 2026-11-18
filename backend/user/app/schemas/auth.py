@@ -4,11 +4,13 @@ from pydantic import BaseModel, Field
 
 
 class BootstrapRequest(BaseModel):
+    unit_code: str = Field(min_length=1, max_length=20)
     username: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=12, max_length=256)
 
 
 class LoginRequest(BaseModel):
+    unit_code: str = Field(min_length=1, max_length=20)
     username: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=1, max_length=256)
 
@@ -16,7 +18,8 @@ class LoginRequest(BaseModel):
 class UserCreate(BaseModel):
     username: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=12, max_length=256)
-    role: str
+    unit_code: str = Field(min_length=1, max_length=20)
+    position: Literal["동대장", "상근예비역", "감사실"]
 
 
 class UserUpdate(BaseModel):
@@ -33,6 +36,8 @@ class UserRead(BaseModel):
     username: str
     role: str
     is_active: bool = True
+    unit_code: str = ""
+    position: str = ""
 
 
 class AuthTokenRead(BaseModel):

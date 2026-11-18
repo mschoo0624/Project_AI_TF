@@ -16,3 +16,5 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[str] = mapped_column(String(50), default="staff")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    unit_code: Mapped[str] = mapped_column(String(20), nullable=False, default="", index=True)
+    position: Mapped[str] = mapped_column(String(20), nullable=False, default="")

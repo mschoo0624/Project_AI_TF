@@ -28,6 +28,8 @@ import type { Conversation } from './features/messenger/messengerData'
 import { trainingTabs } from './features/training/trainingtabs'
 import type { TrainingTabId } from './features/training/trainingtabs'
 import PersonQuickSearch from './features/quicksearch/PersonQuickSearch'
+import TrainingAuthControl, { TrainingLoginPage } from './features/training/TrainingAuthControl'
+import { apiBase, authenticatedFetch, clearAuth, readAuth } from './features/training/auth'
 
 
 const featurePages = [
@@ -249,7 +251,7 @@ function App() {
       <div className="system-brand"><img className="system-brand-logo" src={ministryLogo} alt="대한민국 국방부" />
       <div className="system-brand-title"><span>국방동원정보체계 2.0</span><small>DEFENSE MOBILIZATION INFORMATION SYSTEM</small></div>
     </div>
-      <div className="account-area" />
+      <div className="account-area" /><div className="account-area"><TrainingAuthControl /></div>
     </header>
     <div className="system-body">
       <aside className="sidebar" aria-label="주 메뉴">
@@ -834,7 +836,44 @@ function PopulationForecast() {
     </div>
   </>
 }
-export default App
+
+function AuthGate() {
+  const [auth, setAuth] = useState(readAuth)
+  const [checking, setChecking] = useState(() => readAuth() !== null)
+  const [sessionError, setSessionError] = useState('')
+  const [retry, setRetry] = useState(0)
+
+  useEffect(() => {
+    const refresh = () => setAuth(readAuth())
+    window.addEventListener('training-auth-change', refresh)
+    return () => window.removeEventListener('training-auth-change', refresh)
+  }, [])
+
+  // 저장된 토큰이 아직 유효한지 서버에 확인
+  useEffect(() => {
+    if (!auth) { setChecking(false); return }
+    let cancelled = false
+    setChecking(true)
+    setSessionError('')
+    authenticatedFetch(`${apiBase()}/auth/me`)
+      .then(async res => {
+        if (!res.ok) throw new Error('서버에 연결할 수 없습니다.')
+        const me = await res.json() as { username: string }
+        // 개발 모드에선 만료 토큰도 200 + 'unauthenticated'로 와서 직접 걸러줌
+        if (me.username === 'unauthenticated') clearAuth()
+      })
+      .catch(e => { if (!cancelled) setSessionError(e instanceof Error ? e.message : '세션 확인에 실패했습니다.') })
+      .finally(() => { if (!cancelled) setChecking(false) })
+    return () => { cancelled = true }
+  }, [auth?.token, retry])
+
+  if (!auth || checking || sessionError) {
+    return <TrainingLoginPage checkingSession={checking} sessionError={sessionError} onRetry={() => setRetry(v => v + 1)} />
+  }
+  return <App />
+}
+
+export default AuthGate
 
 const dailyLabels = { departure: '출국자', arrival: '귀국자', transfer_in: '전입자', transfer_out: '전출자' }
 type DailyPayload = { date: string; counts: Record<'hold' | 'delay', number> }

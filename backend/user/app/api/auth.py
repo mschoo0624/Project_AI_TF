@@ -27,6 +27,7 @@ from user.app.schemas.auth import (
 )
 from user.app.services.auth import (
     ALLOWED_ROLES,
+    POSITION_ROLES,
     bearer_scheme,
     get_current_user,
     hash_password,
@@ -46,7 +47,10 @@ def _token_response(user: User, token: str, expires_at) -> dict[str, object]:
         "access_token": token,
         "token_type": "bearer",
         "expires_at": expires_at.isoformat(),
-        "user": {"id": user.id, "username": user.username, "role": user.role},
+        "user": {
+            "id": user.id, "username": user.username, "role": user.role,
+            "unit_code": user.unit_code, "position": user.position,
+        },
     }
 
 
@@ -69,6 +73,8 @@ def bootstrap_first_approver(
         username=payload.username.strip(),
         password_hash=hash_password(payload.password),
         role="approver",
+        unit_code=payload.unit_code.strip(),
+        position="동대장",
     )
     db.add(user)
     try:
@@ -118,7 +124,10 @@ def login(
             headers={"Retry-After": str(int(LOGIN_WINDOW.total_seconds()))},
         )
 
-    user = db.scalar(select(User).where(User.username == payload.username.strip()))
+    user = db.scalar(select(User).where(
+        User.username == payload.username.strip(),
+        User.unit_code == payload.unit_code.strip(),
+    ))
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
         db.add_all(AuthLoginFailure(key_hash=key, failed_at=now) for key in keys)
         db.commit()
@@ -162,12 +171,16 @@ def create_user(
     actor: User = Depends(require_approver),
     db: Session = Depends(get_db),
 ) -> User:
-    if payload.role not in ALLOWED_ROLES:
-        raise HTTPException(status_code=422, detail="Role must be viewer, scheduler, or approver")
+    unit_code = payload.unit_code.strip()
+    # 동대장은 자기 동대 계정만 만들 수 있음
+    if actor.position == "동대장" and unit_code != actor.unit_code:
+        raise HTTPException(status_code=403, detail="자기 동대의 계정만 만들 수 있습니다.")
     user = User(
         username=payload.username.strip(),
         password_hash=hash_password(payload.password),
-        role=payload.role,
+        role=POSITION_ROLES[payload.position],
+        unit_code=unit_code,
+        position=payload.position,
     )
     db.add(user)
     try:

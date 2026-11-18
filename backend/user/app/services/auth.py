@@ -22,6 +22,7 @@ from user.app.models.user import User
 PASSWORD_ITERATIONS = 310_000
 SESSION_HOURS = 12
 ALLOWED_ROLES = {"viewer", "scheduler", "approver"}
+POSITION_ROLES = {"동대장": "approver", "상근예비역": "scheduler", "감사실": "viewer"}
 bearer_scheme = HTTPBearer(auto_error=False)
 _password_hasher = PasswordHasher()
 
