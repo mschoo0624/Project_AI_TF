@@ -8,7 +8,7 @@ stt-dev:
 	source venv/bin/activate && uv run uvicorn stt.app.main:app --reload --port 8003
 
 frontend:
-	cd ../frontend && npm run dev -- --host 0.0.0.0
+	cd ../frontend && npm run dev
 
 reset-test-db:
 	rm -f /tmp/project_ai_tf_test.db
