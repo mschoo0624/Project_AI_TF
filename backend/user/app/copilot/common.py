@@ -19,7 +19,6 @@ Category = Literal["병사", "부사관", "장교", "간부"]
 Rank = Literal["이병", "일병", "상병", "병장", "하사", "중사", "상사", "원사", "소위", "중위", "대위", "소령", "중령", "대령"]
 TRANSFER_REGISTRATION = "예비군 전입"
 
-
 @dataclass
 class ToolResult:
 	message: str
