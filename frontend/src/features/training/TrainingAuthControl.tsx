@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { apiBase, authenticatedFetch, clearAuth, readAuth, storeAuth } from './auth'
+import type { AuthUser } from './auth'
+import ministryLogo from '../../assets/국방부 마크_컬러본.png'
 import './TrainingAuthControl.css'
 
 type TokenResponse = {
   access_token: string
-  user: { id: number; username: string; role: 'viewer' | 'scheduler' | 'approver' }
+  user: AuthUser
 }
 
 export function TrainingLoginPage({ checkingSession, sessionError, onRetry }: {
@@ -13,6 +15,7 @@ export function TrainingLoginPage({ checkingSession, sessionError, onRetry }: {
   sessionError: string
   onRetry: () => void
 }) {
+  const [unitCode, setUnitCode] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showBootstrap, setShowBootstrap] = useState(false)
@@ -27,7 +30,7 @@ export function TrainingLoginPage({ checkingSession, sessionError, onRetry }: {
       const response = await fetch(`${apiBase()}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ unit_code: unitCode, username, password }),
       })
       const payload = await response.json() as TokenResponse | { detail?: string }
       if (!response.ok || !('access_token' in payload)) {
@@ -50,7 +53,7 @@ export function TrainingLoginPage({ checkingSession, sessionError, onRetry }: {
       const response = await fetch(`${apiBase()}/auth/bootstrap`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ unit_code: unitCode, username, password }),
       })
       const payload = await response.json() as TokenResponse | { detail?: string }
       if (!response.ok || !('access_token' in payload)) {
@@ -68,25 +71,28 @@ export function TrainingLoginPage({ checkingSession, sessionError, onRetry }: {
   return <main className="training-login-page">
     <div className="training-login-panel">
       <section className="training-login-brand">
-        <span>31사단 · 내부 업무 시스템</span>
-        <h1>예비군<br />업무체계</h1>
-        <p>통합 자원관리와 훈련 업무를 위한<br />인증된 사용자 전용 공간입니다.</p>
-        <span className="training-login-mark" aria-hidden="true">31</span>
+        <span>대한민국 국방부 · 내부 업무 시스템</span>
+        <img className="training-login-logo" src={ministryLogo} alt="대한민국 국방부" />
+        <h1>국방동원<br />정보체계 2.0</h1>
+        <small>DEFENSE MOBILIZATION INFORMATION SYSTEM</small>
+        <p>예비군 자원관리와 교육훈련 업무를 위한<br />인증된 사용자 전용 공간입니다.</p>
+        <span className="training-login-mark" aria-hidden="true">2.0</span>
       </section>
       <form className="training-login-form" onSubmit={event => void (showBootstrap ? createFirstApprover(event) : submitLogin(event))}>
         <div className="training-login-heading">
           <span>SECURE ACCESS</span>
-          <h2>{showBootstrap ? '첫 approver 계정 만들기' : '로그인'}</h2>
-          <p>{showBootstrap ? '최초 approver 계정으로 사용할 사용자명과 비밀번호를 입력하세요.' : '계정 정보를 입력해 업무체계에 접속하세요.'}</p>
+          <h2>{showBootstrap ? '첫 동대장 계정 만들기' : '로그인'}</h2>
+          <p>{showBootstrap ? '최초 동대장 계정으로 사용할 부대코드, 아이디, 비밀번호를 입력하세요.' : '부대코드와 계정 정보를 입력해 접속하세요.'}</p>
         </div>
         {checkingSession && <p className="training-login-notice" role="status">로그인 상태를 확인하고 있습니다.</p>}
         {sessionError && <div className="training-login-error" role="alert"><span>{sessionError}</span><button type="button" onClick={onRetry}>다시 확인</button></div>}
-        <label>사용자명<input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required disabled={busy} /></label>
+        <label>부대코드<input autoComplete="organization" value={unitCode} onChange={event => setUnitCode(event.target.value)} required disabled={busy} /></label>
+        <label>아이디<input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required disabled={busy} /></label>
         <label>비밀번호<input type="password" autoComplete={showBootstrap ? 'new-password' : 'current-password'} minLength={showBootstrap ? 12 : undefined} value={password} onChange={event => setPassword(event.target.value)} required disabled={busy} /></label>
         {error && <p className="training-login-error" role="alert">{error}</p>}
-        <button className="training-login-submit" type="submit" disabled={busy || checkingSession}>{busy ? '처리 중…' : showBootstrap ? 'approver 계정 만들기' : '로그인'}</button>
-        <button className="training-login-switch" type="button" onClick={() => { setShowBootstrap(value => !value); setError('') }} disabled={busy}>{showBootstrap ? '로그인으로 돌아가기' : '첫 approver 계정 만들기'}</button>
-        <p className="training-login-footnote">첫 계정은 localhost에서 approver로 생성됩니다. 이후에는 approver로 로그인해 상단의 계정 생성 버튼에서 사용자명, 비밀번호, 권한을 지정하세요.</p>
+        <button className="training-login-submit" type="submit" disabled={busy || checkingSession}>{busy ? '처리 중…' : showBootstrap ? '동대장 계정 만들기' : '로그인'}</button>
+        <button className="training-login-switch" type="button" onClick={() => { setShowBootstrap(value => !value); setError('') }} disabled={busy}>{showBootstrap ? '로그인으로 돌아가기' : '첫 동대장 계정 만들기'}</button>
+        <p className="training-login-footnote">첫 계정은 서버 PC(localhost)에서만 동대장으로 생성됩니다. 이후 계정은 동대장이 로그인해 상단의 계정 생성 버튼에서 만듭니다.</p>
       </form>
     </div>
   </main>
@@ -102,7 +108,8 @@ export default function TrainingAuthControl() {
   const [busy, setBusy] = useState(false)
   const [newUsername, setNewUsername] = useState('')
   const [newPassword, setNewPassword] = useState('')
-  const [newRole, setNewRole] = useState<'viewer' | 'scheduler' | 'approver'>('viewer')
+  const [newPosition, setNewPosition] = useState<AuthUser['position']>('상근예비역')
+  const [newUnitCode, setNewUnitCode] = useState('')
   const [accountError, setAccountError] = useState('')
   const [accountMessage, setAccountMessage] = useState('')
   const [accountBusy, setAccountBusy] = useState(false)
@@ -176,7 +183,10 @@ export default function TrainingAuthControl() {
       const response = await authenticatedFetch(`${apiBase()}/auth/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: newUsername, password: newPassword, role: newRole }),
+        body: JSON.stringify({
+          unit_code: auth?.user.position === '동대장' ? auth.user.unit_code : newUnitCode,
+          username: newUsername, password: newPassword, position: newPosition,
+        }),
       })
       const payload = await response.json() as { username?: string; detail?: unknown }
       if (!response.ok) {
@@ -185,7 +195,8 @@ export default function TrainingAuthControl() {
       setAccountMessage(`${payload.username ?? newUsername} 계정을 만들었습니다.`)
       setNewUsername('')
       setNewPassword('')
-      setNewRole('viewer')
+      setNewPosition('상근예비역')
+      setNewUnitCode('')
     } catch (cause) {
       setAccountError(cause instanceof Error ? cause.message : '사용자 계정을 만들지 못했습니다.')
     } finally {
@@ -195,15 +206,23 @@ export default function TrainingAuthControl() {
 
   return <div className="training-auth-control">
     {auth
-      ? <><span className="training-auth-identity">{auth.user.username} · {auth.user.role}</span>
+     ? <><span className="training-auth-identity">[{auth.user.unit_code}] {auth.user.username} · {auth.user.position}</span>
         {auth.user.role === 'approver' && <button type="button" aria-expanded={open} onClick={() => { setOpen(value => !value); setAccountError(''); setAccountMessage('') }}>계정 생성</button>}
         <button type="button" onClick={() => void logout()}>로그아웃</button></>
       : <button type="button" aria-expanded={open} onClick={() => { setOpen(value => !value); setError('') }}>로그인</button>}
     {open && auth?.user.role === 'approver' && <form className="training-auth-popover training-account-form" onSubmit={event => void createUser(event)}>
       <strong>사용자 계정 생성</strong>
-      <label>사용자명<input autoComplete="off" value={newUsername} onChange={event => setNewUsername(event.target.value)} required disabled={accountBusy} /></label>
+      <label>부대코드<input autoComplete="off"
+        value={auth.user.position === '동대장' ? auth.user.unit_code : newUnitCode}
+        onChange={event => setNewUnitCode(event.target.value)}
+        readOnly={auth.user.position === '동대장'} required disabled={accountBusy} /></label>
+      <label>아이디<input autoComplete="off" value={newUsername} onChange={event => setNewUsername(event.target.value)} required disabled={accountBusy} /></label>
       <label>임시 비밀번호<input type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={event => setNewPassword(event.target.value)} required disabled={accountBusy} /></label>
-      <label>권한<select value={newRole} onChange={event => setNewRole(event.target.value as typeof newRole)} disabled={accountBusy}><option value="viewer">viewer · 조회</option><option value="scheduler">scheduler · 일정/결과</option><option value="approver">approver · 승인</option></select></label>
+      <label>구분<select value={newPosition} onChange={event => setNewPosition(event.target.value as AuthUser['position'])} disabled={accountBusy}>
+        <option value="상근예비역">상근예비역</option>
+        <option value="동대장">동대장</option>
+        <option value="감사실">감사실</option>
+      </select></label>
       {accountError && <p role="alert">{accountError}</p>}
       {accountMessage && <p className="training-account-success" role="status">{accountMessage}</p>}
       <button type="submit" disabled={accountBusy}>{accountBusy ? '생성 중…' : '계정 만들기'}</button>

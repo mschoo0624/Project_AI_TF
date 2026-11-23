@@ -49,6 +49,10 @@ def init_db() -> None:
     with engine.begin() as connection:
         if "is_active" not in user_columns:
             connection.execute(text("ALTER TABLE app_user ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1"))
+        if "unit_code" not in user_columns:
+            connection.execute(text("ALTER TABLE app_user ADD COLUMN unit_code VARCHAR(20) NOT NULL DEFAULT ''"))
+        if "position" not in user_columns:
+            connection.execute(text("ALTER TABLE app_user ADD COLUMN position VARCHAR(20) NOT NULL DEFAULT ''"))
         if "version" not in training_schedule_columns:
             connection.execute(text("ALTER TABLE training_schedule ADD COLUMN version INTEGER NOT NULL DEFAULT 1"))
         if "demo_early_save_enabled" not in training_schedule_columns:
