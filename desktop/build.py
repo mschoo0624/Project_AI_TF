@@ -54,6 +54,13 @@ def referenced_public_files(public, built):
     return sorted(selected)
 
 
+def copy_worklog_template(target):
+    source = ROOT / 'frontend/public/pdfs/양식/일일 업무일지 양식.pdf'
+    destination = target / 'user/app/worklog/templates/daily.pdf'
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+
+
 def main():
     if sys.platform != 'win32':
         raise SystemExit('This build targets the existing Windows development PC.')
@@ -83,6 +90,7 @@ def main():
     included = referenced_public_files(public, resources / 'frontend')
     excluded = [p.relative_to(public).as_posix() for p in public.rglob('*') if p.is_file() and p.relative_to(public).as_posix() not in included]
     target = resources / 'backend'
+    copy_worklog_template(target)
     # Package allowlist: no legacy agent, evaluation runs, source DBs, venvs or caches.
     patterns = {
         'user': ['**/*.py'],

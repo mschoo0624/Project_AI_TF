@@ -4,3 +4,5 @@ __pycache__/
 /tests/*
 !/tests/test_prosecution_draft.py
 !/tests/test_prosecution_documents.py
+!/tests/test_worklog*.py
+/worklogs.sqlite3*

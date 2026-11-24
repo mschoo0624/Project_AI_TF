@@ -11,6 +11,13 @@ spec.loader.exec_module(build)
 
 
 class BuildTests(unittest.TestCase):
+    def test_worklog_template_is_packaged_for_backend(self):
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder) / 'backend'
+            build.copy_worklog_template(target)
+            source = build.ROOT / 'frontend/public/pdfs/양식/일일 업무일지 양식.pdf'
+            self.assertEqual((target / 'user/app/worklog/templates/daily.pdf').read_bytes(), source.read_bytes())
+
     def test_snapshot_keeps_committed_wal_and_does_not_change_source(self):
         with tempfile.TemporaryDirectory() as folder:
             source = Path(folder) / 'source.db'

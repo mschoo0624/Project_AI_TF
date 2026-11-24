@@ -8,6 +8,7 @@ import TrainingManagementPage from './features/training/TrainingManagementPage'
 import { resourceTabs } from './features/resource/resourceTabs'
 import type { ResourceTabId } from './features/resource/resourceTabs'
 import WorkLogManagement from './features/worklog/WorkLogManagement'
+import { useWorkLogDay } from './features/worklog/useWorkLogDay'
 import { countReviewDocuments, fetchBootstrap } from './features/review/api'
 import ChatLauncher from './features/chatbot/ChatLauncher'
 import LegalChatbot from './features/chatbot/LegalChatbot'
@@ -182,6 +183,7 @@ function SidebarClock() {
 }
 
 function App() {
+  useWorkLogDay()
   const [homeRevision, setHomeRevision] = useState(0)
   const [activePage, setActivePageState] = useState<PageId>('home')
   const setActivePage = (page: PageId) => {

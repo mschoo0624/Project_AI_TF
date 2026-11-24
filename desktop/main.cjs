@@ -110,6 +110,8 @@ else {
     const backendUrl = `http://127.0.0.1:${backendPort}`;
     const env = { ...process.env, PYTHONUTF8: '1', PYTHONDONTWRITEBYTECODE: '1',
       DB_PATH: path.join(data, 'business.sqlite3'), DATABASE_URL: `sqlite:///${path.join(data, 'business.sqlite3').replaceAll('\\', '/')}`,
+      WORKLOG_DB_PATH: path.join(runtime, 'archives', 'worklogs.sqlite3'),
+      WORKLOG_TEMPLATE_PATH: path.join(bundle, 'backend', 'user', 'app', 'worklog', 'templates', 'daily.pdf'),
       CLASSIFIER_DATA_DIR: path.join(data, 'classifier'), BUSINESS_API_URL: backendUrl,
       VERIFICATION_URL: backendUrl + '/classifier-api', OLLAMA_HOST: ollamaUrl, OLLAMA_URL: ollamaUrl,
       CLASSIFIER_MODEL: config.classifierModel, OPENAI_BASE_URL: ollamaUrl + '/v1', OPENAI_API_KEY: 'ollama',

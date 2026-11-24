@@ -1,5 +1,20 @@
 # Project_AI_TF
 
+## 일일 업무일지
+
+- 프로그램 시작 시 한국 시간(Asia/Seoul) 기준 오늘 일지를 생성합니다. 업무일지 화면에서 날짜별 처리 내역과 당시 대상자 인적사항을 확인하고 비고를 작성할 수 있습니다.
+- **PDF 미리보기**는 업무 내역 오른쪽의 기본 창에 표시됩니다. 업무 내역과 입력 중인 비고가 바뀌면 자동 갱신하며, **확인**을 눌러야 비고와 PDF를 저장합니다. 저장본과 원본 양식도 같은 창에서 열람합니다.
+- 인원·편성·편제·훈련·전입·보류/연기·고발장 업무의 성공한 변경을 자동 기록합니다. 단순 조회나 실패·변경 없는 요청은 기록하지 않으며, 적용 전 과거 작업은 소급 생성하지 않습니다. 전출·출국/귀국은 현재 처리 API가 없어 양식의 해당 칸을 비워 둡니다.
+- **확인**을 누르면 원본 양식 한 장의 날짜·대상자·내용 칸을 채운 PDF를 저장합니다. 보류자/연기자 구역의 여덟 번째 칸에는 신청 구분에 따라 `보류` 또는 `연기`를 기입합니다(구분 정보가 없는 과거 기록은 `보류/연기`). 원본의 연락망 확인·서류 발송 등 실제 처리 여부를 알 수 없는 칸은 비워 둡니다. 같은 내용의 재확인은 중복 저장하지 않고, 추가 업무나 비고 변경 후 확인하면 새 버전을 보존합니다. 저장본은 날짜·버전별로 열람하고 다운로드할 수 있습니다.
+- 원본 양식은 `frontend/public/pdfs/양식/일일 업무일지 양식.pdf` 하나입니다. PDF 생성에는 `backend/requirements.txt`의 PyMuPDF가 필요합니다: `backend`에서 `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`.
+- 처리 내역과 확정 PDF는 별도 SQLite인 `backend/worklogs.sqlite3`에 저장합니다(`WORKLOG_DB_PATH`로 변경). 데스크톱 시연판은 `%APPDATA%/OnbitnuriDemo/archives/worklogs.sqlite3`를 사용하여 일반 시연 DB 초기화와 관계없이 기록을 유지합니다. 이 파일을 백업하면 PDF도 함께 보존됩니다.
+
+코드는 `frontend/src/features/worklog`와 `backend/user/app/worklog`에 있습니다. API는 `/worklogs/today`, `/worklogs`, `/worklogs/{date}`, `/worklogs/{date}/preview`, `/worklogs/{date}/confirm`, `/worklogs/{date}/revisions/{revision}/pdf`, `/worklogs/template`입니다. 데스크톱 빌드 시 양식을 자동 포함하며 `WORKLOG_TEMPLATE_PATH`로 양식 경로를 지정할 수도 있습니다.
+
+자동 기록은 업무 API의 성공 응답 후 별도 저장 트랜잭션으로 남깁니다. 업무 저장 직후 강제 종료 또는 기록 DB 장애가 발생하면 누락될 수 있으며, 기록 실패는 서버 로그에 표시됩니다. 서버 내부 정기 재계산·외부 DB 직접 수정은 사용자 업무 요청 기록에 포함하지 않습니다.
+
+서류 처리에서는 제출·분석 취소/재요청·대상자 연결·재검증·승인/반려를 기록합니다. 비동기 AI 분석 완료 시점은 별도 업무 행으로 추가하지 않습니다. 검증은 `backend`에서 `.\.venv\Scripts\python.exe -m pytest tests/test_worklog.py tests/test_worklog_events.py tests/test_worklog_integration.py -q`, `frontend`에서 `npm run build`로 실행합니다.
+
 ## 고발대상자 관리·고발장 작성
 
 자원관리 → 고발대상자에서 대상자 검색·훈련 이력 확인과 고발장 작성·저장·인쇄를 제공합니다. 훈련 미이수 검토 목록은 고발대상자 목록과 구분합니다.
