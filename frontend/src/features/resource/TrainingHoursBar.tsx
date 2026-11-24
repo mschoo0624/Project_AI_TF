@@ -85,6 +85,44 @@ function VisualBar({ summary, size }: { summary: TrainingHoursSummary; size: Pro
   return visual
 }
 
+/**
+ * Current-year bar (올해): recognized hours out of this year's required hours only.
+ * The cumulative bar (VisualBar) scales to required + carry-over, so a person with
+ * 28/28 this year and 56 carried over looks 1/3 full there. This bar answers
+ * "did they finish THIS year?" on its own scale.
+ */
+function YearBar({ summary }: { summary: TrainingHoursSummary }) {
+  const required = summary.required_hours
+  const recognized = Math.min(required, Math.max(0, summary.recognized_hours))
+  const completion = required > 0 ? recognized / required : 0
+  const percent = completion * 100
+  return <div
+    className={`training-hours-track training-hours-track--year${completion >= 1 ? ' is-complete' : ''}`}
+    style={{ '--training-progress-hue': `${completion * 120}deg` } as CSSProperties}
+    role="img"
+    aria-label={`올해 ${hoursText(required)} 중 ${hoursText(recognized)} 인정, 달성률 ${percent.toFixed(1)}%`}
+  >
+    <span className="training-hours-year-fill" style={{ width: `${percent}%` }} />
+  </div>
+}
+
+/**
+ * Cumulative bar (누적): the combined carry-over (이월) from all previous years.
+ * Current-year completed hours are deliberately left out (the 올해 bar shows them).
+ * The whole bar is the carried-over total, so it is filled completely; the exact
+ * amount is the number next to it.
+ */
+function CarryBar({ summary }: { summary: TrainingHoursSummary }) {
+  const carry = Math.max(0, summary.carryover_hours)
+  return <div
+    className="training-hours-track training-hours-track--compact"
+    role="img"
+    aria-label={`누적 이월 ${hoursText(carry)}`}
+  >
+    <span className="training-hours-segment training-hours-segment--carryover" style={{ width: '100%' }} />
+  </div>
+}
+
 function StatusChip({ summary, statusLabel }: Pick<Props, 'summary' | 'statusLabel'>) {
   const label = statusLabel || summary.training_status
   const className = `training-hours-status${summary.training_status === 'NEEDS_REVIEW' ? ' is-review' : ''}${summary.training_status === '훈련 미이수' ? ' is-incomplete' : ''}`
@@ -103,8 +141,32 @@ export default function TrainingHoursBar({ summary, size, statusLabel, onActivat
     : size === 'compact'
       ? `이수 ${summary.counted_hours} · 보류 ${summary.credited_hours} · 이월 ${summary.carryover_hours}`
       : `${summary.counted_hours > 0 ? `이수/참석 ${hoursText(summary.counted_hours)}` : '이수/참석 0시간'} · 보류 ${hoursText(summary.credited_hours)} · 이월 ${hoursText(summary.carryover_hours)}`
+
+  // Compact (roster table):
+  //  - carry-over > 0  -> two bars: 올해 (this year) + 누적 (cumulative incl. carry-over)
+  //  - carry-over = 0  -> only the 올해 bar (nothing cumulative to show)
+  //  - no obligation this year / NEEDS_REVIEW -> the original single bar
+  const hasYearBar = size === 'compact' && summary.required_hours > 0 && !needsReview(summary)
+  const hasCumulativeBar = hasYearBar && summary.carryover_hours > 0
+  const visual = hasCumulativeBar
+    ? <div className="training-hours-bars">
+      <div className="training-hours-bar-row">
+        <span className="training-hours-bar-label">올해</span>
+        <YearBar summary={summary} />
+        <span className="training-hours-bar-value">{Math.min(summary.recognized_hours, summary.required_hours)}/{summary.required_hours}h</span>
+      </div>
+      <div className="training-hours-bar-row">
+        <span className="training-hours-bar-label">누적</span>
+        <CarryBar summary={summary} />
+        <span className="training-hours-bar-value">{summary.carryover_hours}h</span>
+      </div>
+    </div>
+    : hasYearBar
+      ? <YearBar summary={summary} />
+      : <VisualBar summary={summary} size={size} />
+
   const content = <>
-    <VisualBar summary={summary} size={size} />
+    {visual}
     <span className={`training-hours-copy${needsReview(summary) ? ' is-review' : ''}`}>
       <strong>{showLabel ? numericLabel : 'NEEDS_REVIEW'}</strong>
       <small>{detail}</small>
