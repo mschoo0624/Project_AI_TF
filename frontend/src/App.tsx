@@ -183,7 +183,11 @@ function SidebarClock() {
 
 function App() {
   const [homeRevision, setHomeRevision] = useState(0)
-  const [activePage, setActivePage] = useState<PageId>('home')
+  const [activePage, setActivePageState] = useState<PageId>('home')
+  const setActivePage = (page: PageId) => {
+    if (page !== activePage && !window.dispatchEvent(new Event('app-before-page-change', { cancelable: true }))) return
+    setActivePageState(page)
+  }
   const [resourceLanding, setResourceLanding] = useState<ResourceTabId>('organization')
   const [trainingLanding, setTrainingLanding] = useState<TrainingTabId>('schedule')
   const [trainingScheduleFocus, setTrainingScheduleFocus] = useState<number | null>(null)

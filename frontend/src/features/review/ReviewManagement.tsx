@@ -9,6 +9,8 @@ import EvidenceReviewPanel from './EvidenceReviewPanel'
 import EvidencePdf from './EvidencePdf'
 import type { Proof } from './classifierApi'
 import { formatApprovalTime } from './classifierApi'
+import WorkspaceTabs from '../../components/WorkspaceTabs'
+import { RosterHeading, RosterSummary, RosterPagination } from '../../components/PersonnelRosterParts'
 
 // Shared live submission data is adapted in ./api.ts.
 type ReviewTab = 'roster' | 'inbox' | 'ai'
@@ -32,22 +34,8 @@ function ClassChip({ label }: { label: string }) {
 }
 
 function Tabs({ tab, setTab }: { tab: ReviewTab; setTab: (tab: ReviewTab) => void }) {
-  return (
-    <nav className="review-inner-tabs" aria-label="보류·연기 페이지">
-      <button type="button" className={`review-inner-tab ${tab === 'roster' ? 'active' : ''}`}
-        aria-current={tab === 'roster' ? 'page' : undefined} onClick={() => setTab('roster')}>
-        보류/연기자 명부
-      </button>
-      <button type="button" className={`review-inner-tab ${tab === 'inbox' ? 'active' : ''}`}
-        aria-current={tab === 'inbox' ? 'page' : undefined} onClick={() => setTab('inbox')}>
-        검토함
-      </button>
-      <button type="button" className={`review-inner-tab ${tab === 'ai' ? 'active' : ''}`}
-        aria-current={tab === 'ai' ? 'page' : undefined} onClick={() => setTab('ai')}>
-        서류 AI 판정
-      </button>
-    </nav>
-  )
+  return <WorkspaceTabs<ReviewTab> label="보류·연기 페이지" value={tab} onChange={setTab}
+    items={[{ id: 'roster', label: '보류/연기자 명부' }, { id: 'inbox', label: '검토함' }, { id: 'ai', label: '서류 AI 판정' }]} />
 }
 
 function ReasonList({ title, items, alert = false }: { title: string; items: string[]; alert?: boolean }) {
@@ -95,6 +83,7 @@ function PersonDetail({ person, onClose }: { person: Person; onClose: () => void
 }
 
 function RosterView({ people, onSelect }: { people: Person[]; onSelect: (person: Person) => void }) {
+  const [input, setInput] = useState('')
   const [search, setSearch] = useState('')
   const [classification, setClassification] = useState('')
   const [onlyPending, setOnlyPending] = useState(false)
@@ -110,35 +99,42 @@ function RosterView({ people, onSelect }: { people: Person[]; onSelect: (person:
   const currentPage = Math.min(page, pages)
   const shown = filtered.slice((currentPage - 1) * 20, currentPage * 20)
 
-  return <section className="review-roster">
-    <h2 className="review-roster-title">보류·연기 대상자 관리</h2>
-    <div className="review-roster-cards">{[
-      ['전체 대상자', people.length, '새 신청에 연결된 등록 인원'],
-      ['보류자', people.filter(p => p.classification.includes('보류')).length, '보류 승인 인원'],
-      ['연기자', people.filter(p => p.classification === '연기').length, '연기 승인 인원'],
-      ['검토 필요', people.filter(p => p.pending_count > 0).length, '검토 중인 신청이 있는 인원'],
-    ].map(([label, count, description]) => <div className="review-roster-card" key={label}><span>{label}</span><strong>{count}명</strong><small>{description}</small></div>)}</div>
-    <div className="review-roster-filters">
-      <input type="search" value={search} onChange={event => { setSearch(event.target.value); setPage(1) }} placeholder="성명 또는 군번 검색" aria-label="성명 또는 군번 검색" />
-      <select value={classification} onChange={event => { setClassification(event.target.value); setPage(1) }} aria-label="분류">
-        <option value="">전체 분류</option>
-        {['법규보류', '방침보류', '보류', '연기', '일반'].map(value => <option key={value}>{value}</option>)}
-      </select>
-      <label><input type="checkbox" checked={onlyPending} onChange={event => setOnlyPending(event.target.checked)} /> 검토 대기만</label>
-      <span className="review-roster-total">{filtered.length}명 표시 / 전체 {people.length}명</span>
+  return <section className="rm-roster-layout rm-managed-roster">
+    <div className="rm-roster-main">
+      <RosterHeading>보류·연기 대상자 관리</RosterHeading>
+      <RosterSummary metrics={[
+        { label: '전체 대상자', value: `${people.length.toLocaleString('ko-KR')}명`, description: '신청에 연결된 인원', color: 'blue' },
+        { label: '보류자', value: `${people.filter(p => p.classification.includes('보류')).length.toLocaleString('ko-KR')}명`, description: '보류 승인 인원', color: 'blue' },
+        { label: '연기자', value: `${people.filter(p => p.classification === '연기').length.toLocaleString('ko-KR')}명`, description: '연기 승인 인원', color: 'green' },
+        { label: '검토 필요', value: `${people.filter(p => p.pending_count > 0).length.toLocaleString('ko-KR')}명`, description: '검토 대기 신청 인원', color: 'orange' },
+      ]} />
+      <form className="rm-search-controls" onSubmit={event => { event.preventDefault(); setSearch(input); setPage(1) }}>
+        <label className="rm-query-input"><span aria-hidden="true">⌕</span><input type="search" value={input}
+          onChange={event => setInput(event.target.value)} placeholder="이름, 군번을 입력하세요." aria-label="성명 또는 군번 검색" /></label>
+        <select value={classification} onChange={event => { setClassification(event.target.value); setPage(1) }} aria-label="분류">
+          <option value="">전체 분류</option>
+          {['법규보류', '방침보류', '보류', '연기', '일반'].map(value => <option key={value}>{value}</option>)}
+        </select>
+        <label className="rm-roster-filter-check"><input type="checkbox" checked={onlyPending} onChange={event => { setOnlyPending(event.target.checked); setPage(1) }} /> 검토 대기만</label>
+        <button type="submit" className="rm-btn rm-btn-primary">검색</button>
+        <button type="button" className="rm-btn" onClick={() => { setInput(''); setSearch(''); setClassification(''); setOnlyPending(false); setPage(1) }}>초기화</button>
+      </form>
+      <section className="rm-person-list" aria-label="보류·연기 대상자 목록">
+        <div className="rm-person-list-toolbar"><span>대상자를 선택하면 신청·처리 정보를 확인할 수 있습니다.</span><span className="rm-list-total">총 {filtered.length.toLocaleString('ko-KR')}명</span></div>
+        <div className="rm-list-scroll"><table className="rm-person-table rm-managed-table">
+          <colgroup>{[16, 12, 16, 8, 12, 18, 8, 10].map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}</colgroup>
+          <thead><tr>{['군번', '성명', '직업', '연차', '분류', '훈련', '시간', '검토'].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead>
+          <tbody>{shown.map(person => <tr key={person.person_id} tabIndex={0}
+            onClick={() => onSelect(person)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(person) } }}>
+            <td title={person.person_id}>{person.person_id}</td><td className="rm-table-name" title={person.name}>{person.name}</td><td title={person.occupation ?? undefined}>{person.occupation ?? '—'}</td>
+            <td>{person.resource_year == null ? '—' : `${person.resource_year}년차`}</td><td><ClassChip label={person.classification} /></td>
+            <td title={person.training}>{person.training}</td><td>{person.total_hours == null ? '—' : `${person.total_hours}h`}</td>
+            <td>{person.pending_count > 0 ? `대기 ${person.pending_count}` : '—'}</td>
+          </tr>)}</tbody>
+        </table>{!filtered.length && <p className="rm-list-message">검색 결과가 없습니다.</p>}</div>
+        <RosterPagination total={filtered.length} page={currentPage} pageSize={20} onPageChange={setPage} label="보류·연기 대상자 목록 페이지" />
+      </section>
     </div>
-    <div className="review-roster-table-wrap"><table className="review-roster-table"><thead><tr>
-      {['군번', '성명', '직업', '연차', '분류', '훈련', '시간', '검토'].map(label => <th key={label}>{label}</th>)}
-    </tr></thead><tbody>{shown.map(person => <tr key={person.person_id} tabIndex={0}
-      onClick={() => onSelect(person)} onKeyDown={event => { if (event.key === 'Enter') onSelect(person) }}>
-      <td>{person.person_id}</td><td><strong>{person.name}</strong></td><td>{person.occupation ?? '—'}</td>
-      <td>{person.resource_year == null ? '—' : `${person.resource_year}년차`}</td><td><ClassChip label={person.classification} /></td>
-      <td>{person.training}</td><td>{person.total_hours == null ? '—' : `${person.total_hours}h`}</td>
-      <td>{person.pending_count > 0 ? `대기 ${person.pending_count}` : '—'}</td>
-    </tr>)}</tbody></table>
-      {!filtered.length && <p className="review-empty-state">검색 결과가 없습니다.</p>}
-    </div>
-    <footer className="review-roster-pagination"><span>총 {filtered.length}명 · 페이지당 20명</span><div><button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>이전</button><span>{currentPage} / {pages}</span><button disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}>다음</button></div></footer>
   </section>
 }
 
@@ -263,7 +259,7 @@ export default function ReviewManagement() {
 
   return <div className="review-management">
     <Tabs tab={tab} setTab={setTab} />
-    <main className="review-main-content">
+    <main className={`review-main-content${tab === 'roster' ? ' review-roster-content' : ''}`}>
       {tab === 'ai' ? <PostponementModule initialSelectedId={analysisId} /> : error ? <div role="alert" className="review-load-error"><strong>데이터를 불러오지 못했습니다</strong><p>{error}</p><button type="button" onClick={() => setRevision(value => value + 1)}>다시 불러오기</button></div> : !data ? <div className="review-loading">불러오는 중…</div> : tab === 'roster' ? <RosterView people={data.people} onSelect={setSelectedPerson} /> : <InboxView queue={data.queue} completed={data.completed} onOpenAnalysis={id => { setAnalysisId(id); setTab('ai') }} />}
     </main>
     {selectedPerson && <PersonDetail person={selectedPerson} onClose={() => setSelectedPerson(null)} />}

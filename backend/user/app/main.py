@@ -9,6 +9,7 @@ from user.app.database import SessionLocal, engine, init_db
 from user.app.api.dashboard import router as dashboard_router
 from user.app.api.auth import router as auth_router
 from user.app.api.postponements import router as postponements_router
+from user.app.api.prosecution_documents import router as prosecution_documents_router
 from user.app.api.reservists import persons_router, router as reservists_router
 from user.app.api.squads import router as squads_router
 from user.app.api.organization import router as organization_router
@@ -44,6 +45,7 @@ app.include_router(squads_router)
 app.include_router(organization_router)
 app.include_router(dashboard_router)
 app.include_router(postponements_router)
+app.include_router(prosecution_documents_router)
 app.include_router(training_router)
 app.include_router(persons_training_router)
 app.include_router(transfers_router)

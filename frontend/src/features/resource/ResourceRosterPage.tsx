@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { RosterHeading, RosterSummary, RosterPagination } from '../../components/PersonnelRosterParts'
 import type { FormEvent } from 'react'
 import PersonProfileFields from './PersonProfileFields'
 import TrainingHoursBar, { TrainingStatusChip } from './TrainingHoursBar'
@@ -576,7 +577,7 @@ export default function ResourceRosterPage({ revision, onDataChanged, copilotFil
     setGroupTab('none')
     setGroupValue(null)
   }
-  const metrics = [
+  const metrics: { label: string; number: number; description: string; color: 'blue' | 'orange' | 'green' }[] = [
     { label: '전체 대상자', number: people.length, description: '전체 예비군 등록 인원', color: 'blue' },
     { label: '분대 편성', number: people.filter(person => person.squad_id !== null).length, description: '소속 분대가 있는 인원', color: 'blue' },
     { label: '미편성', number: people.filter(person => person.squad_id === null).length, description: '소속 분대가 없는 인원', color: 'orange' },
@@ -585,14 +586,8 @@ export default function ResourceRosterPage({ revision, onDataChanged, copilotFil
 
   return <div className="rm-roster-layout">
     <div className="rm-roster-main">
-      <h1 className="rm-roster-title"><svg aria-hidden="true" viewBox="0 0 32 26" width="33" height="27" fill="currentColor"><circle cx="16" cy="6" r="4"/><circle cx="5" cy="11" r="3"/><circle cx="27" cy="11" r="3"/><path d="M7 25v-5c0-5 4-8 9-8s9 3 9 8v5H7ZM0 25v-5c0-3 2-5 5-5 1 0 2 .2 3 .8C6 18 5 21 5 25H0ZM27 25v-4c0-2-.8-4-2-5.2a6 6 0 0 1 3-.8c3 0 4 2 4 5v5h-5Z"/></svg> 예비군 대상자 관리</h1>
-      <div className="rm-summary-grid">
-        {metrics.map(metric => <section key={metric.label} className="rm-summary-card">
-          <h2><span className={`rm-summary-icon ${metric.color}`} aria-hidden="true">●</span>{metric.label}</h2>
-          <strong>{loading ? '—' : `${metric.number.toLocaleString('ko-KR')}명`}</strong>
-          <p>{metric.description}</p>
-        </section>)}
-      </div>
+      <RosterHeading>예비군 대상자 관리</RosterHeading>
+      <RosterSummary metrics={metrics.map(metric => ({ ...metric, value: loading ? '—' : `${metric.number.toLocaleString('ko-KR')}명` }))} />
       <form className="rm-search-controls" onSubmit={event => { event.preventDefault(); submitSearch() }}>
         <label className="rm-query-input"><span aria-hidden="true">⌕</span><input aria-label="성명 또는 군번 검색"
           value={input} onChange={event => setInput(event.target.value)} placeholder="이름, 군번을 입력하세요." /></label>
@@ -687,18 +682,7 @@ export default function ResourceRosterPage({ revision, onDataChanged, copilotFil
             </th>)}</tr></thead>
             <tbody>{pageRows.map(renderPersonRow)}</tbody>
           </table>{filtered.length === 0 && <p className="rm-list-message">검색 결과가 없습니다.</p>}</div>}
-        <footer className="rm-person-footer"><span>총 {filtered.length.toLocaleString('ko-KR')}명 중 {filtered.length ? (actualPage - 1) * pageSize + 1 : 0}–{Math.min(actualPage * pageSize, filtered.length)}명 표시</span>
-          <nav aria-label="인원 목록 페이지">
-            <button type="button" disabled={actualPage === 1} onClick={() => setPage(actualPage - 1)} aria-label="이전 페이지">‹</button>
-            {Array.from({ length: Math.min(5, pageCount) }, (_, index) => {
-              const start = Math.max(1, Math.min(actualPage - 2, pageCount - 4))
-              const pageNumber = start + index
-              return <button key={pageNumber} type="button" className={actualPage === pageNumber ? 'is-current' : ''}
-                aria-current={actualPage === pageNumber ? 'page' : undefined} onClick={() => setPage(pageNumber)}>{pageNumber}</button>
-            })}
-            <button type="button" disabled={actualPage === pageCount} onClick={() => setPage(actualPage + 1)} aria-label="다음 페이지">›</button>
-          </nav>
-        </footer>
+        <RosterPagination total={filtered.length} page={actualPage} pageSize={pageSize} onPageChange={setPage} label="인원 목록 페이지" />
       </section>
     </div>
     {selected && <div className="rm-person-detail-backdrop" onMouseDown={event => {
