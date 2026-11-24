@@ -49,14 +49,19 @@ class Config:
     embedding_model: str = field(default_factory=lambda: _env("RAG_EMBEDDING_MODEL", "BAAI/bge-m3"))
 
     # ---- retrieval ----
-    top_k: int = field(default_factory=lambda: _env("RAG_TOP_K", 6))            # 최종 LLM에 넘길 조문 수
+    top_k: int = field(default_factory=lambda: _env("RAG_TOP_K", 3))            # 최종 LLM에 넘길 조문 수
     candidates: int = field(default_factory=lambda: _env("RAG_CANDIDATES", 30))  # 각 검색기에서 가져올 후보 수
     dense_weight: float = 0.6
     bm25_weight: float = 0.4
     rrf_k: int = 60
     # add articles referenced by / referencing the top hits (법 ↔ 시행령 ↔ 시행규칙)
     expand_references: bool = field(default_factory=lambda: _env("RAG_EXPAND_REFS", True))
-    max_reference_hits: int = 4
+    max_reference_hits: int = field(default_factory=lambda: _env("RAG_MAX_REFS", 2))   # 참조로 추가할 조문 수 상한
+    passages_per_article: int = field(default_factory=lambda: _env("RAG_PASSAGES_PER_ARTICLE", 2))  # 조문당 LLM에 넘길 항 수
+    # 항 선택 기준: 조문 안에서 가장 관련 높은 항 점수의 이 비율 이상인 항만 LLM에 넘긴다
+    passage_min_ratio: float = field(default_factory=lambda: _env("RAG_PASSAGE_MIN_RATIO", 0.5))
+    # 검색 점수가 없는 조문(참조/지정)은 최고 항과 dense 유사도 차이가 이 값 이내인 항만 넘긴다
+    passage_dense_margin: float = field(default_factory=lambda: _env("RAG_PASSAGE_DENSE_MARGIN", 0.05))
     # include 부칙 (addenda) articles in search results
     include_addenda: bool = field(default_factory=lambda: _env("RAG_INCLUDE_ADDENDA", True))
 
@@ -69,6 +74,7 @@ class Config:
     llm_base_url: str = field(default_factory=lambda: _env("OPENAI_BASE_URL", ""))
     llm_model: str = field(default_factory=lambda: _env("OPENAI_MODEL", "gpt-4o-mini"))
     llm_temperature: float = field(default_factory=lambda: _env("RAG_TEMPERATURE", 0.2))
+    llm_max_tokens: int = field(default_factory=lambda: _env("RAG_MAX_TOKENS", 250))  # 답변 길이 상한 (CPU 응답 시간 단축)
     llm_timeout: float = field(default_factory=lambda: _env("RAG_LLM_TIMEOUT", 120.0))
 
     # 기준일 (YYYY-MM-DD). Empty = today. Decides which law version is "현행" vs "시행 예정".

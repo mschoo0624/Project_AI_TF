@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import time
 
+from legalrag.chunker import build_chunks
 from legalrag.config import Config
 from legalrag.store import build_embeddings, load_articles
 
@@ -17,9 +18,10 @@ from legalrag.store import build_embeddings, load_articles
 def main() -> None:
     cfg = Config()
     articles = load_articles(cfg.processed_file)
-    print(f"Embedding {len(articles)} articles with {cfg.embedding_model} ...")
+    chunks = build_chunks(articles)
+    print(f"Embedding {len(chunks)} passages ({len(articles)} articles) with {cfg.embedding_model} ...")
     t = time.time()
-    build_embeddings(cfg, articles)
+    build_embeddings(cfg, articles, chunks)
     print(f"Done in {time.time() - t:.0f}s -> {cfg.index_dir}")
 
 

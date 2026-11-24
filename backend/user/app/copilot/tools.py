@@ -11,6 +11,10 @@ from pydantic.json_schema import SkipJsonSchema
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from user.app.copilot.approvals import PendingPostponementsArgs, list_pending_postponements
+from user.app.copilot.changes import ChangedPeopleArgs, list_changed_people
+from user.app.copilot.exports import ExportArgs, export_list
+from user.app.copilot.report import StatusReportArgs, draft_status_report
 from user.app.copilot.common import TRANSFER_REGISTRATION, Tool, ToolResult, josa, squad_label
 from user.app.copilot.filters import PersonFilter, resolve_people
 from user.app.copilot.schemas import PlannedAssignment, Proposal, SquadOption, UiAction
@@ -529,6 +533,34 @@ TOOLS: dict[str, Tool] = {
 			args_model=StatusArgs,
 			kind="조회",
 			run=summarize_status,
+		),
+		Tool(
+			name="list_pending_postponements",
+			description="결재 대기 중인 보류·연기 신청 목록을 보거나, 서류가 빠진·부족한 신청을 찾을 때 사용. 예: 결재 대기 목록 보여줘, 서류가 빠진 연기 신청은?",
+			args_model=PendingPostponementsArgs,
+			kind="조회",
+			run=list_pending_postponements,
+		),
+		Tool(
+			name="draft_status_report",
+			description="오늘 현황을 보고용 문안(보고서 초안)으로 정리해 달라고 할 때 사용. 예: 오늘 현황 보고용으로 정리해줘",
+			args_model=StatusReportArgs,
+			kind="조회",
+			run=draft_status_report,
+		),
+		Tool(
+			name="list_changed_people",
+			description="오늘·어제·이번 주에 수정(편성 변경·훈련 기록 수정)된 인원을 보고 싶을 때 사용. 예: 오늘 수정한 인원 보여줘",
+			args_model=ChangedPeopleArgs,
+			kind="조회",
+			run=list_changed_people,
+		),
+		Tool(
+			name="export_list",
+			description="명단이나 결재 대기 신청 목록을 엑셀·CSV 파일로 내려받고 싶다고 할 때 사용. 예: 서류 미비자 엑셀로 줘, 교육 미달자 파일로 내보내줘",
+			args_model=ExportArgs,
+			kind="조회",
+			run=export_list,
 		),
 		Tool(
 			name="person_summary",

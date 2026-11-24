@@ -94,6 +94,8 @@ def _unauthenticated_user() -> User:
         password_hash="",
         role="approver",
         is_active=True,
+        unit_code="",
+        position="",
     )
 
 

@@ -68,7 +68,7 @@ npm run dev
 
 문서 분석의 `OLLAMA_URL` 기본값은 `http://127.0.0.1:11434`, `CLASSIFIER_MODEL` 기본값은 `qwen3:4b-instruct`입니다. 변경할 때는 백엔드를 시작하는 터미널에 환경 변수를 설정합니다(classifier는 `.env`를 자동으로 읽지 않습니다). 별도 classifier 서버(8001/8003)는 실행하지 않습니다.
 
-법령 챗봇의 생성 모델은 문서 분석 모델과 별도 설정입니다. `RAG/.env`의 `OPENAI_MODEL`에 지정한 모델도 설치하세요(예: `ollama pull qwen2.5:7b`). 두 기능은 같은 Ollama 서버를 사용할 수 있습니다. 자세한 설정은 [RAG 안내](RAG/README.md)를 참고하세요.
+법령 챗봇의 생성 모델은 문서 분석 모델과 별도 설정입니다. `RAG/.env`의 `OPENAI_MODEL`에 지정한 모델도 설치하세요(예: `ollama pull qwen3:4b-instruct`). 두 기능은 같은 Ollama 서버를 사용할 수 있습니다. 자세한 설정은 [RAG 안내](RAG/README.md)를 참고하세요.
 
 Ollama가 꺼져 있거나 지정 모델이 없으면 8002 서버가 실행되어도 문서 AI 분석은 실패합니다. 연결 오류는 위 `/api/tags` 요청으로, 모델 누락은 `ollama list`로 확인하세요.
 
@@ -280,6 +280,24 @@ Status behavior is configurable in `training_status_policy`; defaults are insert
 ## Run Law Chatbot (RAG, Windows PowerShell)
 
 화면 오른쪽 위 **법령 챗봇**은 통합 백엔드의 `/rag-api` 경로에서 제공됩니다. 앞의 **Run Backend** 명령만 실행하면 되며 별도 포트나 RAG 서버는 필요하지 않습니다. 시작 후 임베딩 모델(bge-m3)을 불러오는 데 1~2분이 걸릴 수 있습니다.
-- 답변 생성에는 Ollama가 실행 중이어야 합니다. 모델은 `backend\RAG\.env`의 `OPENAI_MODEL`에서 정합니다 (예: `ollama pull qwen2.5:7b`). Ollama가 없으면 관련 조문 검색만 동작합니다.
+- 답변 생성에는 Ollama가 실행 중이어야 합니다. 모델은 `backend\RAG\.env`의 `OPENAI_MODEL`에서 정합니다 (예: `ollama pull qwen3:4b-instruct`). Ollama가 없으면 관련 조문 검색만 동작합니다.
 - 가상환경 준비, 법령 추가, 인덱스 재생성은 [`RAG/README.md`](RAG/README.md)를 참고하세요.
 - 상태 확인: <http://127.0.0.1:8002/rag-api/api/status>.
+
+> **브랜치를 받은 뒤 한 번만:** 법령 검색을 항(項) 단위로 바꿨기 때문에 인덱스 형식이 달라졌습니다. 예전 인덱스가 있으면 상태 화면에 `Index is out of date`가 뜨니, `backend\RAG`에서 `python -m scripts.build_index`를 다시 실행하세요(CPU에서 약 3~4분). 모델은 `qwen3:4b-instruct`이고 Ollama 컨텍스트는 환경 변수 `OLLAMA_CONTEXT_LENGTH=8192` 이상이어야 합니다.
+
+## Run Work Chatbot (업무 Copilot)
+
+화면의 **업무 챗봇**도 통합 백엔드(`/copilot`)가 처리합니다. 자주 쓰는 요청은 규칙으로 바로(0.1초 안팎), 나머지는 Ollama의 LLM이 도구를 골라 처리하고, 숫자·문장은 항상 DB와 고정 양식에서 만듭니다. 데이터 변경은 제안 카드의 [승인]을 눌렀을 때만 일어나고 변경 기록에 남습니다.
+
+| 기능 | 예시 질문 |
+| --- | --- |
+| 결재 대기 신청 목록·서류 상태 (+관련 법령) | `결재 대기 목록 보여줘`, `서류가 빠진 연기 신청은?` |
+| 보고서 초안 | `오늘 현황 보고용으로 정리해줘` |
+| 기간별 수정 인원 | `오늘 수정한 인원`, `이번 주 자동편성한 인원`, `결재한 인원` |
+| CSV 내보내기 (Excel에서 바로 열림) | `서류 미비자 엑셀로 줘`, `교육 미달자 엑셀로 줘`, `이 명단 엑셀로 줘` |
+| 첫 화면 | 오늘 확인할 일, 지난번에 승인하지 않고 둔 제안, 자주 쓰는 요청 |
+
+- **보고서 양식:** `user/app/copilot/report_template.txt`를 고치면 서버를 다시 켜지 않아도 다음 보고서부터 바뀝니다. 쓸 수 있는 `{자리 표시}`는 파일 맨 위 주석에 있습니다.
+- **내보내기 파일:** 서버 메모리에 15분만 두고, 받을 때마다 변경 기록(`copilot.export.download`)에 파일 이름과 건수만 남깁니다(이름·군번은 남기지 않음).
+- **메모리:** Ollama 모델은 `OLLAMA_KEEP_ALIVE` 동안 약 4GB를 차지합니다. 메모리가 모자라면 값을 줄이거나(`5m`) `ollama stop qwen3:4b-instruct`로 내리세요.

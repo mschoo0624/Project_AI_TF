@@ -2,7 +2,7 @@
 LLM client for any OpenAI-compatible Chat Completions API.
 
   OpenAI  : OPENAI_API_KEY=sk-...                  OPENAI_MODEL=gpt-4o-mini
-  Ollama  : OPENAI_BASE_URL=http://localhost:11434/v1   OPENAI_MODEL=qwen2.5:7b   (free, local)
+  Ollama  : OPENAI_BASE_URL=http://localhost:11434/v1   OPENAI_MODEL=qwen3:4b-instruct  (free, local)
   others  : any server exposing /v1/chat/completions (vLLM, LM Studio, ...)
 """
 from __future__ import annotations
@@ -35,6 +35,8 @@ class LLMClient:
         kw = {"model": self.model, "messages": messages}
         if _supports_temperature(self.model):
             kw["temperature"] = self.cfg.llm_temperature
+            if self.cfg.llm_max_tokens > 0:   # reasoning-style models use a different parameter, so skip them
+                kw["max_tokens"] = self.cfg.llm_max_tokens
         return kw
 
     def chat(self, messages: List[Dict[str, str]]) -> str:

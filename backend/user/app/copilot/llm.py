@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import logging
 import os
 from urllib.parse import urlparse
 
@@ -17,8 +18,9 @@ import httpx
 from user.app.copilot.tools import TOOLS
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
-COPILOT_MODEL = os.environ.get("COPILOT_MODEL", "qwen2.5:7b")
+COPILOT_MODEL = os.environ.get("COPILOT_MODEL", "qwen3:4b-instruct")
 TIMEOUT_SECONDS = float(os.environ.get("COPILOT_LLM_TIMEOUT", "60"))
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
 	"너는 예비군 업무 Copilot이다. 사용자 요청에 맞는 도구를 하나만 골라 호출한다. "
@@ -57,7 +59,7 @@ def _tool_specs() -> list[dict]:
 	]
 
 
-def choose_tool(message: str) -> tuple[str, dict] | None:
+def choose_tool(message: str, timeout: float | None = None) -> tuple[str, dict] | None:
 	"""Return (tool name, raw arguments) or None when the model calls no tool."""
 	_ensure_local(OLLAMA_HOST)
 	payload = {
@@ -70,7 +72,7 @@ def choose_tool(message: str) -> tuple[str, dict] | None:
 		"temperature": 0,
 	}
 	try:
-		response = httpx.post(f"{OLLAMA_HOST.rstrip('/')}/v1/chat/completions", json=payload, timeout=TIMEOUT_SECONDS)
+		response = httpx.post(f"{OLLAMA_HOST.rstrip('/')}/v1/chat/completions", json=payload, timeout=timeout or TIMEOUT_SECONDS)
 		response.raise_for_status()
 	except httpx.HTTPError as error:
 		raise LLMUnavailable(f"Copilot 모델 서버({OLLAMA_HOST}, {COPILOT_MODEL})에 연결하지 못했습니다: {error}") from error
@@ -81,3 +83,14 @@ def choose_tool(message: str) -> tuple[str, dict] | None:
 	function = calls[0]["function"]
 	arguments = function.get("arguments") or "{}"
 	return function["name"], json.loads(arguments) if isinstance(arguments, str) else arguments
+
+
+def warm_up() -> None:
+	"""서버 시작 때 한 번 호출해 모델을 메모리에 올리고 도구 설명 프롬프트를 캐시해 둔다.
+
+	첫 질문이 LLM으로 넘어가도 수십 초씩 기다리지 않게 하려는 것이다. 실패해도 서버는 계속 동작한다."""
+	try:
+		choose_tool("오늘 현황", timeout=180)
+		logger.info("Copilot 모델 워밍업 완료 (%s)", COPILOT_MODEL)
+	except Exception as error:
+		logger.info("Copilot 모델 워밍업을 건너뜁니다: %s", error)
