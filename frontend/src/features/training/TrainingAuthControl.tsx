@@ -30,7 +30,7 @@ export function TrainingLoginPage({ checkingSession, sessionError, onRetry }: {
       const response = await fetch(`${apiBase()}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ unit_code: unitCode, username, password }),
+        body: JSON.stringify({ username, password }),
       })
       const payload = await response.json() as TokenResponse | { detail?: string }
       if (!response.ok || !('access_token' in payload)) {
@@ -82,11 +82,11 @@ export function TrainingLoginPage({ checkingSession, sessionError, onRetry }: {
         <div className="training-login-heading">
           <span>SECURE ACCESS</span>
           <h2>{showBootstrap ? '첫 동대장 계정 만들기' : '로그인'}</h2>
-          <p>{showBootstrap ? '최초 동대장 계정으로 사용할 부대코드, 아이디, 비밀번호를 입력하세요.' : '부대코드와 계정 정보를 입력해 접속하세요.'}</p>
+          <p>{showBootstrap ? '최초 동대장 계정으로 사용할 부대코드, 아이디, 비밀번호를 입력하세요.' : '아이디와 비밀번호를 입력해 접속하세요.'}</p>
         </div>
         {checkingSession && <p className="training-login-notice" role="status">로그인 상태를 확인하고 있습니다.</p>}
         {sessionError && <div className="training-login-error" role="alert"><span>{sessionError}</span><button type="button" onClick={onRetry}>다시 확인</button></div>}
-        <label>부대코드<input autoComplete="organization" value={unitCode} onChange={event => setUnitCode(event.target.value)} required disabled={busy} /></label>
+        {showBootstrap && <label>부대코드<input autoComplete="organization" value={unitCode} onChange={event => setUnitCode(event.target.value)} required disabled={busy} /></label>}
         <label>아이디<input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required disabled={busy} /></label>
         <label>비밀번호<input type="password" autoComplete={showBootstrap ? 'new-password' : 'current-password'} minLength={showBootstrap ? 8 : undefined} value={password} onChange={event => setPassword(event.target.value)} required disabled={busy} /></label>
         {error && <p className="training-login-error" role="alert">{error}</p>}

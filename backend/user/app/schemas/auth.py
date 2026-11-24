@@ -10,7 +10,7 @@ class BootstrapRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    unit_code: str = Field(min_length=1, max_length=20)
+    # 부대코드는 로그인에 쓰지 않습니다(소속만 뜻함). 이전 클라이언트가 보내도 무시됩니다.
     username: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=1, max_length=256)
 

@@ -1,0 +1,57 @@
+/* 마이페이지: 시안(권한별 3종)의 색·간격을 클래스로 옮김 */
+.mypage.mp { display:flex; flex-direction:column; gap:24px; padding:36px 44px 48px; background:#f2f5fa; color:#1b2433; }
+.mp h1, .mp h2, .mp p { margin:0; }
+.mp-header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; }
+.mp-header h1 { font-size:28px; font-weight:700; color:#0e2a5a; }
+.mp-header p { margin-top:4px; font-size:14px; color:#566173; }
+.mp-actions { display:flex; flex-wrap:wrap; gap:12px; }
+.mp-button { min-height:44px; padding:0 18px; border:1px solid #c3ccda; border-radius:10px; background:#fff; color:#1b2433; font-size:14px; font-weight:500; cursor:pointer; }
+.mp-button.is-primary { border-color:#1f5fbf; background:#1f5fbf; color:#fff; font-weight:700; }
+.mp-button:disabled { opacity:.5; cursor:not-allowed; }
+.mp-button:not(:disabled):hover { background:#eef3fb; }
+.mp-button.is-primary:hover { background:#164a96; }
+.mp-card { display:flex; flex-direction:column; gap:18px; padding:26px 28px; border:1px solid #dde3ee; border-radius:16px; background:#fff; }
+.mp-card-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; }
+.mp-card-head.is-column { flex-direction:column; align-items:flex-start; gap:4px; }
+.mp-card-head h2 { font-size:18px; font-weight:700; color:#0e2a5a; }
+.mp-card-head > span { font-size:13px; color:#566173; }
+.mp-link { padding:0; border:0; background:none; color:#1f5fbf; font-size:14px; font-weight:500; cursor:pointer; }
+.mp-link:hover { color:#164a96; text-decoration:underline; }
+.mp-profile { gap:22px; padding:28px 32px; }
+.mp-profile-top { display:flex; flex-wrap:wrap; align-items:center; gap:24px; }
+.mp-avatar { flex:none; width:88px; height:88px; display:grid; place-items:center; border-radius:50%; background:#e3ecfa; color:#1f5fbf; }
+.mp-profile-name { flex:1 1 260px; min-width:0; display:flex; flex-direction:column; gap:8px; }
+.mp-profile-name h2 { display:flex; flex-wrap:wrap; align-items:center; gap:12px; font-size:24px; font-weight:700; }
+.mp-profile-name > span { font-size:14px; color:#566173; }
+.mp-badge { padding:4px 12px; border-radius:999px; background:#e3ecfa; color:#164a96; font-size:13px; font-style:normal; font-weight:500; }
+.mp-info { margin:0; display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); border-top:1px solid #e6ebf3; }
+.mp-info div { display:flex; flex-direction:column; gap:4px; padding:16px 0; }
+.mp-info dt { font-size:13px; color:#566173; }
+.mp-info dd { margin:0; font-size:16px; font-weight:500; }
+.mp-dday { font-size:20px; font-weight:700; color:#1f5fbf; }
+.mp-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; }
+.mp-tiles.is-wide { grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); }
+.mp-tile { display:flex; flex-direction:column; gap:4px; padding:16px 18px; border:1px solid #dde3ee; border-radius:12px; }
+.mp-tile > span { font-size:13px; color:#566173; }
+.mp-tile > strong { font-size:28px; font-weight:700; color:#1b2433; }
+.mp-tiles.is-wide .mp-tile > strong { font-size:18px; }
+.mp-tile strong.is-warn { color:#9a3412; }
+.mp-tile strong.is-good { color:#14663a; }
+.mp-tile small { font-size:14px; font-weight:500; color:#566173; }
+.mp-progress { display:flex; flex-direction:column; gap:8px; }
+.mp-progress > div:first-child { display:flex; justify-content:space-between; font-size:13px; color:#566173; }
+.mp-progress strong { color:#1b2433; }
+.mp-progress-bar { height:10px; overflow:hidden; border-radius:999px; background:#e3ecfa; }
+.mp-progress-bar i { display:block; height:100%; border-radius:999px; background:#1f5fbf; }
+.mp-table-wrap { overflow-x:auto; }
+.mp-table { width:100%; min-width:520px; border-collapse:collapse; font-size:14px; }
+.mp-table th { padding:12px 16px; background:#f2f5fa; color:#566173; font-weight:500; text-align:left; }
+.mp-table td { padding:14px 16px; border-top:1px solid #e6ebf3; }
+.mp-table td.is-warn { color:#9a3412; font-weight:500; }
+.mp-table td.is-info { color:#164a96; font-weight:500; }
+.mp-table td.is-muted { color:#566173; font-weight:500; }
+.mp-table td.mp-empty { color:#8190a0; text-align:center; }
+.mp-security { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; }
+.mp-security .mp-card { gap:4px; padding:20px 24px; }
+.mp-security span { font-size:13px; color:#566173; }
+.mp-security strong { font-size:16px; font-weight:700; }

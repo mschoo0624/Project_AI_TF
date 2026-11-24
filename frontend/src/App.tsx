@@ -9,6 +9,9 @@ import { GRID_WIDTH, LOCKED_WIDGETS, SHORTCUT_MAX_COLUMNS, SIZE_OPTIONS, WIDGET_
 import type { SizeKey, WidgetId } from './features/dashboard/dashboardLayout'
 import { useDashboardConfig } from './features/dashboard/useDashboardConfig'
 import { useSchedules } from './features/dashboard/useSchedules'
+import { unitName } from './features/mypage/orgData'
+import MyPage from './features/mypage/MyPage'
+import DevAccountSwitcher from './features/mypage/DevAccountSwitcher'
 import type { Schedule, ScheduleColor } from './features/dashboard/scheduleStore'
 import './App.css'
 import ministryLogo from './assets/국방부 마크_컬러본.png'
@@ -39,7 +42,7 @@ import { trainingTabs } from './features/training/trainingtabs'
 import type { TrainingTabId } from './features/training/trainingtabs'
 import PersonQuickSearch from './features/quicksearch/PersonQuickSearch'
 import TrainingAuthControl, { TrainingLoginPage } from './features/training/TrainingAuthControl'
-import { AUTO_LOGOUT_ENABLED, AUTO_LOGOUT_MS, apiBase, authenticatedFetch, clearAuth, readAuth } from './features/training/auth'
+import { AUTO_LOGOUT_ENABLED, AUTO_LOGOUT_MS, touchActivity, apiBase, authenticatedFetch, clearAuth, readAuth } from './features/training/auth'
 
 
 const featurePages = [
@@ -51,9 +54,6 @@ const featurePages = [
 
 function EmptyReservePage() {
   return <section className="empty-reserve-page" aria-label="부대관리"><HomeForecastSection /></section>
-}
-function MyPage() {
-  return <section className="mypage" aria-label="마이페이지"><h2>마이페이지</h2></section>
 }
 type FeaturePageId = typeof featurePages[number]['id']
 type PageId = 'home' | FeaturePageId | 'mypage'
@@ -182,9 +182,6 @@ const scheduleColorOrder: ScheduleColor[] = ['high', 'normal', 'low']
 const formatScheduleDate = (date: string) => date.slice(2).replace(/-/g, '.')
 
 
-// 부대코드 → 부대 이름. 매핑이 없으면 코드를 그대로 표시합니다.
-const unitNames: Record<string, string> = {}
-
 async function logoutSession() {
   try { await authenticatedFetch(`${apiBase()}/auth/logout`, { method: 'POST' }) }
   catch { /* 서버 응답과 상관없이 로컬 로그인 정보는 지웁니다. */ }
@@ -197,6 +194,7 @@ function useAutoLogout() {
     if (!AUTO_LOGOUT_ENABLED) return
     let timer = window.setTimeout(() => void logoutSession(), AUTO_LOGOUT_MS)
     const reset = () => {
+      touchActivity()
       window.clearTimeout(timer)
       timer = window.setTimeout(() => void logoutSession(), AUTO_LOGOUT_MS)
     }
@@ -212,7 +210,7 @@ function useAutoLogout() {
 function UserCard({ onNavigate, onCustomize, editing = false }: { onNavigate: (page: HomeDestination) => void; onCustomize?: () => void; editing?: boolean }) {
   const user = readAuth()?.user
   const position = user?.position || (user?.role === 'approver' ? '동대장' : user?.role === 'scheduler' ? '상근예비역' : user?.role === 'viewer' ? '감사실' : '')
-  const unit = user?.unit_code ? (unitNames[user.unit_code] ?? user.unit_code) : '-'
+  const unit = unitName(user?.unit_code)
   const autoLogoutText = AUTO_LOGOUT_ENABLED ? `${AUTO_LOGOUT_MS / 3600000}시간 무활동 시` : '꺼짐(개발 모드)'
   return <section className="home-user-card" aria-label="사용자 정보">
     <div className="home-user-head">
@@ -302,7 +300,9 @@ function App() {
       return next
     })
   }
+  const [customizeOnHome, setCustomizeOnHome] = useState(false)
   const navigate = (destination: HomeDestination) => {
+    setCustomizeOnHome(false)
     if (destination === 'home') setHomeRevision(value => value + 1)
     if (destination === 'resource:hold' || destination === 'resource:prosecution' || destination === 'resource:travel') {
       setResourceLanding(destination === 'resource:hold' ? 'hold' : destination === 'resource:prosecution' ? 'prosecution' : 'travel')
@@ -321,7 +321,7 @@ function App() {
       <div className="system-brand"><img className="system-brand-logo" src={ministryLogo} alt="대한민국 국방부" />
       <div className="system-brand-title"><span>국방동원정보체계 2.0</span><small>DEFENSE MOBILIZATION INFORMATION SYSTEM</small></div>
     </div>
-      <div className="account-area" /><div className="account-area"><TrainingAuthControl /></div>
+      <div className="account-area"><DevAccountSwitcher /></div><div className="account-area"><TrainingAuthControl /></div>
     </header>
     <div className="system-body">
       <aside className="sidebar" aria-label="주 메뉴">
@@ -358,12 +358,12 @@ function App() {
       <main className="workspace">
         <div className="workspace-content">
           {activePage === 'home'
-            ? <Home key={homeRevision} onNavigate={navigate} contactAlerts={contactAlerts} onOpenMessenger={openMessenger} />
+            ? <Home key={`${homeRevision}:${readAuth()?.user.username ?? ''}`} startEditing={customizeOnHome} onNavigate={navigate} contactAlerts={contactAlerts} onOpenMessenger={openMessenger} />
             : activePage === 'resource' ? <ResourceManagement selectedTab={resourceLanding} onTabChange={setResourceLanding}
               copilotView={copilotView} dataRevision={dataRevision}
               onClearCopilotFilter={() => setCopilotView(current => current && { ...current, filter: null })} />
   : activePage === 'training' ? <TrainingManagementPage selectedTab={trainingLanding} onTabChange={setTrainingLanding} onDataChanged={() => setDataRevision(value => value + 1)} />
-            : activePage === 'mypage' ? <MyPage />
+            : activePage === 'mypage' ? <MyPage onCustomize={() => { navigate('home'); setCustomizeOnHome(true) }} onLogout={() => void logoutSession()} onGoWorklog={() => navigate('worklog')} />
             : ActiveComponent ? <ActiveComponent key={activePage} /> : null}
         </div>
       </main>
@@ -413,7 +413,8 @@ function MiniCalendar({ schedules, onPickDate }: { schedules: Schedule[]; onPick
   </section>
 }
 
-function Home({ onNavigate, contactAlerts, onOpenMessenger }: {
+function Home({ onNavigate, contactAlerts, onOpenMessenger, startEditing }: {
+  startEditing: boolean
   onNavigate: (page: HomeDestination) => void
   contactAlerts: { id: number; title: string; time: string }[]
   onOpenMessenger: (roomId?: number | null) => void
@@ -550,7 +551,7 @@ function Home({ onNavigate, contactAlerts, onOpenMessenger }: {
 
   const userKey = readAuth()?.user.username ?? 'guest'
   const { config, update, reset } = useDashboardConfig(userKey)
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing] = useState(startEditing)
   const visibleShortcuts = shortcuts.filter(item => !config.hiddenShortcuts.includes(item.id))
   const layout = buildLayout(config, visibleShortcuts.length)
   const toggleWidget = (id: WidgetId) => update(current => ({ ...current, hidden: current.hidden.includes(id) ? current.hidden.filter(item => item !== id) : [...current.hidden, id] }))

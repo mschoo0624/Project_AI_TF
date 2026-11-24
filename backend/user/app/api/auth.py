@@ -125,10 +125,7 @@ def login(
             headers={"Retry-After": str(int(LOGIN_WINDOW.total_seconds()))},
         )
 
-    user = db.scalar(select(User).where(
-        User.username == payload.username.strip(),
-        User.unit_code == payload.unit_code.strip(),
-    ))
+    user = db.scalar(select(User).where(User.username == payload.username.strip()))
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
         db.add_all(AuthLoginFailure(key_hash=key, failed_at=now) for key in keys)
         db.commit()
