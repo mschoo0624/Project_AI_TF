@@ -67,7 +67,6 @@ class PersonFilter(BaseModel):
 class Resolved:
 	people: list[Person] = field(default_factory=list)
 	notes: list[str] = field(default_factory=list)
-	# 사람을 찾기 전에 되물어야 하는 경우(모호한 분대, 없는 소대). 있으면 people은 비어 있다.
 	question: str | None = None
 	hours: dict[str, YearHours] = field(default_factory=dict)
 	reasons: dict[str, str] = field(default_factory=dict)  # 고발 검토 사유
@@ -75,7 +74,6 @@ class Resolved:
 
 
 def squad_scope(db: Session, platoon: str | None, squad: str) -> tuple[list[int], str] | str:
-	"""'3분대'(+소대) → 분대 id들. 소대 없이 여러 곳에 있으면 되묻는 문장을 돌려준다."""
 	nodes = list(db.scalars(select(OrganizationNode).where(OrganizationNode.kind == "squad", OrganizationNode.name == squad)).all())
 	parents = {node.id: db.get(OrganizationNode, node.parent_id) if node.parent_id else None for node in nodes}
 	if platoon:
@@ -93,7 +91,6 @@ def resolve_people(db: Session, condition: PersonFilter) -> Resolved:
 	condition = condition.conditions()
 	notes: list[str] = []
 	if condition.assigned is False and (condition.platoon or condition.squad):
-		# 미편성자는 분대가 없으므로 소속 소대·분대도 없다.
 		dropped = " ".join(part for part in (condition.platoon, condition.squad) if part)
 		notes.append(f"미편성 인원은 소대 소속이 없어서 '{dropped}' 조건은 뺐어요.")
 		condition = condition.model_copy(update={"platoon": None, "squad": None})
