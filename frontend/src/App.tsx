@@ -8,6 +8,8 @@ import './features/dashboard/dashboard.css'
 import { GRID_WIDTH, LOCKED_WIDGETS, SHORTCUT_MAX_COLUMNS, SIZE_OPTIONS, WIDGET_LABELS, WIDGET_ORDER, buildLayout, snapPosition } from './features/dashboard/dashboardLayout'
 import type { SizeKey, WidgetId } from './features/dashboard/dashboardLayout'
 import { useDashboardConfig } from './features/dashboard/useDashboardConfig'
+import { useSchedules } from './features/dashboard/useSchedules'
+import type { Schedule, ScheduleColor } from './features/dashboard/scheduleStore'
 import './App.css'
 import ministryLogo from './assets/국방부 마크_컬러본.png'
 import { forecastThreshold } from './forecastThreshold'
@@ -85,7 +87,7 @@ function Icon({ name, size = 19 }: { name: IconName; size?: number }) {
       case 'clipboard': return <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4h6v3H9zM9 12h6m-6 4h4" /></>
       case 'users': return <><circle cx="9" cy="8" r="3.2" /><path d="M3 20c.4-3.6 2.7-5.5 6-5.5s5.6 1.9 6 5.5" /><circle cx="17.5" cy="9" r="2.5" /><path d="M17 14.5c2.4.2 3.8 1.9 4 4.5" /></>
       case 'star': return <path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 17l-5.2 2.7 1-5.9-4.3-4.1 5.9-.8Z" />
-      case 'dashboard': return <><rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="3" width="8" height="5" rx="1.5" /><rect x="13" y="11" width="8" height="10" rx="1.5" /><rect x="3" y="14" width="8" height="7" rx="1.5" /></>
+      case 'dashboard': return <><path d="M3 11.5 12 4l9 7.5" /><path d="M5.5 10v9.5a1 1 0 0 0 1 1H10v-6h4v6h3.5a1 1 0 0 0 1-1V10" /></>
       case 'shield': return <><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3Z" /><path d="m9 12 2 2 4-4" /></>
       case 'training': return <><path d="M2 9l10-5 10 5-10 5L2 9Z" /><path d="M6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5" /><path d="M22 9v6" /></>
       case 'notebook': return <><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 3v18M12 8h4M12 12h4" /></>    
@@ -171,11 +173,14 @@ function CompositionPanel({ data, error }: { data: Composition | null; error: st
 // 드래그 중에는 자유롭게 움직이고, 놓을 때 snapPosition이 정렬선에 맞춥니다.
 const dashboardCompactor = getCompactor(null, true, false)
 
-type Schedule = { id: number; date: string; title: string }
-const initialSchedules: Schedule[] = [
-  { id: 1, date: '01/14', title: '동원훈련 1형 예정' },
-  { id: 2, date: '01/15', title: '월 중간 결산' },
-]
+const scheduleColors: Record<ScheduleColor, { label: string; color: string }> = {
+  high: { label: '중요', color: '#e5484d' },
+  normal: { label: '보통', color: '#2563eb' },
+  low: { label: '참고', color: '#22a05b' },
+}
+const scheduleColorOrder: ScheduleColor[] = ['high', 'normal', 'low']
+const formatScheduleDate = (date: string) => date.slice(2).replace(/-/g, '.')
+
 
 // 부대코드 → 부대 이름. 매핑이 없으면 코드를 그대로 표시합니다.
 const unitNames: Record<string, string> = {}
@@ -380,7 +385,7 @@ function MiniCalendar({ schedules, onPickDate }: { schedules: Schedule[]; onPick
   const leading = new Date(year, month, 1).getDay()
   const cells = Array.from({ length: 42 }, (_, i) => new Date(year, month, 1 - leading + i))
   const isToday = (d: Date) => d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()
-  const toKey = (d: Date) => `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+  const toKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   const dayClass = (d: Date) => ['home-calendar-day', d.getDay() === 0 ? 'is-sun' : d.getDay() === 6 ? 'is-sat' : '', d.getMonth() !== month ? 'is-other' : '', isToday(d) ? 'is-today' : ''].filter(Boolean).join(' ')
   return <section className="home-calendar-card" aria-label="월간 달력">
     <div className="home-calendar-head">
@@ -398,7 +403,11 @@ function MiniCalendar({ schedules, onPickDate }: { schedules: Schedule[]; onPick
           aria-current={isToday(d) ? 'date' : undefined}
           aria-label={`${d.getMonth() + 1}월 ${d.getDate()}일${items.length ? `, 일정 ${items.length}건` : ''}, 일정 추가`}
           title={items.length ? items.map(s => s.title).join('\n') : `${key} 일정 추가`}
-          onClick={() => onPickDate(key)}><span>{d.getDate()}</span></button>
+          onClick={() => onPickDate(key)}><span>{d.getDate()}</span>
+          {items.length > 0 && <span className="home-calendar-dots" aria-hidden="true">
+            {scheduleColorOrder.filter(color => items.some(item => item.color === color)).map(color => <i key={color} style={{ background: scheduleColors[color].color }} />)}
+          </span>}
+        </button>
       })}
       </div>
   </section>
@@ -448,11 +457,12 @@ function Home({ onNavigate, contactAlerts, onOpenMessenger }: {
     void Promise.resolve().then(() => { if (!controller.signal.aborted) return refresh() })
     return () => controller.abort()
   }, [])
-  const [schedules, setSchedules] = useState<Schedule[]>(initialSchedules)
+  const [schedules, setSchedules] = useSchedules(readAuth()?.user.username ?? 'guest')
   const [selectedSchedule, setSelectedSchedule] = useState<number | null>(null)
   const [editingSchedule, setEditingSchedule] = useState<number | 'new' | null>(null)
   const [draftDate, setDraftDate] = useState('')
   const [draftTitle, setDraftTitle] = useState('')
+  const [draftColor, setDraftColor] = useState<ScheduleColor>('normal')
   const [showScheduleList, setShowScheduleList] = useState(true)
   const [showScheduleInfo, setShowScheduleInfo] = useState(false)
   const [noticeOpen, setNoticeOpen] = useState(false)
@@ -500,14 +510,15 @@ function Home({ onNavigate, contactAlerts, onOpenMessenger }: {
     setEditingSchedule(schedule?.id ?? 'new')
     setDraftDate(schedule?.date ?? '')
     setDraftTitle(schedule?.title ?? '')
+    setDraftColor(schedule?.color ?? 'normal')
   }
   const saveSchedule = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!/^\d{2}\/\d{2}$/.test(draftDate) || !draftTitle.trim()) return
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(draftDate) || !draftTitle.trim()) return
     if (editingSchedule === 'new') {
-      setSchedules(prev => [...prev, { id: Date.now(), date: draftDate, title: draftTitle.trim() }])
+      setSchedules(prev => [...prev, { id: Date.now(), date: draftDate, title: draftTitle.trim(), color: draftColor }])
     } else if (typeof editingSchedule === 'number') {
-      setSchedules(prev => prev.map(schedule => schedule.id === editingSchedule ? { ...schedule, date: draftDate, title: draftTitle.trim() } : schedule))
+      setSchedules(prev => prev.map(schedule => schedule.id === editingSchedule ? { ...schedule, date: draftDate, title: draftTitle.trim(), color: draftColor } : schedule))
     }
     setEditingSchedule(null)
   }
@@ -522,6 +533,7 @@ function Home({ onNavigate, contactAlerts, onOpenMessenger }: {
   setEditingSchedule('new')
   setDraftDate(date)
   setDraftTitle('')
+  setDraftColor('normal')
 }
 
 
@@ -636,21 +648,26 @@ function Home({ onNavigate, contactAlerts, onOpenMessenger }: {
             <button type="button" className="home-icon-button" title="일정 안내" aria-label="일정 안내" onClick={() => setShowScheduleInfo(v => !v)}><Icon name="settings" /></button>
           </div>
         </div>
-        {showScheduleInfo && <p className="home-schedule-info">예시 일정은 현재 화면에서만 변경되며 서버에 저장되지 않습니다.</p>}
+        {showScheduleInfo && <p className="home-schedule-info">일정은 이 브라우저에 아이디별로 저장되며 서버에는 저장되지 않습니다.</p>}
         {showScheduleList && <div className="home-schedule-list">
-          {schedules.map(schedule =>
+          {[...schedules].sort((x, y) => x.date.localeCompare(y.date)).map(schedule =>
             <div className={`home-schedule-row ${selectedSchedule === schedule.id ? 'selected' : ''}`} key={schedule.id}>
               <button type="button" className="home-schedule-select" onClick={() => setSelectedSchedule(selectedSchedule === schedule.id ? null : schedule.id)} aria-pressed={selectedSchedule === schedule.id}>
-                <span className="home-dot" />{schedule.date} {schedule.title}
+                <span className="home-dot" style={{ background: scheduleColors[schedule.color].color }} />{formatScheduleDate(schedule.date)} {schedule.title}
               </button>
-              <button type="button" className="home-schedule-edit" title="일정 수정" aria-label={`${schedule.date} ${schedule.title} 수정`} onClick={() => editSchedule(schedule)}><Icon name="edit" size={18} /></button>
+              <button type="button" className="home-schedule-edit" title="일정 수정" aria-label={`${formatScheduleDate(schedule.date)} ${schedule.title} 수정`} onClick={() => editSchedule(schedule)}><Icon name="edit" size={18} /></button>
             </div>
           )}
           {schedules.length === 0 && <p className="home-schedule-empty">예시 일정이 없습니다.</p>}
         </div>}
         {editingSchedule !== null && <form className="home-schedule-form" onSubmit={saveSchedule}>
-          <input aria-label="날짜" value={draftDate} placeholder="MM/DD" pattern="[0-9]{2}/[0-9]{2}" onChange={e => setDraftDate(e.target.value)} required />
+          <input type="date" aria-label="날짜" value={draftDate} onChange={e => setDraftDate(e.target.value)} required />
           <input aria-label="일정 내용" value={draftTitle} placeholder="일정 내용" onChange={e => setDraftTitle(e.target.value)} required />
+          <div className="home-schedule-colors" role="radiogroup" aria-label="중요도 색상">
+            {scheduleColorOrder.map(color => <button type="button" key={color} role="radio" aria-checked={draftColor === color}
+              className="home-color-swatch" title={scheduleColors[color].label} aria-label={scheduleColors[color].label}
+              style={{ background: scheduleColors[color].color }} onClick={() => setDraftColor(color)} />)}
+          </div>
           <button type="submit">저장</button><button type="button" onClick={() => setEditingSchedule(null)}>취소</button>
         </form>}
         {!showScheduleInfo && editingSchedule === null && schedules.length === 0 && <p className="home-schedule-add-hint">+ 버튼으로 일정을 추가하세요.</p>}

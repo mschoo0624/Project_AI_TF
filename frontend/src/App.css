@@ -281,3 +281,13 @@ button.home-panel-more { border:0; background:none; padding:2px 6px; }
 .home-user-actions button:disabled { opacity:.45; cursor:default; }
 .home-user-actions .is-logout { grid-column:1 / -1; border-color:#f0c4c4; background:#fff5f5; color:#b42323; }
 .home-user-actions .is-logout:hover { background:#ffe8e8; }
+.home-dashboard .home-notice-back { color:#fff; }
+/* 일정 색상 선택 / 달력 일정 표시 */
+.home-schedule-form { grid-template-columns:minmax(0,1fr) auto auto; row-gap:6px; }
+.home-schedule-form input { grid-column:1 / -1; }
+.home-schedule-colors { display:flex; align-items:center; gap:7px; padding-left:2px; }
+.home-schedule-form .home-color-swatch { width:20px; height:20px; padding:0; border:2px solid #fff; border-radius:50%; box-shadow:0 0 0 1px #ccd5e4; }
+.home-schedule-form .home-color-swatch[aria-checked="true"] { box-shadow:0 0 0 2px #17251f; }
+.home-calendar-day { position:relative; }
+.home-calendar-dots { position:absolute; left:0; right:0; bottom:-3px; width:auto !important; height:auto !important; display:flex !important; justify-content:center; gap:2px; border-radius:0 !important; background:transparent !important; }
+.home-calendar-dots i { width:5px; height:5px; border-radius:50%; }
