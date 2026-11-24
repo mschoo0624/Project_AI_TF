@@ -1,5 +1,5 @@
 import type { TrainingTabId as TrainingTab } from './trainingtabs'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { apiBase, authenticatedFetch } from './auth'
 import { buildTrainingHourPresets, bulkHourExclusionReason, resolveTrainingHours } from './trainingHours.mjs'
@@ -185,7 +185,8 @@ export default function TrainingManagementPage({
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [revision, setRevision] = useState(0)
-  const [assignmentInitialScheduleId, setAssignmentInitialScheduleId] = useState('')
+  // 훈련부과는 이제 별도 탭이 아니라 달력에서 여는 팝업입니다. ''는 일정 미지정(목록에서 선택).
+  const [assignmentModalId, setAssignmentModalId] = useState<string | null>(null)
   const canWrite = true
 
   useEffect(() => {
@@ -209,7 +210,9 @@ export default function TrainingManagementPage({
   }, [revision])
 
   const refresh = () => setRevision(value => value + 1)
-  const activeTab = focusScheduleId !== null ? 'schedule' : tab
+  const activeTab = focusScheduleId !== null || tab === 'assignment' ? 'schedule' : tab
+  const assignmentOpenId = assignmentModalId ?? (tab === 'assignment' ? '' : null)
+  const closeAssignment = () => { setAssignmentModalId(null); if (tab === 'assignment') setTab('schedule') }
 
   return <main className="training-workspace">
     <header className="training-workspace-heading">
@@ -217,7 +220,7 @@ export default function TrainingManagementPage({
       <span>인증 사용 안 함</span>
     </header>
       <nav className="training-workspace-tabs" aria-label="교육훈련 구분">
-        {([['schedule', '훈련일정'], ['assignment', '훈련부과'], ['results', '훈련결과']] as const).map(([id, label]) =>
+        {([['schedule', '훈련일정'], ['results', '훈련결과']] as const).map(([id, label]) =>
           <button type="button" key={id} className={activeTab === id ? 'is-active' : ''} aria-current={activeTab === id ? 'page' : undefined} onClick={() => { setTab(id); setError(''); setMessage('') }}>{label}</button>)}
       </nav>
       {error && <p className="training-message is-error" role="alert">{error}</p>}
@@ -227,56 +230,91 @@ export default function TrainingManagementPage({
         schedules={schedules}
         canWrite={!!canWrite}
         onCreated={refresh}
+        onOpenAssignment={scheduleId => setAssignmentModalId(String(scheduleId))}
         focusScheduleId={focusScheduleId}
         onFocusHandled={onScheduleFocusHandled}
       />}
-      {activeTab === 'assignment' && <AssignmentWorkspace schedules={schedules} people={people} canWrite={!!canWrite} onAssigned={refresh} initialScheduleId={assignmentInitialScheduleId} />}
       {activeTab === 'results' && <ResultsWorkspace
         schedules={schedules}
         people={people}
         canWrite={!!canWrite}
         onSaved={() => { refresh(); onDataChanged?.() }}
         onNavigateToAssignment={scheduleId => {
-          setAssignmentInitialScheduleId(scheduleId === null ? '' : String(scheduleId))
-          setTab('assignment')
+          setAssignmentModalId(scheduleId === null ? '' : String(scheduleId))
+          setTab('schedule')
         }}
       />}
+      {assignmentOpenId !== null && <TrainingModal title="훈련부과" size="lg" onClose={closeAssignment}>
+        <AssignmentWorkspace schedules={schedules} people={people} canWrite={!!canWrite} onAssigned={refresh}
+          initialScheduleId={assignmentOpenId} lockSchedule={assignmentOpenId !== ''} />
+      </TrainingModal>}
   </main>
 }
 
-function ScheduleWorkspace({ schedules, canWrite, onCreated, focusScheduleId, onFocusHandled }: {
-  schedules: Schedule[]
-  canWrite: boolean
-  onCreated: () => void
-  focusScheduleId: number | null
-  onFocusHandled?: () => void
-}) {
-  const [title, setTitle] = useState('')
-  const [trainingType, setTrainingType] = useState('동원훈련Ⅱ형')
-  const [serviceYear, setServiceYear] = useState(1)
-  const [trainingRound, setTrainingRound] = useState(1)
-  const [days, setDays] = useState<DayInput[]>(() => defaultSessions('동원훈련Ⅱ형'))
-  const [formError, setFormError] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null)
-  const [editingDays, setEditingDays] = useState<DayInput[]>([])
-  const [lifecycleError, setLifecycleError] = useState('')
-  const [lifecycleMessage, setLifecycleMessage] = useState('')
-  const [lifecycleBusy, setLifecycleBusy] = useState(false)
-  const [editingTitle, setEditingTitle] = useState('')
-  const [editingTrainingType, setEditingTrainingType] = useState('')
-  const [editingServiceYear, setEditingServiceYear] = useState(1)
-  const [editingTrainingRound, setEditingTrainingRound] = useState(1)
+const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
+const TRAINING_TYPE_OPTIONS = ['동원훈련Ⅱ형', '동원훈련Ⅰ형', '기본훈련', '작계훈련(전·후반기)', '학생예비군']
 
+const pad2 = (value: number) => String(value).padStart(2, '0')
+const toIsoDate = (date: Date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+
+function scheduleStatusLabel(status: string): string {
+  return status === 'scheduled' ? '예정' : status === 'completed' ? '완료' : '취소'
+}
+
+function scheduleStatusClass(status: string): string {
+  return status === 'scheduled' ? 'is-scheduled' : status === 'completed' ? 'is-completed' : 'is-canceled'
+}
+
+function scheduleTypeLabel(schedule: Schedule): string {
+  return `${schedule.training_type} · ${schedule.service_year}년차${isTypeIISchedule(schedule.training_type) ? ` · ${schedule.training_round}차` : ''}`
+}
+
+function TrainingModal({ title, size = 'md', onClose, children }: {
+  title: string
+  size?: 'md' | 'lg'
+  onClose: () => void
+  children: ReactNode
+}) {
   useEffect(() => {
-    if (focusScheduleId === null || !schedules.some(schedule => schedule.id === focusScheduleId)) return
-    const frame = requestAnimationFrame(() => {
-      document.getElementById(`training-schedule-${focusScheduleId}`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      onFocusHandled?.()
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [focusScheduleId, schedules, onFocusHandled])
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [onClose])
+
+  return <div className="training-modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
+    <div className={`training-modal training-modal--${size}`} role="dialog" aria-modal="true" aria-label={title}>
+      <header className="training-modal-header">
+        <h2>{title}</h2>
+        <button type="button" className="training-modal-close" aria-label="닫기" onClick={onClose} autoFocus>×</button>
+      </header>
+      <div className="training-modal-body">{children}</div>
+    </div>
+  </div>
+}
+
+// 훈련일정 등록·수정 공용 폼 (팝업)
+function ScheduleFormModal({ schedule, initialDate, canWrite, onClose, onSaved }: {
+  schedule: Schedule | null
+  initialDate?: string
+  canWrite: boolean
+  onClose: () => void
+  onSaved: (message: string) => void
+}) {
+  const editing = schedule !== null
+  const [title, setTitle] = useState(schedule?.title ?? '')
+  const [trainingType, setTrainingType] = useState(schedule?.training_type ?? '동원훈련Ⅱ형')
+  const [serviceYear, setServiceYear] = useState(schedule?.service_year ?? 1)
+  const [trainingRound, setTrainingRound] = useState(schedule?.training_round ?? 1)
+  const [days, setDays] = useState<DayInput[]>(() => schedule
+    ? schedule.sessions.map(({ session_date, credited_hours }) => ({ session_date, credited_hours }))
+    : defaultSessions('동원훈련Ⅱ형', initialDate))
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
 
   const updateDay = (index: number, key: keyof DayInput, value: string | number) => {
     setDays(current => current.map((day, dayIndex) => dayIndex === index ? { ...day, [key]: value } : day))
@@ -285,182 +323,259 @@ function ScheduleWorkspace({ schedules, canWrite, onCreated, focusScheduleId, on
     const last = current[current.length - 1]
     const nextDate = last ? new Date(`${last.session_date}T12:00:00`) : new Date()
     nextDate.setDate(nextDate.getDate() + 1)
-    const session_date = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`
     const hours = TRAINING_SESSION_HOURS[trainingType] ?? [8]
-    return [...current, { session_date, credited_hours: hours[Math.min(current.length, hours.length - 1)] }]
+    return [...current, { session_date: toIsoDate(nextDate), credited_hours: hours[Math.min(current.length, hours.length - 1)] }]
   })
-  const editSchedule = (schedule: Schedule) => {
-    setEditingScheduleId(schedule.id)
-    setEditingTitle(schedule.title)
-    setEditingTrainingType(schedule.training_type)
-    setEditingServiceYear(schedule.service_year)
-    setEditingTrainingRound(schedule.training_round)
-    setEditingDays(schedule.sessions.map(({ session_date, credited_hours }) => ({ session_date, credited_hours })))
-    setLifecycleError('')
-    setLifecycleMessage('')
-  }
-  const addEditingDay = () => setEditingDays(current => {
-    const last = current[current.length - 1]
-    const nextDate = last ? new Date(`${last.session_date}T12:00:00`) : new Date()
-    nextDate.setDate(nextDate.getDate() + 1)
-    const session_date = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`
-    const hours = TRAINING_SESSION_HOURS[editingTrainingType] ?? [8]
-    return [...current, { session_date, credited_hours: hours[Math.min(current.length, hours.length - 1)] }]
-  })
-  const saveScheduleEdits = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (editingScheduleId === null) return
-    setLifecycleBusy(true)
-    setLifecycleError('')
-    try {
-      const response = await authenticatedFetch(`${API}/reservists/training-schedules/${editingScheduleId}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          expected_version: schedules.find(schedule => schedule.id === editingScheduleId)?.version,
-          title: editingTitle,
-          training_type: editingTrainingType,
-          service_year: editingServiceYear,
-          training_round: isTypeIISchedule(editingTrainingType) ? editingTrainingRound : 1,
-          sessions: editingDays.map((day, index) => ({ ...day, day_number: index + 1 })),
-        }),
-      })
-      if (!response.ok) throw new Error(await apiError(response, '훈련일정을 수정하지 못했습니다.'))
-      setLifecycleMessage('훈련일정을 수정했습니다.')
-      setEditingScheduleId(null)
-      onCreated()
-    } catch (cause) { setLifecycleError(cause instanceof Error ? cause.message : '훈련일정을 수정하지 못했습니다.') }
-    finally { setLifecycleBusy(false) }
-  }
-  const cancelSchedule = async (schedule: Schedule) => {
-    if (!window.confirm(`'${schedule.title}' 일정을 취소할까요?`)) return
-    setLifecycleBusy(true)
-    setLifecycleError('')
-    try {
-      const response = await authenticatedFetch(`${API}/reservists/training-schedules/${schedule.id}/cancel`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expected_version: schedule.version }),
-      })
-      if (!response.ok) throw new Error(await apiError(response, '훈련일정을 취소하지 못했습니다.'))
-      setLifecycleMessage('훈련일정을 취소했습니다.')
-      if (editingScheduleId === schedule.id) setEditingScheduleId(null)
-      onCreated()
-    } catch (cause) { setLifecycleError(cause instanceof Error ? cause.message : '훈련일정을 취소하지 못했습니다.') }
-    finally { setLifecycleBusy(false) }
-  }
-  const completeSchedule = async (schedule: Schedule) => {
-    if (!window.confirm(`'${schedule.title}' 일정을 완료 처리할까요? 완료 후에는 연결된 훈련 결과를 수정할 수 없습니다.`)) return
-    setLifecycleBusy(true)
-    setLifecycleError('')
-    try {
-      const response = await authenticatedFetch(`${API}/reservists/training-schedules/${schedule.id}/complete`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expected_version: schedule.version }),
-      })
-      if (!response.ok) throw new Error(await apiError(response, '훈련일정을 완료하지 못했습니다.'))
-      setLifecycleMessage('훈련일정을 완료 처리했습니다.')
-      if (editingScheduleId === schedule.id) setEditingScheduleId(null)
-      onCreated()
-    } catch (cause) { setLifecycleError(cause instanceof Error ? cause.message : '훈련일정을 완료하지 못했습니다.') }
-    finally { setLifecycleBusy(false) }
-  }
-  const deleteSchedule = async (schedule: Schedule) => {
-    if (!window.confirm(`'${schedule.title}' 일정을 삭제할까요? 연결된 훈련기록이 있으면 삭제할 수 없습니다.`)) return
-    setLifecycleBusy(true)
-    setLifecycleError('')
-    try {
-      const response = await authenticatedFetch(`${API}/reservists/training-schedules/${schedule.id}`, {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expected_version: schedule.version }),
-      })
-      if (!response.ok) throw new Error(await apiError(response, '훈련일정을 삭제하지 못했습니다.'))
-      setLifecycleMessage('훈련일정을 삭제했습니다.')
-      if (editingScheduleId === schedule.id) setEditingScheduleId(null)
-      onCreated()
-    } catch (cause) { setLifecycleError(cause instanceof Error ? cause.message : '훈련일정을 삭제하지 못했습니다.') }
-    finally { setLifecycleBusy(false) }
-  }
 
-  const saveSchedule = async (event: FormEvent<HTMLFormElement>) => {
+  const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setSaving(true)
-    setFormError('')
+    setError('')
     try {
-      const response = await authenticatedFetch(`${API}/reservists/training-schedules`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title, training_type: trainingType, service_year: serviceYear,
-          training_round: isTypeIISchedule(trainingType) ? trainingRound : 1,
-          sessions: days.map((day, index) => ({ ...day, day_number: index + 1 })),
-        }),
-      })
-      if (!response.ok) throw new Error(await apiError(response, '훈련일정을 저장하지 못했습니다.'))
-      setTitle('')
-      setFormError('')
-      onCreated()
+      const response = await authenticatedFetch(
+        editing ? `${API}/reservists/training-schedules/${schedule.id}` : `${API}/reservists/training-schedules`,
+        {
+          method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...(editing ? { expected_version: schedule.version } : {}),
+            title, training_type: trainingType, service_year: serviceYear,
+            training_round: isTypeIISchedule(trainingType) ? trainingRound : 1,
+            sessions: days.map((day, index) => ({ ...day, day_number: index + 1 })),
+          }),
+        },
+      )
+      if (!response.ok) throw new Error(await apiError(response, editing ? '훈련일정을 수정하지 못했습니다.' : '훈련일정을 저장하지 못했습니다.'))
+      onSaved(editing ? '훈련일정을 수정했습니다.' : '훈련일정을 등록했습니다.')
     } catch (cause) {
-      setFormError(cause instanceof Error ? cause.message : '훈련일정을 저장하지 못했습니다.')
+      setError(cause instanceof Error ? cause.message : editing ? '훈련일정을 수정하지 못했습니다.' : '훈련일정을 저장하지 못했습니다.')
     } finally { setSaving(false) }
   }
 
-  return <div className="training-columns">
-    <section className="training-section">
-      <header><h2>훈련일정 등록</h2><span>행사 1건 · 훈련일별 세션</span></header>
-      {!canWrite && <p className="training-note">일정 등록은 scheduler 권한이 필요합니다.</p>}
-      <form className="training-form" onSubmit={event => void saveSchedule(event)}>
-        <label className="training-field training-field-wide">행사명<input value={title} onChange={event => setTitle(event.target.value)} required maxLength={160} disabled={!canWrite || saving} /></label>
-        <label className="training-field">훈련종류<select value={trainingType} onChange={event => { const value = event.target.value; setTrainingType(value); setTrainingRound(1); setDays(current => defaultSessions(value, current[0]?.session_date)) }} disabled={!canWrite || saving}><option>동원훈련Ⅱ형</option><option>동원훈련Ⅰ형</option><option>기본훈련</option><option>작계훈련(전·후반기)</option><option>학생예비군</option></select></label>
-        <label className="training-field">복무연차<input type="number" min="1" max="99" value={serviceYear} onChange={event => setServiceYear(Number(event.target.value))} disabled={!canWrite || saving} /></label>
-        {isTypeIISchedule(trainingType) && <label className="training-field">동원훈련Ⅱ형 차수<select value={trainingRound} onChange={event => setTrainingRound(Number(event.target.value))} disabled={!canWrite || saving}><option value={1}>1차</option><option value={2}>2차</option><option value={3}>3차</option></select></label>}
-        <div className="training-days training-field-wide"><div className="training-inline-heading"><strong>세션 날짜와 인정 상한</strong><button type="button" onClick={addDay} disabled={!canWrite || days.length >= 30}>날짜 추가</button></div>
-          {days.map((day, index) => { const label = sessionLabel(trainingType, index); return <div className="training-day-row" key={index}><span>{label}</span><input aria-label={`${label} 날짜`} type="date" value={day.session_date} onChange={event => updateDay(index, 'session_date', event.target.value)} disabled={!canWrite || saving} /><input aria-label={`${label} 시간 상한`} type="number" min="0" max="24" value={day.credited_hours} onChange={event => updateDay(index, 'credited_hours', Number(event.target.value))} disabled={!canWrite || saving} /><span>시간</span><button type="button" aria-label={`${label} 제거`} onClick={() => setDays(current => current.filter((_, dayIndex) => dayIndex !== index))} disabled={!canWrite || days.length <= 1}>제거</button></div> })}
-        </div>
-        {formError && <p className="training-message is-error training-field-wide" role="alert">{formError}</p>}
-        <button className="training-primary training-field-wide" type="submit" disabled={!canWrite || saving}>{saving ? '저장 중…' : '일정 저장'}</button>
-      </form>
-    </section>
-    <section className="training-section">
-      <header><h2>등록된 일정</h2><strong>{schedules.length}건</strong></header>
-      {lifecycleError && <p className="training-message is-error" role="alert">{lifecycleError}</p>}
-      {lifecycleMessage && <p className="training-message" role="status">{lifecycleMessage}</p>}
-      {schedules.length === 0 ? <p className="training-note">등록된 일정이 없습니다.</p> : <div className="training-table-wrap"><table><thead><tr><th>행사</th><th>훈련</th><th>연차·차수</th><th>기간</th><th>세션</th><th>상태</th><th>관리</th></tr></thead><tbody>{schedules.map(schedule => {
-        const lastSessionDate = schedule.sessions.at(-1)?.session_date
-        const sessionsHavePassed = lastSessionDate !== undefined && lastSessionDate < localDateAfter(0)
-        const statusLabel = schedule.status === 'scheduled'
-          ? '예정'
-          : schedule.status === 'completed' ? '완료' : '취소'
-        return <tr id={`training-schedule-${schedule.id}`} key={schedule.id} className={focusScheduleId === schedule.id ? 'training-schedule-focus' : undefined}>
-          <td>{schedule.title}</td><td>{schedule.training_type}</td>
-          <td>{schedule.service_year}년차{isTypeIISchedule(schedule.training_type) ? ` · ${schedule.training_round}차` : ''}</td>
-          <td>{schedule.sessions[0]?.session_date} - {lastSessionDate}</td><td>{schedule.sessions.length}일</td><td>{statusLabel}</td>
-          <td className="training-schedule-actions">{schedule.status === 'scheduled' && <>
-            <button className="training-schedule-edit" type="button" disabled={!canWrite || lifecycleBusy} onClick={() => editSchedule(schedule)}>일정 편집</button>
-            <button className="training-schedule-complete" type="button" disabled={!canWrite || lifecycleBusy || !sessionsHavePassed}
-              title={sessionsHavePassed ? '모든 배정 결과가 확정되어야 완료할 수 있습니다.' : '모든 훈련 세션이 종료된 후 완료할 수 있습니다.'}
-              aria-label={`${schedule.title} 일정 완료 처리`}
-              onClick={() => void completeSchedule(schedule)}>완료</button>
-            <button className="training-schedule-cancel" type="button" disabled={!canWrite || lifecycleBusy} onClick={() => void cancelSchedule(schedule)}>취소</button>
-          </>}
-            <button className="training-schedule-delete" type="button" disabled={!canWrite || lifecycleBusy} onClick={() => void deleteSchedule(schedule)}>삭제</button>
-          </td>
-        </tr>
-      })}</tbody></table></div>}
-      {editingScheduleId !== null && <form className="training-form training-schedule-editor" onSubmit={event => void saveScheduleEdits(event)}>
-        <header className="training-field-wide"><h3>일정 편집</h3><button type="button" onClick={addEditingDay} disabled={!canWrite || lifecycleBusy || editingDays.length >= 30}>날짜 추가</button></header>
-        <label className="training-field training-field-wide">행사명<input value={editingTitle} onChange={event => setEditingTitle(event.target.value)} required maxLength={160} disabled={lifecycleBusy} /></label>
-        <label className="training-field">훈련종류<select value={editingTrainingType} onChange={event => { const value = event.target.value; setEditingTrainingType(value); setEditingTrainingRound(1); setEditingDays(current => defaultSessions(value, current[0]?.session_date)) }} disabled={lifecycleBusy}><option>동원훈련Ⅱ형</option><option>동원훈련Ⅰ형</option><option>기본훈련</option><option>작계훈련(전·후반기)</option><option>학생예비군</option></select></label>
-        <label className="training-field">복무연차<input type="number" min="1" max="99" value={editingServiceYear} onChange={event => setEditingServiceYear(Number(event.target.value))} disabled={lifecycleBusy} /></label>
-        {isTypeIISchedule(editingTrainingType) && <label className="training-field">동원훈련Ⅱ형 차수<select value={editingTrainingRound} onChange={event => setEditingTrainingRound(Number(event.target.value))} disabled={!canWrite || lifecycleBusy}><option value={1}>1차</option><option value={2}>2차</option><option value={3}>3차</option></select></label>}
-        <div className="training-days training-field-wide"><strong>세션 날짜와 인정 상한</strong>
-        {editingDays.map((day, index) => { const label = sessionLabel(editingTrainingType, index); return <div className="training-day-row" key={index}><span>{label}</span><input aria-label={`변경 ${label} 날짜`} type="date" value={day.session_date} onChange={event => setEditingDays(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, session_date: event.target.value } : item))} disabled={!canWrite || lifecycleBusy} /><input aria-label={`변경 ${label} 시간 상한`} type="number" min="0" max="24" value={day.credited_hours} onChange={event => setEditingDays(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, credited_hours: Number(event.target.value) } : item))} disabled={!canWrite || lifecycleBusy} /><span>시간</span><button type="button" aria-label={`변경 ${label} 제거`} onClick={() => setEditingDays(current => current.filter((_, itemIndex) => itemIndex !== index))} disabled={!canWrite || lifecycleBusy || editingDays.length <= 1}>제거</button></div> })}
-        </div>
-        {lifecycleError && <p className="training-message is-error training-field-wide" role="alert">{lifecycleError}</p>}
-        <footer className="training-actions training-field-wide"><button type="button" onClick={() => setEditingScheduleId(null)} disabled={lifecycleBusy}>닫기</button><button className="training-primary" type="submit" disabled={!canWrite || lifecycleBusy}>{lifecycleBusy ? '저장 중…' : '수정 저장'}</button></footer>
-      </form>}
-    </section>
-  </div>
+  return <TrainingModal title={editing ? '훈련일정 수정' : '훈련일정 등록'} onClose={onClose}>
+    <form className="training-form" onSubmit={event => void save(event)}>
+      <label className="training-field training-field-wide">행사명<input value={title} onChange={event => setTitle(event.target.value)} required maxLength={160} disabled={!canWrite || saving} /></label>
+      <label className="training-field">훈련종류<select value={trainingType} onChange={event => { const value = event.target.value; setTrainingType(value); setTrainingRound(1); setDays(current => defaultSessions(value, current[0]?.session_date)) }} disabled={!canWrite || saving}>{TRAINING_TYPE_OPTIONS.map(option => <option key={option}>{option}</option>)}</select></label>
+      <label className="training-field">복무연차<input type="number" min="1" max="99" value={serviceYear} onChange={event => setServiceYear(Number(event.target.value))} disabled={!canWrite || saving} /></label>
+      {isTypeIISchedule(trainingType) && <label className="training-field">동원훈련Ⅱ형 차수<select value={trainingRound} onChange={event => setTrainingRound(Number(event.target.value))} disabled={!canWrite || saving}><option value={1}>1차</option><option value={2}>2차</option><option value={3}>3차</option></select></label>}
+      <div className="training-days training-field-wide">
+        <div className="training-inline-heading"><strong>세션 날짜와 인정 상한</strong><button type="button" onClick={addDay} disabled={!canWrite || saving || days.length >= 30}>날짜 추가</button></div>
+        {days.map((day, index) => {
+          const label = sessionLabel(trainingType, index)
+          return <div className="training-day-row" key={index}>
+            <span>{label}</span>
+            <input aria-label={`${label} 날짜`} type="date" value={day.session_date} onChange={event => updateDay(index, 'session_date', event.target.value)} disabled={!canWrite || saving} />
+            <input aria-label={`${label} 시간 상한`} type="number" min="0" max="24" value={day.credited_hours} onChange={event => updateDay(index, 'credited_hours', Number(event.target.value))} disabled={!canWrite || saving} />
+            <span>시간</span>
+            <button type="button" aria-label={`${label} 제거`} onClick={() => setDays(current => current.filter((_, dayIndex) => dayIndex !== index))} disabled={!canWrite || saving || days.length <= 1}>제거</button>
+          </div>
+        })}
+      </div>
+      {error && <p className="training-message is-error training-field-wide" role="alert">{error}</p>}
+      <footer className="training-actions training-field-wide">
+        <button type="button" onClick={onClose} disabled={saving}>닫기</button>
+        <button className="training-primary" type="submit" disabled={!canWrite || saving}>{saving ? '저장 중…' : editing ? '수정 저장' : '일정 저장'}</button>
+      </footer>
+    </form>
+  </TrainingModal>
 }
 
-function AssignmentWorkspace({ schedules, people, canWrite, onAssigned, initialScheduleId }: { schedules: Schedule[]; people: Person[]; canWrite: boolean; onAssigned: () => void; initialScheduleId?: string }) {
+function ScheduleWorkspace({ schedules, canWrite, onCreated, onOpenAssignment, focusScheduleId, onFocusHandled }: {
+  schedules: Schedule[]
+  canWrite: boolean
+  onCreated: () => void
+  onOpenAssignment: (scheduleId: number) => void
+  focusScheduleId: number | null
+  onFocusHandled?: () => void
+}) {
+  const today = toIsoDate(new Date())
+  const [cursor, setCursor] = useState(() => { const now = new Date(); return { year: now.getFullYear(), month: now.getMonth() } })
+  const [view, setView] = useState<'calendar' | 'list'>('calendar')
+  const [detailId, setDetailId] = useState<number | null>(null)
+  const [form, setForm] = useState<{ schedule: Schedule | null; date?: string } | null>(null)
+  const [lifecycleError, setLifecycleError] = useState('')
+  const [lifecycleMessage, setLifecycleMessage] = useState('')
+  const [lifecycleBusy, setLifecycleBusy] = useState(false)
+
+  // 다른 화면에서 특정 일정으로 이동해 온 경우: 해당 월로 이동하고 상세 팝업을 엽니다.
+  useEffect(() => {
+    if (focusScheduleId === null) return
+    const target = schedules.find(schedule => schedule.id === focusScheduleId)
+    if (!target) return
+    const firstDate = target.sessions[0]?.session_date
+    if (firstDate) {
+      const parsed = new Date(`${firstDate.slice(0, 10)}T12:00:00`)
+      setCursor({ year: parsed.getFullYear(), month: parsed.getMonth() })
+    }
+    setView('calendar')
+    setDetailId(target.id)
+    onFocusHandled?.()
+  }, [focusScheduleId, schedules, onFocusHandled])
+
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, { schedule: Schedule; index: number }[]>()
+    schedules.forEach(schedule => schedule.sessions.forEach((session, index) => {
+      const key = session.session_date.slice(0, 10)
+      map.set(key, [...(map.get(key) ?? []), { schedule, index }])
+    }))
+    return map
+  }, [schedules])
+
+  const cells = useMemo(() => {
+    const offset = new Date(cursor.year, cursor.month, 1).getDay()
+    const dayCount = new Date(cursor.year, cursor.month + 1, 0).getDate()
+    const weeks = Math.ceil((offset + dayCount) / 7)
+    return Array.from({ length: weeks * 7 }, (_, index) => new Date(cursor.year, cursor.month, 1 - offset + index))
+  }, [cursor])
+
+  const monthScheduleCount = useMemo(() => schedules.filter(schedule => schedule.sessions.some(session => {
+    const date = new Date(`${session.session_date.slice(0, 10)}T12:00:00`)
+    return date.getFullYear() === cursor.year && date.getMonth() === cursor.month
+  })).length, [schedules, cursor])
+
+  const moveMonth = (delta: number) => setCursor(current => {
+    const next = new Date(current.year, current.month + delta, 1)
+    return { year: next.getFullYear(), month: next.getMonth() }
+  })
+  const goToday = () => { const now = new Date(); setCursor({ year: now.getFullYear(), month: now.getMonth() }) }
+
+  const detail = schedules.find(schedule => schedule.id === detailId) ?? null
+  useEffect(() => {
+    if (detailId !== null && !schedules.some(schedule => schedule.id === detailId)) setDetailId(null)
+  }, [detailId, schedules])
+
+  const openDetail = (scheduleId: number) => { setLifecycleError(''); setDetailId(scheduleId) }
+
+  const runLifecycle = async (schedule: Schedule, kind: 'cancel' | 'complete' | 'delete') => {
+    const config = {
+      cancel: { confirm: `'${schedule.title}' 일정을 취소할까요?`, path: '/cancel', method: 'POST', fail: '훈련일정을 취소하지 못했습니다.', done: '훈련일정을 취소했습니다.' },
+      complete: { confirm: `'${schedule.title}' 일정을 완료 처리할까요? 완료 후에는 연결된 훈련 결과를 수정할 수 없습니다.`, path: '/complete', method: 'POST', fail: '훈련일정을 완료하지 못했습니다.', done: '훈련일정을 완료 처리했습니다.' },
+      delete: { confirm: `'${schedule.title}' 일정을 삭제할까요? 연결된 훈련기록이 있으면 삭제할 수 없습니다.`, path: '', method: 'DELETE', fail: '훈련일정을 삭제하지 못했습니다.', done: '훈련일정을 삭제했습니다.' },
+    }[kind]
+    if (!window.confirm(config.confirm)) return
+    setLifecycleBusy(true)
+    setLifecycleError('')
+    try {
+      const response = await authenticatedFetch(`${API}/reservists/training-schedules/${schedule.id}${config.path}`, {
+        method: config.method, headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expected_version: schedule.version }),
+      })
+      if (!response.ok) throw new Error(await apiError(response, config.fail))
+      setLifecycleMessage(config.done)
+      if (kind === 'delete') setDetailId(null)
+      onCreated()
+    } catch (cause) { setLifecycleError(cause instanceof Error ? cause.message : config.fail) }
+    finally { setLifecycleBusy(false) }
+  }
+
+  const afterSave = (message: string) => {
+    setForm(null)
+    setLifecycleError('')
+    setLifecycleMessage(message)
+    onCreated()
+  }
+
+  return <section className="training-section training-calendar-section">
+    <header className="training-calendar-header">
+      <div className="training-calendar-title">
+        <button type="button" aria-label="이전 달" onClick={() => moveMonth(-1)}>‹</button>
+        <h2>{cursor.year}년 {cursor.month + 1}월</h2>
+        <button type="button" aria-label="다음 달" onClick={() => moveMonth(1)}>›</button>
+        <button type="button" className="training-calendar-today" onClick={goToday}>오늘</button>
+        <span>이번 달 {monthScheduleCount}건 · 전체 {schedules.length}건</span>
+      </div>
+      <div className="training-calendar-tools">
+        <div className="training-calendar-legend" aria-label="일정 상태 범례">
+          <span className="is-scheduled">예정</span><span className="is-completed">완료</span><span className="is-canceled">취소</span>
+        </div>
+        <div className="training-calendar-views" role="group" aria-label="보기 방식">
+          <button type="button" className={view === 'calendar' ? 'is-active' : ''} aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}>달력</button>
+          <button type="button" className={view === 'list' ? 'is-active' : ''} aria-pressed={view === 'list'} onClick={() => setView('list')}>목록</button>
+        </div>
+        <button type="button" className="training-primary" disabled={!canWrite} onClick={() => setForm({ schedule: null })}>+ 훈련일정 등록</button>
+      </div>
+    </header>
+    {!canWrite && <p className="training-note">일정 등록은 scheduler 권한이 필요합니다.</p>}
+    {lifecycleError && !detail && <p className="training-message is-error" role="alert">{lifecycleError}</p>}
+    {lifecycleMessage && <p className="training-message" role="status">{lifecycleMessage}</p>}
+
+    {view === 'calendar'
+      ? <div className="training-calendar" role="grid" aria-label={`${cursor.year}년 ${cursor.month + 1}월 훈련일정`}>
+        <div className="training-calendar-weekdays" role="row">
+          {WEEKDAY_LABELS.map((label, index) => <span key={label} role="columnheader" className={index === 0 ? 'is-sun' : index === 6 ? 'is-sat' : undefined}>{label}</span>)}
+        </div>
+        <div className="training-calendar-grid">
+          {cells.map(date => {
+            const iso = toIsoDate(date)
+            const inMonth = date.getMonth() === cursor.month
+            const events = eventsByDate.get(iso) ?? []
+            return <div key={iso} role="gridcell"
+              className={`training-calendar-cell${inMonth ? '' : ' is-outside'}${iso === today ? ' is-today' : ''}${date.getDay() === 0 ? ' is-sun' : date.getDay() === 6 ? ' is-sat' : ''}`}
+              onClick={() => { if (canWrite) setForm({ schedule: null, date: iso }) }}>
+              <div className="training-calendar-daybar">
+                <span className="training-calendar-daynum">{date.getDate()}</span>
+                <button type="button" className="training-calendar-add" aria-label={`${iso} 훈련일정 등록`} disabled={!canWrite}
+                  onClick={event => { event.stopPropagation(); setForm({ schedule: null, date: iso }) }}>＋</button>
+              </div>
+              <div className="training-calendar-events">
+                {events.map(({ schedule, index }) => <button key={`${schedule.id}-${index}`} type="button"
+                  className={`training-calendar-event ${scheduleStatusClass(schedule.status)}`}
+                  title={`${schedule.title} · ${scheduleTypeLabel(schedule)} · ${schedule.sessions.length > 1 ? `${index + 1}/${schedule.sessions.length}일차` : '1일'}`}
+                  onClick={event => { event.stopPropagation(); openDetail(schedule.id) }}>
+                  <strong>{schedule.title}</strong>
+                  <small>{scheduleTypeLabel(schedule)}{schedule.sessions.length > 1 ? ` · ${index + 1}/${schedule.sessions.length}일차` : ''}</small>
+                </button>)}
+              </div>
+            </div>
+          })}
+        </div>
+      </div>
+      : schedules.length === 0
+        ? <p className="training-note">등록된 일정이 없습니다.</p>
+        : <div className="training-table-wrap"><table><thead><tr><th>행사</th><th>훈련</th><th>연차·차수</th><th>기간</th><th>세션</th><th>상태</th><th>관리</th></tr></thead><tbody>{schedules.map(schedule => <tr key={schedule.id} id={`training-schedule-${schedule.id}`}>
+          <td>{schedule.title}</td><td>{schedule.training_type}</td>
+          <td>{schedule.service_year}년차{isTypeIISchedule(schedule.training_type) ? ` · ${schedule.training_round}차` : ''}</td>
+          <td>{schedule.sessions[0]?.session_date} - {schedule.sessions.at(-1)?.session_date}</td><td>{schedule.sessions.length}일</td>
+          <td><span className={`training-status-pill ${scheduleStatusClass(schedule.status)}`}>{scheduleStatusLabel(schedule.status)}</span></td>
+          <td className="training-schedule-actions"><button type="button" onClick={() => openDetail(schedule.id)}>상세·관리</button></td>
+        </tr>)}</tbody></table></div>}
+
+    {detail && (() => {
+      const lastSessionDate = detail.sessions.at(-1)?.session_date
+      const sessionsHavePassed = lastSessionDate !== undefined && lastSessionDate < localDateAfter(0)
+      return <TrainingModal title={detail.title} onClose={() => setDetailId(null)}>
+        <div className="training-detail">
+          <div className="training-detail-meta">
+            <span className={`training-status-pill ${scheduleStatusClass(detail.status)}`}>{scheduleStatusLabel(detail.status)}</span>
+            <strong>{scheduleTypeLabel(detail)}</strong>
+            <span>{detail.sessions[0]?.session_date} - {lastSessionDate} · {detail.sessions.length}일</span>
+          </div>
+          <div className="training-table-wrap"><table><thead><tr><th>세션</th><th>날짜</th><th>인정 상한</th></tr></thead><tbody>{detail.sessions.map((session, index) => <tr key={session.id}>
+            <td>{sessionLabel(detail.training_type, index)}</td><td>{session.session_date}</td><td>{session.credited_hours}시간</td>
+          </tr>)}</tbody></table></div>
+          {lifecycleError && <p className="training-message is-error" role="alert">{lifecycleError}</p>}
+          <footer className="training-actions training-detail-actions">
+            <button className="training-primary" type="button" disabled={!canWrite || lifecycleBusy || !['scheduled', 'completed'].includes(detail.status)}
+              onClick={() => { const id = detail.id; setDetailId(null); onOpenAssignment(id) }}>훈련부과</button>
+            {detail.status === 'scheduled' && <>
+              <button className="training-schedule-edit" type="button" disabled={!canWrite || lifecycleBusy} onClick={() => { setForm({ schedule: detail }); setDetailId(null) }}>일정 편집</button>
+              <button className="training-schedule-complete" type="button" disabled={!canWrite || lifecycleBusy || !sessionsHavePassed}
+                title={sessionsHavePassed ? '모든 배정 결과가 확정되어야 완료할 수 있습니다.' : '모든 훈련 세션이 종료된 후 완료할 수 있습니다.'}
+                aria-label={`${detail.title} 일정 완료 처리`}
+                onClick={() => void runLifecycle(detail, 'complete')}>완료</button>
+              <button className="training-schedule-cancel" type="button" disabled={!canWrite || lifecycleBusy} onClick={() => void runLifecycle(detail, 'cancel')}>취소</button>
+            </>}
+            <button className="training-schedule-delete" type="button" disabled={!canWrite || lifecycleBusy} onClick={() => void runLifecycle(detail, 'delete')}>삭제</button>
+          </footer>
+        </div>
+      </TrainingModal>
+    })()}
+
+    {form && <ScheduleFormModal key={form.schedule?.id ?? `new-${form.date ?? ''}`} schedule={form.schedule} initialDate={form.date}
+      canWrite={canWrite} onClose={() => setForm(null)} onSaved={afterSave} />}
+  </section>
+}
+
+function AssignmentWorkspace({ schedules, people, canWrite, onAssigned, initialScheduleId, lockSchedule = false }: { schedules: Schedule[]; people: Person[]; canWrite: boolean; onAssigned: () => void; initialScheduleId?: string; lockSchedule?: boolean }) {
   const [scheduleId, setScheduleId] = useState(initialScheduleId ?? '')
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
@@ -562,7 +677,7 @@ function AssignmentWorkspace({ schedules, people, canWrite, onAssigned, initialS
   return <section className="training-section">
     <header><h2>훈련부과 대상 편성</h2><span>대상자를 지정해 훈련일정에 배정합니다.</span></header>
     <div className="training-toolbar">
-      <label className="training-field">일정<select value={activeScheduleId} onChange={event => { setScheduleId(event.target.value); setAssignedIds(new Set()); setAssignmentTargets(new Map()); setRosterLoading(Boolean(event.target.value)); setSelected(new Set()); setGroup('all'); setGroupValue(null); setReview(false); setError('') }}><option value="">일정 선택</option>{schedules.map(schedule => <option key={schedule.id} value={schedule.id}>{schedule.title} · {schedule.service_year}년차{isTypeIISchedule(schedule.training_type) ? ` · ${schedule.training_round}차` : ''}</option>)}</select></label>
+      {!lockSchedule && <label className="training-field">일정<select value={activeScheduleId} onChange={event => { setScheduleId(event.target.value); setAssignedIds(new Set()); setAssignmentTargets(new Map()); setRosterLoading(Boolean(event.target.value)); setSelected(new Set()); setGroup('all'); setGroupValue(null); setReview(false); setError('') }}><option value="">일정 선택</option>{schedules.map(schedule => <option key={schedule.id} value={schedule.id}>{schedule.title} · {schedule.service_year}년차{isTypeIISchedule(schedule.training_type) ? ` · ${schedule.training_round}차` : ''}</option>)}</select></label>}
       <label className="training-field training-search">군번 또는 이름 검색<input value={query} onChange={event => { setQuery(event.target.value); setGroupValue(null) }} /></label>
     </div>
     {activeSchedule && <div className="training-assignment-summary"><strong>{activeSchedule.training_type} · {activeSchedule.service_year}년차{isTypeIISchedule(activeSchedule.training_type) ? ` · ${activeSchedule.training_round}차` : ''}</strong>{isTypeIISchedule(activeSchedule.training_type) && <span>선택한 차수와 대상자의 현재 차수가 일치하는 경우에만 부과할 수 있습니다.</span>}<span>훈련 대상 {cohort.length}명</span><span>목록 선택 가능 {cohort.length}명</span><span>부과 가능 {assignableCount}명</span><span>이미 부과 {assignedIds.size}명</span></div>}
