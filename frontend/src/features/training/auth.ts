@@ -1,5 +1,15 @@
-export type AuthUser = { id: number; username: string; role: 'viewer' | 'scheduler' | 'approver' }
+export type AuthUser = {
+  id: number
+  username: string
+  role: 'viewer' | 'scheduler' | 'approver'
+  unit_code: string
+  position: '동대장' | '상근예비역' | '감사실'
+  service_number: string
+}
 export type AuthState = { token: string; user: AuthUser }
+
+export const AUTO_LOGOUT_ENABLED = false // 개발 모드: 꺼짐
+export const AUTO_LOGOUT_MS = 3 * 60 * 60 * 1000 // 무활동 3시간
 
 const TOKEN_KEY = 'project-ai-tf.access-token'
 const USER_KEY = 'project-ai-tf.auth-user'

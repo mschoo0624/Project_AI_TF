@@ -20,6 +20,7 @@ from user.app.api.training import (
 from user.app.api.training_results import router as training_results_router
 from user.app.api.transfers import router as transfers_router
 from user.app.copilot.router import router as copilot_router
+from user.app.services.auth import seed_dev_account
 from user.app.services.training import reconcile_all_due_training_absences
 from user.app.services.training_recalculation import recalculate_ended_holds, run_jan1_rollover
 
@@ -68,6 +69,8 @@ async def _training_reconciliation_loop() -> None:
 async def startup() -> None:
     global _training_reconciliation_task
     init_db()
+    with SessionLocal() as db:
+        seed_dev_account(db)
     initialize_prediction_cache()
     initialize_attendance_cache()
     _training_reconciliation_task = asyncio.create_task(_training_reconciliation_loop())

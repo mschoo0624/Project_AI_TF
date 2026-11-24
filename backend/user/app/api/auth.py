@@ -50,6 +50,7 @@ def _token_response(user: User, token: str, expires_at) -> dict[str, object]:
         "user": {
             "id": user.id, "username": user.username, "role": user.role,
             "unit_code": user.unit_code, "position": user.position,
+            "service_number": user.service_number,
         },
     }
 
@@ -181,6 +182,7 @@ def create_user(
         role=POSITION_ROLES[payload.position],
         unit_code=unit_code,
         position=payload.position,
+        service_number=payload.service_number.strip(),
     )
     db.add(user)
     try:

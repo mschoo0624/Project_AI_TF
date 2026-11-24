@@ -53,8 +53,8 @@ button { cursor:pointer; }
 .workspace { min-width:0; min-height:0; display:flex; flex-direction:column; }
 .workspace-content { flex:1; min-width:0; min-height:0; background:var(--paper); }
 .sidebar-clock { padding:14px 8px 12px; text-align:center; border-bottom:1px solid rgba(255,255,255,.23); color:#fff; }
-.sidebar-clock-main { font-family:'Space Mono',monospace; font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:.5px; line-height:1.2; }
-.sidebar-clock-sec { font-family:'Space Mono',monospace; font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; color:#60a5fa; }
+.sidebar-clock-main { font-family:'Space Mono',monospace; font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:1px; line-height:1.2; }
+.sidebar-clock-sec { font-family:'Space Mono',monospace; font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; color:#60a5fa; }
 .sidebar-clock small { display:block; margin-top:3px; font-size:11px; color:#94a3b8; }
 .side-button { display:flex; align-items:center; justify-content:flex-start; gap:10px; height:46px; padding:0 8px 0 22px; font-size:15px; text-align:left; }
 .side-button svg { flex:none; }
@@ -262,3 +262,22 @@ button.home-panel-more { border:0; background:none; padding:2px 6px; }
 .mypage { min-height:calc(var(--screen-height) - var(--topbar-height)); padding:27px 20px; background:#f9fbff; }
 .mypage h2 { margin:0; font-size:20px; font-weight:700; }
 
+/* 사용자 정보 카드 (282x300) */
+.home-user-card { height:300px; display:flex; flex-direction:column; gap:12px; padding:16px 16px 14px; border:1px solid #e1e7ef; box-shadow:0 3px 11px #1f355312; }
+.home-user-head { display:flex; align-items:center; gap:12px; }
+.home-user-avatar { flex:none; width:52px; height:52px; display:grid; place-items:center; border-radius:50%; background:#eaf1ff; color:#2563eb; }
+.home-user-name { min-width:0; display:grid; gap:5px; justify-items:start; }
+.home-user-name strong { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:17px; font-weight:700; }
+.home-user-badge { padding:1px 9px; border-radius:10px; background:#e8f0ff; color:#1d56c8; font-size:11px; font-style:normal; font-weight:600; }
+.home-user-badge.is-상근예비역 { background:#e7f7ee; color:#157a45; }
+.home-user-badge.is-감사실 { background:#f1eefb; color:#5b3fb0; }
+.home-user-info { margin:0; display:grid; gap:7px; }
+.home-user-info div { display:grid; grid-template-columns:78px minmax(0,1fr); gap:6px; font-size:12px; }
+.home-user-info dt { color:#728095; }
+.home-user-info dd { margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#253449; font-weight:600; }
+.home-user-actions { margin-top:auto; display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.home-user-actions button { height:30px; border:1px solid #ccd5e4; border-radius:7px; background:#f7f9fd; font-size:12px; font-weight:600; }
+.home-user-actions button:not(:disabled):hover { background:#e8effb; }
+.home-user-actions button:disabled { opacity:.45; cursor:default; }
+.home-user-actions .is-logout { grid-column:1 / -1; border-color:#f0c4c4; background:#fff5f5; color:#b42323; }
+.home-user-actions .is-logout:hover { background:#ffe8e8; }

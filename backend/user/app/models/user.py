@@ -18,3 +18,4 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     unit_code: Mapped[str] = mapped_column(String(20), nullable=False, default="", index=True)
     position: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    service_number: Mapped[str] = mapped_column(String(20), nullable=False, default="")

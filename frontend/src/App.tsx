@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { CSSProperties, FormEvent, ReactNode } from 'react'
+import ReactGridLayout, { getCompactor } from 'react-grid-layout'
+import type { Layout, LayoutItem } from 'react-grid-layout'
+import { absoluteStrategy } from 'react-grid-layout/core'
+import 'react-grid-layout/css/styles.css'
+import './features/dashboard/dashboard.css'
+import { GRID_WIDTH, LOCKED_WIDGETS, SHORTCUT_MAX_COLUMNS, SIZE_OPTIONS, WIDGET_LABELS, WIDGET_ORDER, buildLayout, snapPosition } from './features/dashboard/dashboardLayout'
+import type { SizeKey, WidgetId } from './features/dashboard/dashboardLayout'
+import { useDashboardConfig } from './features/dashboard/useDashboardConfig'
 import './App.css'
 import ministryLogo from './assets/국방부 마크_컬러본.png'
 import { forecastThreshold } from './forecastThreshold'
@@ -29,7 +37,7 @@ import { trainingTabs } from './features/training/trainingtabs'
 import type { TrainingTabId } from './features/training/trainingtabs'
 import PersonQuickSearch from './features/quicksearch/PersonQuickSearch'
 import TrainingAuthControl, { TrainingLoginPage } from './features/training/TrainingAuthControl'
-import { apiBase, authenticatedFetch, clearAuth, readAuth } from './features/training/auth'
+import { AUTO_LOGOUT_ENABLED, AUTO_LOGOUT_MS, apiBase, authenticatedFetch, clearAuth, readAuth } from './features/training/auth'
 
 
 const featurePages = [
@@ -102,7 +110,6 @@ const demoDashboard = {
 }
 
 // 예시 데이터 (API 생기면 교체)
-const demoTravelCount = 16
 const demoWorkAlerts: { title: string; body: string; page: HomeDestination }[] = [
   { title: '교육훈련 일정 관리', body: '10월 5일 1형 훈련 일정 관리가 필요합니다.', page: 'training' },
   { title: '홍보메일 전송', body: '9월 28일, 훈련 대상자 134명을 대상으로 홍보메일 발송을 완료했습니다.', page: 'training' },
@@ -161,11 +168,68 @@ function CompositionPanel({ data, error }: { data: Composition | null; error: st
   </section>
 }
 
+// 드래그 중에는 자유롭게 움직이고, 놓을 때 snapPosition이 정렬선에 맞춥니다.
+const dashboardCompactor = getCompactor(null, true, false)
+
 type Schedule = { id: number; date: string; title: string }
 const initialSchedules: Schedule[] = [
   { id: 1, date: '01/14', title: '동원훈련 1형 예정' },
   { id: 2, date: '01/15', title: '월 중간 결산' },
 ]
+
+// 부대코드 → 부대 이름. 매핑이 없으면 코드를 그대로 표시합니다.
+const unitNames: Record<string, string> = {}
+
+async function logoutSession() {
+  try { await authenticatedFetch(`${apiBase()}/auth/logout`, { method: 'POST' }) }
+  catch { /* 서버 응답과 상관없이 로컬 로그인 정보는 지웁니다. */ }
+  finally { clearAuth() }
+}
+
+// 무활동 AUTO_LOGOUT_MS 후 자동 로그아웃. AUTO_LOGOUT_ENABLED가 false면 아무 것도 하지 않습니다.
+function useAutoLogout() {
+  useEffect(() => {
+    if (!AUTO_LOGOUT_ENABLED) return
+    let timer = window.setTimeout(() => void logoutSession(), AUTO_LOGOUT_MS)
+    const reset = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => void logoutSession(), AUTO_LOGOUT_MS)
+    }
+    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'] as const
+    events.forEach(name => window.addEventListener(name, reset, { passive: true }))
+    return () => {
+      window.clearTimeout(timer)
+      events.forEach(name => window.removeEventListener(name, reset))
+    }
+  }, [])
+}
+
+function UserCard({ onNavigate, onCustomize, editing = false }: { onNavigate: (page: HomeDestination) => void; onCustomize?: () => void; editing?: boolean }) {
+  const user = readAuth()?.user
+  const position = user?.position || (user?.role === 'approver' ? '동대장' : user?.role === 'scheduler' ? '상근예비역' : user?.role === 'viewer' ? '감사실' : '')
+  const unit = user?.unit_code ? (unitNames[user.unit_code] ?? user.unit_code) : '-'
+  const autoLogoutText = AUTO_LOGOUT_ENABLED ? `${AUTO_LOGOUT_MS / 3600000}시간 무활동 시` : '꺼짐(개발 모드)'
+  return <section className="home-user-card" aria-label="사용자 정보">
+    <div className="home-user-head">
+      <span className="home-user-avatar" aria-hidden="true"><Icon name="person" size={26} /></span>
+      <div className="home-user-name">
+        <strong title={user?.username}>{user?.username ?? '-'}</strong>
+        {position && <em className={`home-user-badge is-${position}`}>{position}</em>}
+      </div>
+    </div>
+    <dl className="home-user-info">
+      <div><dt>군번</dt><dd>{user?.service_number || '-'}</dd></div>
+      <div><dt>소속</dt><dd title={unit}>{unit}</dd></div>
+      <div><dt>최근 접속</dt><dd>-</dd></div>
+      <div><dt>자동 로그아웃</dt><dd>{autoLogoutText}</dd></div>
+    </dl>
+    <div className="home-user-actions">
+      <button type="button" onClick={() => onNavigate('mypage')}>마이페이지</button>
+      <button type="button" onClick={onCustomize} disabled={!onCustomize} aria-pressed={editing}>{editing ? '편집 완료' : '대시보드 커스텀'}</button>
+      <button type="button" className="is-logout" onClick={() => void logoutSession()}>로그아웃</button>
+    </div>
+  </section>
+}
 
 function SidebarClock() {
   const [now, setNow] = useState(() => new Date())
@@ -185,6 +249,7 @@ function SidebarClock() {
 }
 
 function App() {
+  useAutoLogout()
   const [homeRevision, setHomeRevision] = useState(0)
   const [activePage, setActivePage] = useState<PageId>('home')
   const [resourceLanding, setResourceLanding] = useState<ResourceTabId>('organization')
@@ -460,60 +525,39 @@ function Home({ onNavigate, contactAlerts, onOpenMessenger }: {
 }
 
 
-  const shortcuts: { label: string; icon: string | IconName; page: HomeDestination; onClick?: () => void }[] = [
-    { label: '보류자/연기자', icon: holdIcon, page: 'resource:hold'},
-    { label: '출국자/귀국자', icon: travelIcon, page: 'resource:travel'},
-    { label: '고발대상자', icon: prosecutionIcon, page: 'resource:prosecution'},
-    { label: '업무일지 작성', icon: worklogIcon, page: 'worklog' },
-    { label: '전투편성기구도', icon: formationIcon, page: 'resource' },
-    { label: '교육훈련', icon: trainingIcon, page: 'training' },
-    { label: '공지사항', icon: noticeIcon, page: 'home', onClick: openNoticeList },
-    { label: '마이페이지', icon: myPageIcon, page: 'mypage' },
+  const shortcuts: { id: string; label: string; icon: string | IconName; page: HomeDestination; onClick?: () => void }[] = [
+    { id: 'hold', label: '보류자/연기자', icon: holdIcon, page: 'resource:hold'},
+    { id: 'travel', label: '출국자/귀국자', icon: travelIcon, page: 'resource:travel'},
+    { id: 'prosecution', label: '고발대상자', icon: prosecutionIcon, page: 'resource:prosecution'},
+    { id: 'worklog', label: '업무일지 작성', icon: worklogIcon, page: 'worklog' },
+    { id: 'formation', label: '전투편성기구도', icon: formationIcon, page: 'resource' },
+    { id: 'training', label: '교육훈련', icon: trainingIcon, page: 'training' },
+    { id: 'notice', label: '공지사항', icon: noticeIcon, page: 'home', onClick: openNoticeList },
+    { id: 'mypage', label: '마이페이지', icon: myPageIcon, page: 'mypage' },
   ] 
 
-  return <section className="home-dashboard" aria-label="홈 대시보드">
-    <div className="home-left-column">
-      <section className="home-user-card" aria-label="사용자 정보">
-        <strong>담당자</strong>
-        <span>소속 정보 미연결</span>
-        <small>화면 예시 · 실데이터 미연결</small>
-      </section>
+  const userKey = readAuth()?.user.username ?? 'guest'
+  const { config, update, reset } = useDashboardConfig(userKey)
+  const [editing, setEditing] = useState(false)
+  const visibleShortcuts = shortcuts.filter(item => !config.hiddenShortcuts.includes(item.id))
+  const layout = buildLayout(config, visibleShortcuts.length)
+  const toggleWidget = (id: WidgetId) => update(current => ({ ...current, hidden: current.hidden.includes(id) ? current.hidden.filter(item => item !== id) : [...current.hidden, id] }))
+  const toggleShortcut = (id: string) => update(current => ({ ...current, hiddenShortcuts: current.hiddenShortcuts.includes(id) ? current.hiddenShortcuts.filter(item => item !== id) : [...current.hiddenShortcuts, id] }))
+  const setWidgetSize = (id: WidgetId, key: SizeKey) => update(current => ({ ...current, sizes: { ...current.sizes, [id]: key } }))
+  const commitLayout = (_next: Layout, _old: LayoutItem | null, moved: LayoutItem | null) => {
+    if (!moved || LOCKED_WIDGETS.includes(moved.i as WidgetId)) return
+    const snapped = snapPosition(layout, moved.i, moved.x, moved.y)
+    update(current => {
+      const positions = { ...current.positions }
+      for (const item of layout) if (!item.static) positions[item.i as WidgetId] = { x: item.x, y: item.y }
+      positions[moved.i as WidgetId] = snapped
+      return { ...current, positions }
+    })
+  }
 
-    <MiniCalendar schedules={schedules} onPickDate={pickScheduleDate} />
-
-      <section className="home-schedule-card" aria-label="주요 일정">
-        <div className="home-schedule-toolbar">
-          <span className="home-schedule-heading"><Icon name="bell" size={19} />주요 일정</span>
-          <div className="home-toolbar-actions">
-            <button type="button" className="home-icon-button" title="예시 일정 추가" aria-label="예시 일정 추가" onClick={() => editSchedule()}><Icon name="plus" /></button>
-            <button type="button" className="home-icon-button" title="선택한 예시 일정 삭제" aria-label="선택한 예시 일정 삭제" disabled={selectedSchedule === null} onClick={removeSelectedSchedule}><Icon name="minus" /></button>
-            <button type="button" className="home-icon-button" title={showScheduleList ? '일정 목록 접기' : '일정 목록 펼치기'} aria-label={showScheduleList ? '일정 목록 접기' : '일정 목록 펼치기'} onClick={() => setShowScheduleList(v => !v)}><Icon name="list" /></button>
-            <button type="button" className="home-icon-button" title="일정 안내" aria-label="일정 안내" onClick={() => setShowScheduleInfo(v => !v)}><Icon name="settings" /></button>
-          </div>
-        </div>
-        {showScheduleInfo && <p className="home-schedule-info">예시 일정은 현재 화면에서만 변경되며 서버에 저장되지 않습니다.</p>}
-        {showScheduleList && <div className="home-schedule-list">
-          {schedules.map(schedule =>
-            <div className={`home-schedule-row ${selectedSchedule === schedule.id ? 'selected' : ''}`} key={schedule.id}>
-              <button type="button" className="home-schedule-select" onClick={() => setSelectedSchedule(selectedSchedule === schedule.id ? null : schedule.id)} aria-pressed={selectedSchedule === schedule.id}>
-                <span className="home-dot" />{schedule.date} {schedule.title}
-              </button>
-              <button type="button" className="home-schedule-edit" title="일정 수정" aria-label={`${schedule.date} ${schedule.title} 수정`} onClick={() => editSchedule(schedule)}><Icon name="edit" size={18} /></button>
-            </div>
-          )}
-          {schedules.length === 0 && <p className="home-schedule-empty">예시 일정이 없습니다.</p>}
-        </div>}
-        {editingSchedule !== null && <form className="home-schedule-form" onSubmit={saveSchedule}>
-          <input aria-label="날짜" value={draftDate} placeholder="MM/DD" pattern="[0-9]{2}/[0-9]{2}" onChange={e => setDraftDate(e.target.value)} required />
-          <input aria-label="일정 내용" value={draftTitle} placeholder="일정 내용" onChange={e => setDraftTitle(e.target.value)} required />
-          <button type="submit">저장</button><button type="button" onClick={() => setEditingSchedule(null)}>취소</button>
-        </form>}
-        {!showScheduleInfo && editingSchedule === null && schedules.length === 0 && <p className="home-schedule-add-hint">+ 버튼으로 일정을 추가하세요.</p>}
-      </section>
-
-      <DailyPanel />
-    </div>
-
+  const widgets: Record<WidgetId, ReactNode> = {
+    user: <UserCard onNavigate={onNavigate} editing={editing} onCustomize={() => setEditing(value => !value)} />,
+    banner: <>
     <section className="home-notice-banner" aria-label="공지사항" style={{ backgroundImage: `url("${noticeBannerImg}")` }}>
       <div className="home-notice-content">
         <span className="home-panel-chip"><Icon name="calendar" size={14} />공지사항</span>
@@ -578,13 +622,42 @@ function Home({ onNavigate, contactAlerts, onOpenMessenger }: {
         </div>
       </div>}
     </section>
-
-
-  
-    <PersonQuickSearch />
-
-  <div className="home-lower-area">
-    <div className="home-notify-row">
+    </>,
+    search: <PersonQuickSearch />,
+    calendar: <MiniCalendar schedules={schedules} onPickDate={pickScheduleDate} />,
+    schedule: <>
+      <section className="home-schedule-card" aria-label="주요 일정">
+        <div className="home-schedule-toolbar">
+          <span className="home-schedule-heading"><Icon name="bell" size={19} />주요 일정</span>
+          <div className="home-toolbar-actions">
+            <button type="button" className="home-icon-button" title="예시 일정 추가" aria-label="예시 일정 추가" onClick={() => editSchedule()}><Icon name="plus" /></button>
+            <button type="button" className="home-icon-button" title="선택한 예시 일정 삭제" aria-label="선택한 예시 일정 삭제" disabled={selectedSchedule === null} onClick={removeSelectedSchedule}><Icon name="minus" /></button>
+            <button type="button" className="home-icon-button" title={showScheduleList ? '일정 목록 접기' : '일정 목록 펼치기'} aria-label={showScheduleList ? '일정 목록 접기' : '일정 목록 펼치기'} onClick={() => setShowScheduleList(v => !v)}><Icon name="list" /></button>
+            <button type="button" className="home-icon-button" title="일정 안내" aria-label="일정 안내" onClick={() => setShowScheduleInfo(v => !v)}><Icon name="settings" /></button>
+          </div>
+        </div>
+        {showScheduleInfo && <p className="home-schedule-info">예시 일정은 현재 화면에서만 변경되며 서버에 저장되지 않습니다.</p>}
+        {showScheduleList && <div className="home-schedule-list">
+          {schedules.map(schedule =>
+            <div className={`home-schedule-row ${selectedSchedule === schedule.id ? 'selected' : ''}`} key={schedule.id}>
+              <button type="button" className="home-schedule-select" onClick={() => setSelectedSchedule(selectedSchedule === schedule.id ? null : schedule.id)} aria-pressed={selectedSchedule === schedule.id}>
+                <span className="home-dot" />{schedule.date} {schedule.title}
+              </button>
+              <button type="button" className="home-schedule-edit" title="일정 수정" aria-label={`${schedule.date} ${schedule.title} 수정`} onClick={() => editSchedule(schedule)}><Icon name="edit" size={18} /></button>
+            </div>
+          )}
+          {schedules.length === 0 && <p className="home-schedule-empty">예시 일정이 없습니다.</p>}
+        </div>}
+        {editingSchedule !== null && <form className="home-schedule-form" onSubmit={saveSchedule}>
+          <input aria-label="날짜" value={draftDate} placeholder="MM/DD" pattern="[0-9]{2}/[0-9]{2}" onChange={e => setDraftDate(e.target.value)} required />
+          <input aria-label="일정 내용" value={draftTitle} placeholder="일정 내용" onChange={e => setDraftTitle(e.target.value)} required />
+          <button type="submit">저장</button><button type="button" onClick={() => setEditingSchedule(null)}>취소</button>
+        </form>}
+        {!showScheduleInfo && editingSchedule === null && schedules.length === 0 && <p className="home-schedule-add-hint">+ 버튼으로 일정을 추가하세요.</p>}
+      </section>
+    </>,
+    today: <DailyPanel />,
+    work: <>
       <section className="home-panel" aria-label="업무 알림">
         <span className="home-panel-chip"><Icon name="bell" size={14} />업무 알림</span>
         <div className="home-bubble-list">
@@ -597,6 +670,8 @@ function Home({ onNavigate, contactAlerts, onOpenMessenger }: {
         {reviewError && <p className="home-data-note" role="alert">{reviewError}</p>}
         <span className="home-panel-more" aria-hidden="true"><Icon name="more" size={16} /></span>
       </section>
+    </>,
+    contact: <>
       <section className="home-panel" aria-label="연락 알림">
         <span className="home-panel-chip"><Icon name="inbox" size={14} />연락 알림</span>
         <div className="home-bubble-list">
@@ -605,10 +680,10 @@ function Home({ onNavigate, contactAlerts, onOpenMessenger }: {
         </div>
         <button type="button" className="home-panel-more" aria-label="메신저 열기" onClick={() => onOpenMessenger()}><Icon name="more" size={16} /></button>
       </section>
-    </div>
-
-<nav className="home-shortcuts" aria-label="바로가기">
-  {shortcuts.map(item => <button type="button" className="home-shortcut" key={item.label} onClick={() => item.onClick ? item.onClick() : onNavigate(item.page)}>
+    </>,
+    shortcuts: <>
+<nav className="home-shortcuts" aria-label="바로가기" style={{ '--shortcut-columns': Math.min(SHORTCUT_MAX_COLUMNS, visibleShortcuts.length) } as CSSProperties}>
+  {visibleShortcuts.map(item => <button type="button" className="home-shortcut" key={item.label} onClick={() => item.onClick ? item.onClick() : onNavigate(item.page)}>
     <span className="home-shortcut-icon">
       {/[/:]/.test(item.icon)
         ? <img src={item.icon} alt="" />
@@ -617,8 +692,47 @@ function Home({ onNavigate, contactAlerts, onOpenMessenger }: {
     <span className="home-shortcut-label">{item.label}</span>
   </button>)}
 </nav>
-</div>
-    <CompositionPanel data={summary?.composition ?? null} error={summaryError} />
+    </>,
+    composition: <CompositionPanel data={summary?.composition ?? null} error={summaryError} />,
+  }
+
+  return <section className="home-dashboard" aria-label="홈 대시보드">
+    {editing && <div className="dash-toolbar">
+      <div className="dash-toolbar-head">
+        <strong>대시보드 편집</strong>
+        <span>위젯을 끌어서 옮기고, 표시 여부와 크기를 고르세요. 변경은 자동 저장됩니다.</span>
+        <div className="dash-toolbar-buttons">
+          <button type="button" onClick={reset}>기본값으로 되돌리기</button>
+          <button type="button" className="is-primary" onClick={() => setEditing(false)}>편집 완료</button>
+        </div>
+      </div>
+      <div className="dash-chip-row"><b>위젯 표시</b>
+        {WIDGET_ORDER.filter(id => !LOCKED_WIDGETS.includes(id)).map(id => <button type="button" key={id} aria-pressed={!config.hidden.includes(id)} onClick={() => toggleWidget(id)}>{WIDGET_LABELS[id]}</button>)}
+      </div>
+      <div className="dash-chip-row"><b>바로가기 항목</b>
+        {shortcuts.map(item => <button type="button" key={item.id} aria-pressed={!config.hiddenShortcuts.includes(item.id)} onClick={() => toggleShortcut(item.id)}>{item.label}</button>)}
+      </div>
+    </div>}
+    <ReactGridLayout className="dash-grid" width={GRID_WIDTH} layout={layout}
+      gridConfig={{ cols: GRID_WIDTH, rowHeight: 1, margin: [0, 0], containerPadding: [0, 0], maxRows: Infinity }}
+      dragConfig={{ enabled: editing, bounded: true, cancel: '.dash-edit-controls', threshold: 3 }}
+      resizeConfig={{ enabled: false, handles: [] }}
+      compactor={dashboardCompactor} positionStrategy={absoluteStrategy} onDragStop={commitLayout}>
+      {layout.map(item => {
+        const id = item.i as WidgetId
+        const options = SIZE_OPTIONS[id]
+        return <div key={id} className={`dash-item${editing && !item.static ? ' is-editing' : ''}`}>
+          {widgets[id]}
+          {editing && !item.static && <div className="dash-edit-overlay">
+            <span className="dash-edit-label">{WIDGET_LABELS[id]}</span>
+            <div className="dash-edit-controls">
+              {options?.map(option => <button type="button" key={option.key} aria-pressed={option.w === item.w && option.h === item.h} onClick={() => setWidgetSize(id, option.key)}>{option.label}</button>)}
+              <button type="button" className="is-hide" onClick={() => toggleWidget(id)}>숨기기</button>
+            </div>
+          </div>}
+        </div>
+      })}
+    </ReactGridLayout>
   </section>
 }
 

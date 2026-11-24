@@ -53,6 +53,8 @@ def init_db() -> None:
             connection.execute(text("ALTER TABLE app_user ADD COLUMN unit_code VARCHAR(20) NOT NULL DEFAULT ''"))
         if "position" not in user_columns:
             connection.execute(text("ALTER TABLE app_user ADD COLUMN position VARCHAR(20) NOT NULL DEFAULT ''"))
+        if "service_number" not in user_columns:
+            connection.execute(text("ALTER TABLE app_user ADD COLUMN service_number VARCHAR(20) NOT NULL DEFAULT ''"))
         if "version" not in training_schedule_columns:
             connection.execute(text("ALTER TABLE training_schedule ADD COLUMN version INTEGER NOT NULL DEFAULT 1"))
         if "demo_early_save_enabled" not in training_schedule_columns:

@@ -1,0 +1,38 @@
+/* 대시보드 격자 (react-grid-layout). 1칸 = 1px */
+.app .home-dashboard { display:block; height:auto; min-height:852px; padding:20px 12px 16px 20px; }
+.dash-grid { min-height:816px; }
+.dash-grid.react-grid-layout { transition:none; }
+.dash-item { overflow:visible; }
+.dash-item.react-grid-item { transition-property:left, top; }
+.dash-item > section, .dash-item > nav { width:100%; height:100%; margin:0; box-sizing:border-box; }
+.dash-item > .home-today { padding-top:0; }
+.dash-item > .home-calendar-card { background:#fff; border-radius:11px; overflow:hidden; }
+.dash-grid .react-grid-item.react-grid-placeholder { background:#2563eb; opacity:.18; border-radius:10px; }
+.dash-item.react-draggable-dragging { z-index:5; opacity:.92; box-shadow:0 8px 24px #10243b33; }
+
+/* 바로가기: 칸 크기 고정, 개수에 맞춰 카드 크기 자동 */
+.dash-item > .home-shortcuts { display:grid; grid-template-columns:repeat(var(--shortcut-columns,8),128px); grid-auto-rows:135px; gap:8px; padding:16px; align-content:start; }
+.dash-item > .home-shortcuts .home-shortcut { width:128px; height:135px; padding:8px 4px; gap:8px; justify-content:center; }
+.dash-item > .home-shortcuts .home-shortcut-label { font-size:16px; }
+
+/* 편집 모드 */
+.dash-toolbar { margin:0 0 12px; padding:10px 14px; display:grid; gap:8px; border:1px solid #bcd0f3; border-radius:10px; background:#eef4ff; font-size:12px; color:#253449; }
+.dash-toolbar-head { display:flex; align-items:center; gap:12px; }
+.dash-toolbar-head strong { font-size:14px; }
+.dash-toolbar-head span { color:#53647e; }
+.dash-toolbar-head .dash-toolbar-buttons { margin-left:auto; display:flex; gap:6px; }
+.dash-toolbar button { height:28px; padding:0 12px; border:1px solid #ccd5e4; border-radius:7px; background:#fff; font-size:12px; font-weight:600; }
+.dash-toolbar button.is-primary { border-color:#2563eb; background:#2563eb; color:#fff; }
+.dash-chip-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.dash-chip-row > b { margin-right:4px; font-weight:700; }
+.dash-chip-row button { height:24px; padding:0 10px; border-radius:12px; }
+.dash-chip-row button[aria-pressed="true"] { border-color:#2563eb; background:#dbe8ff; color:#1d56c8; }
+.dash-chip-row button[aria-pressed="false"] { color:#8190a0; text-decoration:line-through; }
+.dash-edit-overlay { position:absolute; inset:0; z-index:4; display:flex; flex-direction:column; justify-content:space-between; padding:8px; border:2px dashed #2563eb; border-radius:10px; background:#2563eb14; cursor:move; }
+.dash-edit-label { align-self:flex-start; padding:2px 9px; border-radius:10px; background:#2563eb; color:#fff; font-size:12px; font-weight:600; }
+.dash-edit-controls { align-self:flex-end; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px; cursor:default; }
+.dash-edit-controls button { height:24px; padding:0 9px; border:1px solid #ccd5e4; border-radius:6px; background:#fff; font-size:11px; font-weight:600; }
+.dash-edit-controls button[aria-pressed="true"] { border-color:#2563eb; background:#2563eb; color:#fff; }
+.dash-edit-controls .is-hide { border-color:#f0c4c4; background:#fff5f5; color:#b42323; }
+/* 편집 중에는 위젯 자체 제목을 숨겨 이름표와 겹치지 않게 함 */
+.dash-item.is-editing .home-panel-chip, .dash-item.is-editing .home-schedule-heading, .dash-item.is-editing .home-composition h2 { visibility:hidden; }
