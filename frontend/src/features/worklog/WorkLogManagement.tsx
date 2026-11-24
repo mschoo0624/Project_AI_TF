@@ -1,301 +1,215 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  categoryNames, displayDate, displayTime, displayTimestamp, errorText, WorkLogError,
+  workLogPdf, workLogRequest, type WorkLogDetail, type WorkLogEvent, type WorkLogSummary,
+} from './api'
 import './WorkLogManagement.css'
+import WorkLogPreview from './WorkLogPreview'
 
-type Entry = { id: string; year: number; month: number; day: number; pdf?: string }
-const STORAGE_KEY = 'aitf-worklog-index-v1'
+function detailValue(value: unknown): string {
+  if (value == null) return ''
+  if (Array.isArray(value)) return value.map(detailValue).filter(Boolean).join(', ')
+  if (typeof value === 'object') return Object.entries(value).map(([key, item]) => `${key}: ${detailValue(item)}`).join(' · ')
+  return String(value)
+}
 
-// 기존 시연용 목록과 localStorage 키를 유지합니다.
-const initialEntries: Entry[] = [1, 2, 3, 4, 5].map(day => ({
-  id: `2026-01-${String(day).padStart(2, '0')}`, year: 2026, month: 1, day,
-}))
-const initialMonths = ['2026-01', '2026-02']
-const sampleStatuses = ['대기', '작성중', '검토중', '승인', '완료'] as const
+function EventRows({ events }: { events: WorkLogEvent[] }) {
+  return <table className="worklog-events-table">
+    <colgroup><col style={{ width: '12%' }} /><col style={{ width: '14%' }} /><col style={{ width: '29%' }} /><col style={{ width: '30%' }} /><col style={{ width: '15%' }} /></colgroup>
+    <thead><tr><th>처리 시각</th><th>업무</th><th>처리 내용</th><th>대상자 정보</th><th>처리자</th></tr></thead>
+    <tbody>{events.map(event => <tr key={event.id}>
+      <td><time dateTime={event.occurred_at}>{displayTime(event.occurred_at)}</time></td>
+      <td><span className="worklog-category">{categoryNames[event.category] ?? event.category}</span></td>
+      <td><strong>{event.summary}</strong>
+        {Object.keys(event.details ?? {}).length > 0 && <details className="worklog-event-details"><summary>상세 내용</summary>
+          <dl>{Object.entries(event.details).filter(([, value]) => value != null && value !== '').map(([key, value]) =>
+            <div key={key}><dt>{key}</dt><dd>{detailValue(value)}</dd></div>)}</dl>
+        </details>}
+      </td>
+      <td>{event.people.length ? event.people.map((person, index) => <div className="worklog-person" key={`${person.military_number ?? ''}-${index}`}>
+        {person.name && <strong>{person.name}</strong>}{person.military_number && <span>{person.military_number}</span>}
+        <small>{[person.branch, person.rank, person.unit].filter(Boolean).join(' · ')}</small>
+      </div>) : <span className="worklog-muted">—</span>}</td>
+      <td>{event.actor}</td>
+    </tr>)}</tbody>
+  </table>
+}
 
-const keyOf = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}`
-const dateOf = (entry: Entry) =>
-  `${entry.year}.${String(entry.month).padStart(2, '0')}.${String(entry.day).padStart(2, '0')}`
-const titleOf = (entry: Entry) => `${entry.year}년 ${entry.month}월 ${entry.day}일 업무일지`
-const safeRead = <T,>(key: string, fallback: T): T => {
-  try { const value = localStorage.getItem(key); return value ? JSON.parse(value) as T : fallback }
-  catch { return fallback }
+function PdfView({ path, filename }: { path: string; filename: string }) {
+  const [url, setUrl] = useState('')
+  const [error, setError] = useState('')
+  useEffect(() => {
+    const controller = new AbortController()
+    let objectUrl = ''
+    setUrl(''); setError('')
+    workLogPdf(path, controller.signal).then(blob => {
+      if (controller.signal.aborted) return
+      objectUrl = URL.createObjectURL(blob); setUrl(objectUrl)
+    }).catch(cause => { if (!controller.signal.aborted) setError(errorText(cause)) })
+    return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl) }
+  }, [path])
+  return <div className="worklog-pdf-view">
+    {error ? <p className="worklog-error" role="alert">{error}</p>
+      : !url ? <p className="worklog-message">PDF를 불러오는 중입니다…</p>
+        : <><div className="worklog-pdf-actions"><a className="worklog-btn" href={url} download={filename}>PDF 다운로드</a></div>
+          <iframe title={filename} className="worklog-pdf" src={url} /></>}
+  </div>
 }
 
 export default function WorkLogManagement() {
-  const [months, setMonths] = useState<string[]>(() => safeRead(`${STORAGE_KEY}-months`, initialMonths))
-  const [entries, setEntries] = useState<Entry[]>(() => safeRead(`${STORAGE_KEY}-entries`, initialEntries))
-  const [expanded, setExpanded] = useState<number[]>(() =>
-    [...new Set(months.map(month => Number(month.slice(0, 4))))])
-  const [expandedMonths, setExpandedMonths] = useState<string[]>([])
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(
-    () => months.includes('2026-01') ? '2026-01' : (months[0] ?? null),
-  )
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [today, setToday] = useState('')
+  const [index, setIndex] = useState<WorkLogSummary[]>([])
+  const [selectedDate, setSelectedDate] = useState('')
+  const [detail, setDetail] = useState<WorkLogDetail | null>(null)
+  const [notes, setNotes] = useState('')
+  const [expanded, setExpanded] = useState<string[]>([])
   const [search, setSearch] = useState('')
-  const [pdfOverrides, setPdfOverrides] = useState<Record<string, string>>({})
-  const [pdfError, setPdfError] = useState(false)
-  const fileInput = useRef<HTMLInputElement>(null)
-  const blobUrls = useRef<string[]>([])
+  const [view, setView] = useState<'events' | 'pdf' | 'template'>('events')
+  const [revision, setRevision] = useState<number | null>(null)
+  const [error, setError] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [message, setMessage] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const notesDirty = useRef(false)
+  const selectedRef = useRef(selectedDate)
+  selectedRef.current = selectedDate
+  const alive = useRef(true)
+  useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
 
-  useEffect(() => { localStorage.setItem(`${STORAGE_KEY}-months`, JSON.stringify(months)) }, [months])
-  useEffect(() => { localStorage.setItem(`${STORAGE_KEY}-entries`, JSON.stringify(entries)) }, [entries])
-  useEffect(() => () => { blobUrls.current.forEach(url => URL.revokeObjectURL(url)) }, [])
+  const refreshIndex = useCallback(async (signal?: AbortSignal) => {
+    const current = await workLogRequest<WorkLogDetail>('/today', { signal })
+    const list = await workLogRequest<WorkLogSummary[]>('', { signal })
+    if (signal?.aborted || !alive.current) return
+    setToday(current.date); setIndex(list)
+    setSelectedDate(previous => previous || current.date)
+    if (!selectedRef.current) setExpanded([current.date.slice(0, 4), current.date.slice(0, 7)])
+  }, [])
 
-  const years = [...new Set([...months, ...entries.map(entry => keyOf(entry.year, entry.month))]
-    .map(month => Number(month.slice(0, 4))))].sort((a, b) => a - b)
-  const selected = entries.find(entry => entry.id === selectedId) ?? null
-  const monthEntries = entries.filter(entry => keyOf(entry.year, entry.month) === selectedMonth)
-    .sort((a, b) => a.day - b.day)
-  const visibleEntries = monthEntries.filter(entry =>
-    `${dateOf(entry)} ${titleOf(entry)}`.toLowerCase().includes(search.trim().toLowerCase()))
-  const selectedPdf = selected ? pdfOverrides[selected.id] ?? selected.pdf : undefined
-  const monthLabel = selectedMonth
-    ? `${Number(selectedMonth.slice(0, 4))}년 ${Number(selectedMonth.slice(5))}월`
-    : '업무일지'
+  useEffect(() => {
+    const controller = new AbortController()
+    refreshIndex(controller.signal).catch(cause => { if (!controller.signal.aborted) setError(errorText(cause)) })
+    return () => controller.abort()
+  }, [refreshIndex, refreshKey])
 
-  // 프로그래밍으로 월을 선택하는 경우(새 월 생성 등)에는 문서 목록도 펼칩니다.
-  const selectMonth = (month: string) => {
-    setSelectedMonth(month)
-    setExpandedMonths(prev => prev.includes(month) ? prev : [...prev, month])
-    setExpanded(prev => {
-      const year = Number(month.slice(0, 4))
-      return prev.includes(year) ? prev : [...prev, year]
-    })
-    setSelectedId(null)
-    setSearch('')
-    setPdfError(false)
-  }
-  const toggleMonth = (month: string) => {
-    setExpandedMonths(prev => prev.includes(month) ? prev.filter(key => key !== month) : [...prev, month])
-    setSelectedMonth(month)
-    setSelectedId(null)
-    setSearch('')
-    setPdfError(false)
-  }
-  const selectEntry = (id: string) => {
-    const entry = entries.find(item => item.id === id)
-    if (entry) {
-      const month = keyOf(entry.year, entry.month)
-      setSelectedMonth(month)
-      setExpandedMonths(prev => prev.includes(month) ? prev : [...prev, month])
-      setExpanded(prev => prev.includes(entry.year) ? prev : [...prev, entry.year])
+  useEffect(() => {
+    if (!selectedDate) return
+    const controller = new AbortController()
+    let running = false
+    const refresh = async () => {
+      if (running || saving) return
+      running = true
+      try {
+        const value = await workLogRequest<WorkLogDetail>(`/${selectedDate}`, { signal: controller.signal })
+        if (controller.signal.aborted) return
+        setDetail(value)
+        if (!notesDirty.current) setNotes(value.notes)
+        setRevision(previous => previous && value.revisions.some(item => item.revision === previous) ? previous : (value.revisions[0]?.revision ?? null))
+        setError('')
+        await refreshIndex(controller.signal)
+      } catch (cause) { if (!controller.signal.aborted) setError(errorText(cause)) }
+      finally { running = false }
     }
-    setSelectedId(id)
-    setPdfError(false)
+    void refresh()
+    const timer = window.setInterval(() => { if (!document.hidden) void refresh() }, 8000)
+    window.addEventListener('focus', refresh)
+    return () => { controller.abort(); window.clearInterval(timer); window.removeEventListener('focus', refresh) }
+  }, [selectedDate, refreshKey, saving, refreshIndex])
+
+  useEffect(() => {
+    const guard = (event: Event) => {
+      if (saving || (notesDirty.current && !window.confirm('저장하지 않은 비고가 있습니다. 이동하시겠습니까?'))) event.preventDefault()
+    }
+    const unload = (event: BeforeUnloadEvent) => { if (notesDirty.current || saving) { event.preventDefault(); event.returnValue = '' } }
+    window.addEventListener('app-before-page-change', guard)
+    window.addEventListener('beforeunload', unload)
+    return () => { window.removeEventListener('app-before-page-change', guard); window.removeEventListener('beforeunload', unload) }
+  }, [saving])
+
+  const selectDate = (date: string) => {
+    if (saving) return
+    if (date === selectedDate) { setView('events'); return }
+    if (notesDirty.current && !window.confirm('저장하지 않은 비고가 있습니다. 다른 일지를 열겠습니까?')) return
+    notesDirty.current = false
+    setSelectedDate(date); setDetail(null); setNotes(''); setRevision(null); setView('events'); setError(''); setActionError(''); setMessage('')
+    setExpanded(previous => [...new Set([...previous, date.slice(0, 4), date.slice(0, 7)])])
   }
-
-  const create = () => {
-    if (!selectedMonth) {
-      const answer = window.prompt('생성할 연월을 입력하세요. (예: 2026-03)')?.trim()
-      if (!answer || !/^\d{4}-(0[1-9]|1[0-2])$/.test(answer)) return
-      if (months.includes(answer)) { selectMonth(answer); return }
-      setMonths(prev => [...prev, answer].sort())
-      setExpanded(prev => [...new Set([...prev, Number(answer.slice(0, 4))])])
-      selectMonth(answer)
-      return
-    }
-
-    const answer = window.prompt(`${selectedMonth}에 추가할 날짜를 입력하세요. (1~31)`)?.trim()
-    if (!answer) return
-    const day = Number(answer)
-    const [year, month] = selectedMonth.split('-').map(Number)
-    const date = new Date(year, month - 1, day)
-    if (!Number.isInteger(day) || date.getFullYear() !== year ||
-      date.getMonth() !== month - 1 || date.getDate() !== day) {
-      window.alert('유효한 날짜를 입력하세요.')
-      return
-    }
-    const id = `${selectedMonth}-${String(day).padStart(2, '0')}`
-    if (entries.some(entry => entry.id === id)) { selectEntry(id); return }
-    // 탐색기는 매년 12개월을 보여주되, 실제로 생성한 월만 저장합니다.
-    setMonths(prev => prev.includes(selectedMonth) ? prev : [...prev, selectedMonth].sort())
-    setEntries(prev => [...prev, { id, year, month, day }])
-    selectEntry(id)
-  }
-
-  const remove = () => {
-    if (selectedId) {
-      if (!window.confirm('선택한 업무일지를 목록에서 삭제하시겠습니까? PDF 원본 파일은 삭제되지 않습니다.')) return
-      setEntries(prev => prev.filter(entry => entry.id !== selectedId))
-      setSelectedId(null)
-    } else if (selectedMonth && months.includes(selectedMonth)) {
-      if (!window.confirm('선택한 월과 해당 월의 업무일지 목록을 삭제하시겠습니까? PDF 원본 파일은 삭제되지 않습니다.')) return
-      setMonths(prev => prev.filter(month => month !== selectedMonth))
-      setEntries(prev => prev.filter(entry => keyOf(entry.year, entry.month) !== selectedMonth))
-      setSelectedMonth(null)
-    }
+  const confirm = async () => {
+    if (!detail || saving) return
+    const date = detail.date
+    setSaving(true); setActionError(''); setMessage('')
+    try {
+      const value = await workLogRequest<WorkLogDetail>(`/${date}/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes, expected_event_id: detail.last_event_id }) })
+      if (!alive.current || selectedRef.current !== date) return
+      notesDirty.current = false
+      setDetail(value); setNotes(value.notes); setRevision(value.revisions[0]?.revision ?? null); setView('pdf')
+      setMessage('업무일지 PDF를 저장했습니다.')
+      await refreshIndex()
+    } catch (cause) {
+      if (!alive.current) return
+      setActionError(cause instanceof WorkLogError && cause.status === 409
+        ? '확인 중 새 업무가 추가되었습니다. 최신 내역을 확인한 뒤 다시 확인해 주세요.' : errorText(cause))
+      if (cause instanceof WorkLogError && cause.status === 409) {
+        try { const value = await workLogRequest<WorkLogDetail>(`/${date}`); if (alive.current && selectedRef.current === date) setDetail(value) } catch { /* 원래 오류를 유지합니다. */ }
+      }
+    } finally { if (alive.current) setSaving(false) }
   }
 
-  const edit = () => {
-    if (!selected) { window.alert('먼저 수정할 업무일지를 선택하세요.'); return }
-    const answer = window.prompt('변경할 날짜를 입력하세요. (1~31)', String(selected.day))?.trim()
-    if (!answer) return
-    const day = Number(answer)
-    const date = new Date(selected.year, selected.month - 1, day)
-    if (!Number.isInteger(day) || date.getFullYear() !== selected.year ||
-      date.getMonth() !== selected.month - 1 || date.getDate() !== day) {
-      window.alert('유효한 날짜를 입력하세요.')
-      return
-    }
-    const id = `${keyOf(selected.year, selected.month)}-${String(day).padStart(2, '0')}`
-    if (id !== selected.id && entries.some(entry => entry.id === id)) {
-      window.alert('같은 날짜의 일지가 이미 있습니다.')
-      return
-    }
-    setEntries(prev => prev.map(entry => entry.id === selected.id ? { ...entry, id, day } : entry))
-    if (pdfOverrides[selected.id]) {
-      setPdfOverrides(prev => {
-        const next = { ...prev, [id]: prev[selected.id] }
-        if (id !== selected.id) delete next[selected.id]
-        return next
-      })
-    }
-    setSelectedId(id)
-  }
+  const dates = index.filter(item => `${item.date} ${displayDate(item.date)}`.includes(search.trim()))
+  const years = [...new Set(dates.map(item => item.date.slice(0, 4)))].sort().reverse()
+  const toggle = (key: string) => setExpanded(previous => previous.includes(key) ? previous.filter(item => item !== key) : [...previous, key])
+  const savedRevision = detail?.revisions.find(item => item.revision === revision)
+  const changed = !!detail && (!detail.revisions.length || detail.has_unconfirmed_changes || notes !== detail.notes)
 
-  const savePdf = () => {
-    if (!selectedPdf || !selected) return
-    const link = document.createElement('a')
-    link.href = selectedPdf
-    link.download = `${selected.id}.pdf`
-    link.click()
-  }
-
-  const upload = (file?: File) => {
-    if (!selected || !file) return
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      window.alert('PDF 파일만 선택할 수 있습니다.')
-      return
-    }
-    const url = URL.createObjectURL(file)
-    blobUrls.current.push(url)
-    setPdfOverrides(prev => ({ ...prev, [selected.id]: url }))
-    setPdfError(false)
-  }
-
-  return <section className={`worklog ${selected ? 'worklog--pdf' : 'worklog--list'}`}>
-    <header className="worklog-heading">
-      <div>
-        <h1>업무일지</h1>
-        <p>{monthLabel} 업무일지 목록</p>
-      </div>
-      <div className="worklog-heading-actions">
-        <button className="worklog-btn worklog-btn--primary" onClick={create}>생성</button>
-        <button className="worklog-btn" onClick={edit} disabled={!selected}>수정</button>
-      </div>
+  return <section className="worklog">
+    <header className="worklog-heading"><div><h1>일일 업무일지</h1><p>처리한 업무를 확인하고 PDF 기록으로 보관합니다.</p></div>
+      <div className="worklog-heading-actions"><button type="button" className="worklog-btn" disabled={!today || saving} onClick={() => selectDate(today)}>오늘 업무</button>
+        <button type="button" className="worklog-btn" disabled={saving} onClick={() => setRefreshKey(value => value + 1)}>새로고침</button>
+        <button type="button" className="worklog-btn" onClick={() => setView('template')}>원본 양식</button></div>
     </header>
-
+    {error && <div className="worklog-error" role="alert">{error}</div>}
+    {actionError && <div className="worklog-error" role="alert">{actionError}</div>}
+    {message && <div className="worklog-success" role="status">{message}</div>}
     <div className="worklog-layout">
-      <aside className="worklog-explorer" aria-label="업무일지 탐색기">
-        <nav className="worklog-tree" aria-label="연도 및 월">
-          <div className="worklog-tree-label">
-            <strong>연도 / 월</strong>
-            <span className="worklog-chevron worklog-chevron--closed" aria-hidden="true" />
-          </div>
-          {years.map(year => <div key={year}>
-            <button
-              className="worklog-tree-row worklog-tree-year"
-              onClick={() => setExpanded(prev => prev.includes(year) ? prev.filter(value => value !== year) : [...prev, year])}
-              aria-expanded={expanded.includes(year)}
-              aria-controls={`worklog-year-${year}`}
-            >
-              <span>{year}년</span><span className={`worklog-chevron ${expanded.includes(year) ? '' : 'worklog-chevron--closed'}`} aria-hidden="true" />
-            </button>
-            {expanded.includes(year) && <div id={`worklog-year-${year}`} className="worklog-year-months">
-              {Array.from({ length: 12 }, (_, index) => index + 1).map(month => {
-                const key = keyOf(year, month)
-                const isOpen = expandedMonths.includes(key)
-                const documents = entries.filter(entry => keyOf(entry.year, entry.month) === key)
-                  .sort((a, b) => a.day - b.day)
-                return <div key={key} className="worklog-month-group">
-                  <button
-                    className={`worklog-tree-row worklog-tree-month ${selectedMonth === key ? 'is-selected' : ''}`}
-                    onClick={() => toggleMonth(key)}
-                    aria-expanded={isOpen}
-                    aria-controls={`worklog-documents-${key}`}
-                  >
-                    <span>{month}월</span>
-                    <span className={`worklog-chevron ${isOpen ? '' : 'worklog-chevron--closed'}`} aria-hidden="true" />
-                  </button>
-                  {isOpen && <div id={`worklog-documents-${key}`} className="worklog-month-entries" role="group" aria-label={`${year}년 ${month}월 문서 목록`}>
-                    {documents.map(entry => <button
-                      key={entry.id}
-                      className={`worklog-tree-file ${selectedId === entry.id ? 'is-selected' : ''}`}
-                      onClick={() => selectEntry(entry.id)}
-                      aria-current={selectedId === entry.id ? 'page' : undefined}
-                      title={`${dateOf(entry)} 업무일지`}
-                    >
-                      <span className="worklog-file-icon" aria-hidden="true" />
-                      <span className="worklog-file-name">{dateOf(entry)} 업무일지</span>
-                    </button>)}
-                    {documents.length === 0 && <p className="worklog-month-empty">등록된 문서가 없습니다.</p>}
-                  </div>}
-                </div>
-              })}
-            </div>}
+      <aside className="worklog-explorer" aria-label="업무일지 탐색기"><div className="worklog-search"><input type="search" aria-label="업무일지 날짜 검색" placeholder="날짜 검색 (YYYY-MM-DD)" value={search} onChange={event => setSearch(event.target.value)} /></div>
+        <nav className="worklog-tree" aria-label="연도 및 월">{years.map(year => <div key={year}>
+          <button type="button" className="worklog-tree-row worklog-tree-year" onClick={() => toggle(year)} aria-expanded={expanded.includes(year)}><span>{year}년</span><span>{expanded.includes(year) ? '▲' : '▼'}</span></button>
+          {expanded.includes(year) && [...new Set(dates.filter(item => item.date.startsWith(year)).map(item => item.date.slice(0, 7)))].sort().reverse().map(month => <div key={month} className="worklog-month-group">
+            <button type="button" className="worklog-tree-row worklog-tree-month" onClick={() => toggle(month)} aria-expanded={expanded.includes(month)}><span>{Number(month.slice(5))}월</span><span>{expanded.includes(month) ? '▲' : '▼'}</span></button>
+            {expanded.includes(month) && <div className="worklog-month-entries">{dates.filter(item => item.date.startsWith(month)).sort((a, b) => b.date.localeCompare(a.date)).map(item => <button type="button" key={item.date} disabled={saving}
+              className={`worklog-tree-file ${selectedDate === item.date ? 'is-selected' : ''}`} aria-current={selectedDate === item.date ? 'page' : undefined} onClick={() => selectDate(item.date)}>
+              <span className="worklog-file-icon" aria-hidden="true" /><span><strong>{displayDate(item.date)}{item.date === today ? ' · 오늘' : ''}</strong><small>{item.event_count}건 · {item.has_unconfirmed_changes ? '확인 대기' : 'PDF 저장됨'}</small></span>
+            </button>)}</div>}
           </div>)}
-        </nav>
-        <div className="worklog-explorer-actions">
-          <div className="worklog-action-row">
-            <button className="worklog-btn worklog-btn--primary" onClick={create}>생성</button>
-            <button className="worklog-btn" onClick={remove}
-              disabled={!selectedId && !(selectedMonth && months.includes(selectedMonth))}>삭제</button>
-            <button className="worklog-btn" onClick={edit} disabled={!selected}>수정</button>
-          </div>
-          <input
-            aria-label="업무일지 검색"
-            placeholder="검색어 입력"
-            value={search}
-            onChange={event => setSearch(event.target.value)}
-          />
-        </div>
+        </div>)}{!years.length && <p className="worklog-message">{search ? '검색 결과가 없습니다.' : '목록을 불러오는 중입니다…'}</p>}</nav>
+        <p className="worklog-explorer-note">업무 기록과 저장한 PDF는 재실행 후에도 보관됩니다.</p>
       </aside>
-
-      <main className="worklog-content">
-        {!selected ? <>
-          <div className="worklog-content-head">
-            <h2>{selectedMonth ? `${monthLabel} 업무일지` : '업무일지'}</h2>
-            <span className="worklog-count">총 {visibleEntries.length}건</span>
-          </div>
-          <div className="worklog-list">
-            {visibleEntries.map(entry => {
-              const sampleIndex = initialEntries.findIndex(item => item.id === entry.id)
-              const status = sampleIndex >= 0 ? sampleStatuses[sampleIndex] : '대기'
-              return <button key={entry.id} className="worklog-list-row" onClick={() => selectEntry(entry.id)}>
-                <span className="worklog-entry-name">{dateOf(entry)} 업무일지</span>
-                <span className="worklog-entry-meta">
-                  <span className="worklog-status">{status}</span>
-                  <time>{dateOf(entry)}{sampleIndex >= 0 ? ' 08:00' : ''}</time>
-                </span>
-              </button>
-            })}
-            {selectedMonth && visibleEntries.length === 0 &&
-              <p className="worklog-empty-list">{search ? '검색 결과가 없습니다.' : '해당 월에 등록된 업무일지가 없습니다.'}</p>}
-            {!selectedMonth && <p className="worklog-empty-list">왼쪽에서 연도와 월을 선택하세요.</p>}
-          </div>
-        </> : <>
-          <div className="worklog-content-head">
-            <h2>{monthLabel} 업무일지</h2>
-            <div className="worklog-document-actions">
-              <button className="worklog-btn" onClick={savePdf} disabled={!selectedPdf}>저장</button>
-              <button className="worklog-btn" onClick={() => fileInput.current?.click()}>불러오기</button>
-              <button className="worklog-btn" onClick={() => selectedPdf && window.open(selectedPdf, '_blank', 'noopener,noreferrer')}
-                disabled={!selectedPdf}>출력</button>
-            </div>
-          </div>
-          <input ref={fileInput} className="worklog-hidden-input" type="file" accept="application/pdf,.pdf"
-            onChange={event => { upload(event.target.files?.[0]); event.target.value = '' }} />
-          {selectedPdf && !pdfError
-            ? <iframe key={selectedPdf} title={titleOf(selected)} src={selectedPdf} className="worklog-pdf" onError={() => setPdfError(true)} />
-            : <div className="worklog-no-pdf">
-                <strong>{titleOf(selected)}</strong>
-                <span>연결된 PDF 파일이 없습니다. ‘불러오기’로 PDF를 선택하세요.</span>
-              </div>}
-          {selectedPdf && <p className="worklog-pdf-note">‘저장’은 PDF 다운로드, ‘출력’은 PDF를 새 창에서 여는 기능입니다.</p>}
-        </>}
+      <main className="worklog-content" aria-busy={saving || (!detail && !error)}>
+        <div className="worklog-content-head"><h2>{selectedDate ? `${displayDate(selectedDate)} 업무일지` : '업무일지'}</h2><span className="worklog-count">총 {detail?.events.length ?? 0}건</span></div>
+        {!detail ? <p className="worklog-message">{error ? '업무일지를 불러오지 못했습니다. 새로고침해 주세요.' : '업무일지를 불러오는 중입니다…'}</p>
+              : <><div className="worklog-events-scroll"><EventRows events={detail.events} />{!detail.events.length && <p className="worklog-message">아직 처리한 업무가 없습니다. 업무가 완료되면 자동으로 기록됩니다.</p>}</div>
+                <div className="worklog-confirm"><label htmlFor="worklog-notes">비고</label><textarea id="worklog-notes" maxLength={20000} rows={3} value={notes} disabled={saving}
+                  onChange={event => { notesDirty.current = event.target.value !== detail.notes; setNotes(event.target.value) }} placeholder="추가로 기록할 내용을 입력하세요." />
+                  <div><span>{detail.revisions.length ? `저장한 PDF ${detail.revisions.length}개${changed ? ' · 추가 확인 필요' : ''}` : '확인하면 업무 내역과 비고를 PDF로 저장합니다.'}</span>
+                    <button type="button" className="worklog-btn worklog-btn--primary" disabled={saving || !changed} onClick={() => void confirm()}>{saving ? 'PDF 저장 중…' : '확인'}</button></div>
+                </div></>}
       </main>
+      <aside className="worklog-preview-pane" aria-label="업무일지 PDF">
+        <div className="worklog-content-head"><h2>{view === 'template' ? '원본 양식' : view === 'pdf' ? '저장한 PDF' : 'PDF 미리보기'}</h2></div>
+        <div className="worklog-document-toolbar"><div className="worklog-view-tabs">
+          <button type="button" className={view === 'events' ? 'is-active' : ''} onClick={() => setView('events')}>현재 작성본</button>
+          <button type="button" className={view === 'pdf' ? 'is-active' : ''} disabled={!detail?.revisions.length} onClick={() => setView('pdf')}>저장한 PDF</button>
+        </div></div>
+        {view === 'template' ? <PdfView path="/template" filename="일일 업무일지 양식.pdf" />
+          : !detail ? <p className="worklog-message">{error ? '업무일지를 불러오지 못했습니다.' : '업무일지를 불러오는 중입니다…'}</p>
+            : view === 'pdf' && savedRevision ? <>
+              <div className="worklog-document-toolbar"><select aria-label="저장한 업무일지 버전" value={revision ?? ''} onChange={event => setRevision(Number(event.target.value))}>
+                {detail.revisions.map(item => <option key={item.revision} value={item.revision}>{item.revision}차 · {displayTimestamp(item.confirmed_at)} · {item.event_count}건</option>)}
+              </select></div>
+              <p className="worklog-saved-note">{displayTimestamp(savedRevision.confirmed_at)} 확인 · {savedRevision.event_count}건{detail.has_unconfirmed_changes ? ' · 추가 업무 확인 필요' : ''}</p>
+              <PdfView path={`/${detail.date}/revisions/${savedRevision.revision}/pdf`} filename={`${detail.date}_업무일지_${savedRevision.revision}차.pdf`} />
+            </> : <WorkLogPreview key={detail.date} date={detail.date} notes={notes} eventId={detail.last_event_id} refreshKey={refreshKey} />}
+      </aside>
     </div>
-    <p className="worklog-storage-note">
-      시범 화면: 목록과 상태 표시는 예시이며 목록 변경은 이 브라우저에만 저장됩니다. 불러온 PDF는 새로고침 후 유지되지 않습니다.
-    </p>
   </section>
 }

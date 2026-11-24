@@ -1,4 +1,8 @@
 __pycache__/
 *.py[cod]
 /project_ai_tf.db
-/tests
+/tests/*
+!/tests/test_prosecution_draft.py
+!/tests/test_prosecution_documents.py
+!/tests/test_worklog*.py
+/worklogs.sqlite3*

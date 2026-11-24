@@ -8,6 +8,7 @@ import TrainingManagementPage from './features/training/TrainingManagementPage'
 import { resourceTabs } from './features/resource/resourceTabs'
 import type { ResourceTabId } from './features/resource/resourceTabs'
 import WorkLogManagement from './features/worklog/WorkLogManagement'
+import { useWorkLogDay } from './features/worklog/useWorkLogDay'
 import { countReviewDocuments, fetchBootstrap } from './features/review/api'
 import ChatLauncher from './features/chatbot/ChatLauncher'
 import LegalChatbot from './features/chatbot/LegalChatbot'
@@ -102,7 +103,6 @@ const demoDashboard = {
 }
 
 // 예시 데이터 (API 생기면 교체)
-const demoTravelCount = 16
 const demoWorkAlerts: { title: string; body: string; page: HomeDestination }[] = [
   { title: '교육훈련 일정 관리', body: '10월 5일 1형 훈련 일정 관리가 필요합니다.', page: 'training' },
   { title: '홍보메일 전송', body: '9월 28일, 훈련 대상자 134명을 대상으로 홍보메일 발송을 완료했습니다.', page: 'training' },
@@ -185,8 +185,13 @@ function SidebarClock() {
 }
 
 function App() {
+  useWorkLogDay()
   const [homeRevision, setHomeRevision] = useState(0)
-  const [activePage, setActivePage] = useState<PageId>('home')
+  const [activePage, setActivePageState] = useState<PageId>('home')
+  const setActivePage = (page: PageId) => {
+    if (page !== activePage && !window.dispatchEvent(new Event('app-before-page-change', { cancelable: true }))) return
+    setActivePageState(page)
+  }
   const [resourceLanding, setResourceLanding] = useState<ResourceTabId>('organization')
   const [trainingLanding, setTrainingLanding] = useState<TrainingTabId>('schedule')
   const [trainingScheduleFocus, setTrainingScheduleFocus] = useState<number | null>(null)

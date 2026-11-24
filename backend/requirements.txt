@@ -1,4 +1,6 @@
 fastapi
+Pillow>=9.1  # PDF dependency and desktop Windows icon conversion
+PyMuPDF>=1.26,<2  # Fill the daily work-log PDF template and embed Korean text
 argon2-cffi>=23.1.0
 uvicorn
 sqlalchemy

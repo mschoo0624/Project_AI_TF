@@ -1,0 +1,5 @@
+.workspace-subtabs { display:flex; align-items:flex-end; gap:3px; flex:none; height:45px; padding:0 11px; border-bottom:1px solid #b8b8bf; background:#fafbff; }
+.workspace-subtab { position:relative; flex:0 0 155px; height:37px; padding:0 6px; border:1px solid #b7b7bd; border-bottom:0; border-radius:14px 14px 0 0; background:#fff; color:#85868c; font-family:inherit; font-size:18px; font-weight:400; text-align:center; white-space:nowrap; cursor:pointer; }
+.workspace-subtab.active { color:#35445a; }
+.workspace-subtab.active::after { position:absolute; right:18px; bottom:-1px; left:18px; height:3px; border-radius:2px; background:var(--review-blue,#087af4); content:''; }
+.workspace-subtab:focus-visible { outline:2px solid var(--review-blue,#087af4); outline-offset:-2px; }

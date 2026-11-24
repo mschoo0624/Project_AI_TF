@@ -41,6 +41,8 @@ python -m scripts.ask "예비군 훈련은 1년에 최대 며칠까지 받나요
 python -m scripts.ask --search-only "직장 보장"      # LLM 없이 조문만 확인
 ```
 
+데스크톱 빌드(`desktop`에서 `npm run build`)는 전처리와 `scripts.build_index --if-needed`를 자동 실행하고 생성된 세 파일을 배포 폴더에 포함합니다. `--if-needed`는 조문 원문 해시·모델·조문 순서 및 벡터 무결성이 같을 때만 기존 인덱스를 재사용합니다. 원본 법령이나 모델이 달라지면 다시 생성하며, 실패하면 데스크톱 빌드를 중단합니다.
+
 법령을 추가/교체할 때: 국가법령정보센터(law.go.kr)에서 법령을 **한글(.doc)** 로 저장해 `data/raw/`에 넣고
 1), 2) 단계를 다시 실행하면 됩니다.
 

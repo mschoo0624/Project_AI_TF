@@ -10,6 +10,80 @@ from legalrag.tokenizer import tokenize
 
 RAW = Path(__file__).resolve().parent.parent / "data" / "raw"
 
+
+def test_index_reuse_rejects_changed_content_model_and_broken_vectors(tmp_path):
+    import hashlib
+    import json
+    from types import SimpleNamespace
+    import numpy as np
+    from legalrag.chunker import Chunk
+    from scripts.build_index import reusable
+
+    source = tmp_path / 'laws.jsonl'
+    source.write_text('original', encoding='utf-8')
+    cfg = SimpleNamespace(processed_file=source, index_dir=tmp_path, embedding_model='test-model')
+    articles = [SimpleNamespace(id='one')]
+    chunks = [Chunk(0, i, f'제{i + 1}항', 'test', False, 2) for i in range(2)]
+    info = {'ids': ['one#0', 'one#1'], 'embedding_model': 'test-model',
+            'source_sha256': hashlib.sha256(source.read_bytes()).hexdigest()}
+    (tmp_path / 'index_info.json').write_text(json.dumps(info), encoding='utf-8')
+    np.save(tmp_path / 'embeddings.npy', np.ones((2, 3), dtype='float32'))
+    assert reusable(cfg, articles, chunks)
+    assert not reusable(cfg, articles, list(reversed(chunks)))
+    source.write_text('changed with same article ID', encoding='utf-8')
+    assert not reusable(cfg, articles, chunks)
+    source.write_text('original', encoding='utf-8')
+    cfg.embedding_model = 'different-model'
+    assert not reusable(cfg, articles, chunks)
+    cfg.embedding_model = 'test-model'
+    np.save(tmp_path / 'embeddings.npy', np.ones((1, 3), dtype='float32'))
+    assert not reusable(cfg, articles, chunks)
+    np.save(tmp_path / 'embeddings.npy', np.full((2, 3), float('nan')))
+    assert not reusable(cfg, articles, chunks)
+    (tmp_path / 'embeddings.npy').write_bytes(b'broken')
+    assert not reusable(cfg, articles, chunks)
+
+
+def test_chunk_index_build_reuse_and_content_change(tmp_path, monkeypatch):
+    import json
+    from types import SimpleNamespace
+    import numpy as np
+    from legalrag import store
+    from legalrag.chunker import build_chunks, chunk_id
+    from scripts import build_index
+
+    articles = parse_law_text(
+        '예비군법\n[시행 2026. 8. 28.] [법률 제21388호, 2026. 2. 27., 일부개정]\n'
+        '제1조(시험용 조문) ① ' + '첫 번째 항의 내용. ' * 30 + '\n② ' + '두 번째 항의 내용. ' * 30,
+        'synthetic',
+    )
+    chunks = build_chunks(articles)
+    assert len(chunks) > len(articles)
+    cfg = SimpleNamespace(processed_file=tmp_path / 'laws.jsonl', index_dir=tmp_path / 'index', embedding_model='test-model')
+    store.save_articles(cfg.processed_file, articles)
+    calls = []
+
+    class Encoder:
+        def encode(self, texts, **kwargs):
+            calls.append(texts)
+            return np.ones((len(texts), 3), dtype='float32')
+
+    monkeypatch.setattr(store, 'load_embedding_model', lambda _: Encoder())
+    monkeypatch.setattr(build_index, 'Config', lambda: cfg)
+    monkeypatch.setattr('sys.argv', ['build_index', '--if-needed'])
+    build_index.main()
+    assert len(calls) == 1 and len(calls[0]) == len(chunks)
+    assert '제1항' in calls[0][0] and '제2항' in calls[0][1]
+    info = json.loads((cfg.index_dir / 'index_info.json').read_text(encoding='utf-8'))
+    assert info['ids'] == [chunk_id(articles, chunk) for chunk in chunks]
+    assert store.load_embeddings(cfg, articles, chunks).shape == (len(chunks), 3)
+    build_index.main()
+    assert len(calls) == 1
+    articles[0].text = articles[0].text.replace('첫 번째', '변경된 첫 번째')
+    store.save_articles(cfg.processed_file, articles)
+    build_index.main()
+    assert len(calls) == 2
+
 SAMPLE = """예비군법
 [시행 2026. 8. 28.] [법률 제21388호, 2026. 2. 27., 일부개정]
 

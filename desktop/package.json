@@ -1,0 +1,14 @@
+{
+  "name": "onbitnuri-demo",
+  "version": "1.0.0",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "build": "..\\backend\\.venv\\Scripts\\python.exe build.py",
+    "test": "node --test test/*.test.cjs"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "44.7.1"
+  }
+}

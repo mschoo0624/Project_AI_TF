@@ -6,6 +6,7 @@ from user.app.models.annual_status import AnnualStatus
 from user.app.models.education import Education
 from user.app.models.person import Person
 from user.app.models.postpoment import Postponement
+from user.app.models.prosecution_document import ProsecutionDocument
 from user.app.models.squad import Squad
 from user.app.models.transfer_intake import TransferIntake
 from user.app.models.training_recalculation import (
@@ -33,6 +34,7 @@ __all__ = [
     "Education",
     "Person",
     "Postponement",
+    "ProsecutionDocument",
     "Squad",
     "TransferIntake",
     "TrainingCarryover",

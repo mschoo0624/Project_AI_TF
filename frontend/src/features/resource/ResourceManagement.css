@@ -135,7 +135,7 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
 .rm-tab-pane { flex:1; min-height:0; overflow:hidden; }
 .rm-empty-pane { background:#f9fbff; }
 .rm-tab-pane>.review-management { height:100%; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
-.rm-tab-pane .review-inner-tabs { flex:none; height:calc(var(--rm-unit) * 45); }
+.rm-tab-pane .workspace-subtabs { flex:none; height:calc(var(--rm-unit) * 45); }
 .rm-tab-pane .review-main-content { flex:1; min-height:0; overflow:auto; padding:calc(var(--rm-unit) * 9) 28px calc(var(--rm-unit) * 14) 12px; }
 .rm-tab-pane .review-inbox-grid { height:100%; min-height:0; }
 .rm-tab-pane .review-confirm-panel { min-height:0; }
@@ -229,51 +229,6 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
   .rm-transfer-person-details { gap:10px; }
 }
 .rm-empty-pane { min-height:calc(100vh - var(--topbar-height) - 56px); background:#f9fbff; }
-.rm-prosecution-page { min-height:calc(100vh - var(--topbar-height) - 56px); height:100%; overflow-y:auto; padding:28px 30px 48px; background:#f9fbff; }
-.rm-prosecution-heading { display:flex; align-items:end; justify-content:space-between; gap:24px; margin-bottom:24px; }
-.rm-prosecution-heading h1 { margin:2px 0 8px; color:#202b3b; font-size:28px; }
-.rm-prosecution-heading p { margin:0; color:#7b8797; }
-.rm-prosecution-heading>strong { color:#c43d35; font-size:32px; }
-.rm-prosecution-eyebrow { color:#c43d35!important; font-size:11px; font-weight:700; letter-spacing:.08em; }
-.rm-prosecution-table-wrap { overflow:auto; border:1px solid #e2c5c2; border-radius:8px; background:#fff; }
-.rm-training-review-section { margin-top:32px; padding-top:24px; border-top:1px solid #d9e0e8; }
-.rm-training-review-section>header { display:flex; align-items:end; justify-content:space-between; gap:20px; margin-bottom:16px; }
-.rm-training-review-section h2 { margin:0 0 5px; color:#354255; font-size:18px; }
-.rm-training-review-section p { margin:0; color:#7b8797; font-size:12px; }
-.rm-training-review-section>header>strong { color:#52677c; font-size:20px; }
-.rm-training-review-table-wrap { overflow:auto; border:1px solid #d9e0e8; border-radius:8px; background:#fff; }
-.rm-training-review-table-wrap table { width:100%; border-collapse:collapse; text-align:left; }
-.rm-training-review-table-wrap th { padding:12px 16px; background:#f0f4f6; color:#52677c; font-size:11px; }
-.rm-training-review-table-wrap td { padding:14px 16px; border-top:1px solid #e6ecef; color:#354255; }
-.rm-training-review-table-wrap td small { display:block; margin-top:4px; color:#8a96a5; font-size:11px; }
-.rm-prosecution-table { width:100%; border-collapse:collapse; text-align:left; }
-.rm-prosecution-table th { padding:12px 16px; background:#fff4f2; color:#8f514d; font-size:11px; }
-.rm-prosecution-table td { padding:14px 16px; border-top:1px solid #f0e3e1; color:#354255; }
-.rm-prosecution-table td small { display:block; margin-top:4px; color:#8a96a5; font-size:11px; }
-.rm-prosecution-badge { display:inline-block; padding:5px 8px; border-radius:4px; background:#ffe4e1; color:#b3342e; font-size:11px; font-weight:700; }
-.rm-prosecution-row { cursor:pointer; }
-.rm-prosecution-row:hover td,.rm-prosecution-row:focus td { background:#fff7f5; outline:0; }
-.rm-prosecution-row:focus-visible { outline:2px solid #c43d35; outline-offset:-2px; }
-.rm-prosecution-profile { position:fixed; inset:7vh 12vw; z-index:60; display:flex; flex-direction:column; overflow:hidden; border:1px solid #e2c5c2; border-radius:10px; background:#fff; box-shadow:0 20px 60px rgba(38,28,28,.25); }
-.rm-prosecution-profile::before { content:''; position:fixed; inset:0; z-index:-1; background:rgba(20,30,25,.38); }
-.rm-prosecution-profile>header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px 24px; background:#fff8f6; border-bottom:1px solid #f0d9d6; }
-.rm-prosecution-profile>header p { margin:0 0 5px; color:#c43d35; font-size:10px; font-weight:700; letter-spacing:.08em; }
-.rm-prosecution-profile>header h2 { margin:0; color:#202b3b; font-size:24px; }
-.rm-prosecution-profile>header span { display:block; margin-top:5px; color:#7b8797; font-size:12px; }
-.rm-prosecution-profile>header button { width:32px; height:32px; border:1px solid #e2c5c2; border-radius:5px; background:#fff; color:#8f514d; font-size:20px; }
-.rm-prosecution-profile-body { min-height:0; overflow:auto; padding:20px 24px 30px; }
-.rm-prosecution-profile-body h3 { margin:20px 0 9px; color:#354255; font-size:14px; }
-.rm-prosecution-profile-reason { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid #f0d1cd; border-radius:6px; background:#fff7f5; color:#8f514d; font-size:12px; }
-.rm-prosecution-profile-reason span { color:#b3342e; font-weight:700; }
-.rm-prosecution-progress { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-.rm-prosecution-progress>div { display:grid; grid-template-columns:55px minmax(0,1fr) auto; align-items:center; gap:8px; padding:10px; border:1px solid #e2e7ef; border-radius:6px; background:#fafcff; color:#344153; font-size:11px; }
-.rm-prosecution-progress small { overflow:hidden; color:#8a96a5; text-overflow:ellipsis; white-space:nowrap; }
-.rm-prosecution-progress b { color:#536b8e; font-size:10px; white-space:nowrap; }
-.rm-prosecution-progress>div.is-risk { border-color:#e1aaa5; background:#fff5f3; }
-.rm-prosecution-history { overflow:auto; border:1px solid #e2e7ef; border-radius:7px; }
-.rm-prosecution-history table { width:100%; min-width:620px; border-collapse:collapse; font-size:11px; }
-.rm-prosecution-history th { padding:9px 10px; background:#f7f9fc; color:#657389; text-align:left; }
-.rm-prosecution-history td { padding:10px; border-top:1px solid #e5eaf1; color:#344153; white-space:nowrap; }
 /* 편성인원목록 — 화면 내부 스타일. 다른 기능/전투편성 화면에는 적용하지 않습니다. */
 .rm-roster-layout {
   display:grid;
@@ -306,7 +261,7 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
 }
 .rm-summary-card {
   min-width:0;
-  height:calc(var(--rm-unit) * 130);
+  min-height:calc(var(--rm-unit) * 130);
   padding:14px 11px 10px;
   border:1px solid #d1d4dc;
   border-radius:5px;
@@ -991,3 +946,18 @@ tbody tr:hover,tbody tr:focus { outline:0; background:#f1f8f3; cursor:pointer; }
 .rm-org-edit select { width:100%; padding:calc(var(--rm-unit) * 8); border:1px solid #dce5ef; border-radius:6px; background:#fff; }
 .rm-org-edit>small { flex:1 0 100%; font-size:10px; color:#8b98aa; }
 .rm-org-edit button.rm-org-delete { color:#c44848; border-color:#f1d7d7; }
+
+/* The hold/prosecution rosters share the reservist roster's controls and panels. */
+.rm-tab-pane .review-roster-content { padding:0; overflow:hidden; }
+.rm-managed-roster { font-size:14px; background:#f9fbff; }
+.rm-managed-roster>.rm-roster-main { overflow:hidden; }
+.rm-managed-roster .rm-summary-card>p { overflow:hidden; text-overflow:ellipsis; }
+.rm-roster-filter-check { display:flex; align-items:center; gap:6px; height:40px; padding:0 12px; border:1px solid #dce2ed; border-radius:23px; background:#fff; color:#536175; white-space:nowrap; }
+.rm-roster-filter-check input { width:16px; height:16px; margin:0; accent-color:#2670ed; }
+.rm-managed-roster .rm-managed-table { min-width:780px; }
+.rm-managed-roster .rm-managed-table th { height:40px; background:#f7f9fc; color:#657389; font-size:12px; font-weight:600; }
+.rm-managed-roster .rm-managed-table td { height:48px; background:#fff; }
+.rm-managed-roster .rm-managed-table th:last-child,.rm-managed-roster .rm-managed-table td:last-child { position:static; box-shadow:none; }
+.rm-managed-roster .rm-managed-table tr:hover td { background:#f2f7ff; }
+.rm-managed-roster .rm-managed-table td strong { color:#17233b; font-size:14px; }
+.rm-managed-roster .rm-person-list-toolbar>span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

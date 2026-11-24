@@ -9,6 +9,10 @@ from user.app.database import SessionLocal, engine, init_db
 from user.app.api.dashboard import router as dashboard_router
 from user.app.api.auth import router as auth_router
 from user.app.api.postponements import router as postponements_router
+from user.app.api.prosecution_documents import router as prosecution_documents_router
+from user.app.worklog.router import router as worklogs_router
+from user.app.worklog.middleware import WorkLogMiddleware
+from user.app.worklog.repository import ensure_today
 from user.app.api.reservists import persons_router, router as reservists_router
 from user.app.api.squads import router as squads_router
 from user.app.api.organization import router as organization_router
@@ -30,6 +34,7 @@ logger = logging.getLogger(__name__)
 _training_reconciliation_task: asyncio.Task[None] | None = None
 
 app = FastAPI(title="Project AI TF API")
+app.add_middleware(WorkLogMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -45,6 +50,8 @@ app.include_router(squads_router)
 app.include_router(organization_router)
 app.include_router(dashboard_router)
 app.include_router(postponements_router)
+app.include_router(prosecution_documents_router)
+app.include_router(worklogs_router)
 app.include_router(training_router)
 app.include_router(persons_training_router)
 app.include_router(transfers_router)
@@ -73,6 +80,7 @@ async def _training_reconciliation_loop() -> None:
 async def startup() -> None:
     global _training_reconciliation_task
     init_db()
+    await asyncio.to_thread(ensure_today)
     start_analysis_service()
     initialize_prediction_cache()
     initialize_attendance_cache()

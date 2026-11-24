@@ -61,6 +61,15 @@ router = APIRouter(prefix="/reservists", tags=["reservists"])
 persons_router = APIRouter(prefix="/persons", tags=["persons"])
 
 
+@router.get("/{military_number}/prosecution-draft", dependencies=[Depends(require_viewer)])
+def prosecution_draft_sources(military_number: str, db: Session = Depends(get_db)):
+	from user.app.services.prosecution_draft import draft_sources
+	person = db.get(Person, military_number)
+	if person is None:
+		raise HTTPException(404, '대상자를 찾을 수 없습니다.')
+	return draft_sources(db, person)
+
+
 @router.get("/prosecution-targets", dependencies=[Depends(require_viewer)])
 def list_prosecution_targets(db: Session = Depends(get_db)) -> list[dict[str, object]]:
 	"""List reservists currently marked as prosecution targets by training rules."""
