@@ -68,10 +68,19 @@ class Proposal(BaseModel):
 	notes: list[str] = Field(default_factory=list)
 
 
+class Download(BaseModel):
+	"""채팅 답변에 붙는 내려받기 파일. 파일은 서버가 잠시만 보관한다(exports.TTL_SECONDS)."""
+
+	url: str
+	filename: str
+	rows: int
+
+
 class ChatResponse(BaseModel):
 	message: str
 	ui_actions: list[UiAction] = Field(default_factory=list)
 	proposal: Proposal | None = None
+	download: Download | None = None
 	conditions: list[str] = Field(default_factory=list, description="적용한 조건. 화면에 칩으로 보인다.")
 	unparsed: list[str] = Field(default_factory=list, description="규칙이 이해하지 못한 말")
 	tool: str | None = None

@@ -30,7 +30,7 @@ python -m scripts.build_index
 $env:OPENAI_API_KEY = "sk-..."                       # (A) OpenAI
 $env:OPENAI_MODEL   = "gpt-4o-mini"
 # $env:OPENAI_BASE_URL = "http://localhost:11434/v1"  # (B) Ollama (무료, 로컬)
-# $env:OPENAI_MODEL    = "qwen2.5:7b" # 현재 우리 메인 모델
+# $env:OPENAI_MODEL    = "qwen3:4b-instruct" # 현재 우리 메인 모델
 
 # 4-a) (선택) RAG 단독 테스트 서버 — 프런트엔드 통합 실행에는 필요하지 않습니다.
 python -m uvicorn legalrag.server:app --port 8005

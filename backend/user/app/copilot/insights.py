@@ -4,6 +4,7 @@ data checks and change history. Nothing here writes to the DB."""
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import timedelta, timezone
 from typing import Literal
 
@@ -43,7 +44,24 @@ class StatusArgs(BaseModel):
 		default=None, description="특히 궁금한 항목. 예: '보류자 몇 명' → 보류")
 
 
-def summarize_status(db: Session, args: StatusArgs) -> ToolResult:
+@dataclass
+class StatusSnapshot:
+	"""오늘 현황의 숫자. summarize_status(대화 답변)와 보고서 초안이 같은 계산을 쓴다."""
+
+	people: list[Person]
+	active: list[Person]
+	targets: list[str]          # 올해 교육 대상 군번
+	short: list[str]            # 그중 교육 시간 미달
+	unassigned: list[Person]
+	held: list[Person]
+	approved_by_type: dict[str, int]
+	pending_postponements: int
+	pending_transfers: int
+	prosecution: dict
+	issues: list
+
+
+def collect_status(db: Session) -> StatusSnapshot:
 	people = list(db.scalars(select(Person)).all())
 	active = [person for person in people if person.status == "active"]
 	hours = current_year_hours(db, people)
@@ -53,11 +71,22 @@ def summarize_status(db: Session, args: StatusArgs) -> ToolResult:
 	held = [person for person in people if person.status in HELD_STATUSES or person.mobilization_status in PARTIAL_HOLD]
 	approved = db.execute(select(Postponement.type, func.count(func.distinct(Postponement.person_id)))
 		.where(Postponement.status == "approved").group_by(Postponement.type)).all()
-	approved_by_type = {POSTPONEMENT_TYPES.get(kind, kind): count for kind, count in approved}
-	pending_postponements = db.scalar(select(func.count()).select_from(Postponement).where(Postponement.status == "pending")) or 0
-	pending_transfers = db.scalar(select(func.count()).select_from(TransferIntake).where(TransferIntake.status == "pending")) or 0
-	prosecution = prosecution_reasons(db, people, hours)
-	issues = find_data_issues(db)
+	return StatusSnapshot(
+		people=people, active=active, targets=targets, short=short, unassigned=unassigned, held=held,
+		approved_by_type={POSTPONEMENT_TYPES.get(kind, kind): count for kind, count in approved},
+		pending_postponements=db.scalar(select(func.count()).select_from(Postponement).where(Postponement.status == "pending")) or 0,
+		pending_transfers=db.scalar(select(func.count()).select_from(TransferIntake).where(TransferIntake.status == "pending")) or 0,
+		prosecution=prosecution_reasons(db, people, hours),
+		issues=find_data_issues(db),
+	)
+
+
+def summarize_status(db: Session, args: StatusArgs) -> ToolResult:
+	snap = collect_status(db)
+	people, active, targets, short, unassigned, held = snap.people, snap.active, snap.targets, snap.short, snap.unassigned, snap.held
+	approved_by_type = snap.approved_by_type
+	pending_postponements, pending_transfers = snap.pending_postponements, snap.pending_transfers
+	prosecution, issues = snap.prosecution, snap.issues
 
 	lines = [
 		f"전체 {len(people)}명 (복무 중 {len(active)}명)",

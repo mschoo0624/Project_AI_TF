@@ -13,7 +13,11 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
+from user.app.copilot.approvals import PendingPostponementsArgs
+from user.app.copilot.changes import ChangedPeopleArgs
+from user.app.copilot.exports import ExportArgs
 from user.app.copilot.filters import PersonFilter
+from user.app.copilot.report import StatusReportArgs
 from user.app.copilot.insights import DataCheckArgs, PersonSummaryArgs, RecentChangesArgs, StatusArgs
 from user.app.copilot.tools import (
 	BulkAssignmentArgs, MoveArgs, ReleaseArgs, SearchMembersArgs, SquadShortageArgs, TransferSquadArgs,
@@ -181,6 +185,52 @@ CHANGES_RE = re.compile(
 ADD_SQUAD_RE = re.compile(r"추가|만들|늘려|증편|신설")
 PERSON_INFO_RE = re.compile(r"정보|프로필|상세|이력|요약")
 STATUS_RE = re.compile(r"현황|브리핑|요약|상황")
+REPORT_RE = re.compile(r"보고(?:용|서|\s*자료|\s*문|\s*양식)?")
+REPORT_TOPIC_RE = re.compile(r"현황|정리|작성|초안|만들|써\s*줘|써\s*주")
+APPROVAL_TOPIC_RE = re.compile(r"결재|신청|서류")
+APPROVAL_LIST_RE = re.compile(r"목록|보여|명단|리스트|누구|어떤|뭐|찾아|알려|있는|서류")
+DOCUMENT_GAP_RE = re.compile(r"서류.{0,6}(?:빠진|빠져|없|미비|부족|누락|안\s*냈|미제출)|(?:빠진|미비|부족|누락|미제출).{0,6}서류")
+EXPORT_RE = re.compile(r"[엑액]셀|excel|csv|내려\s*받|다운\s*로드|파일로|내보내", re.IGNORECASE)
+# 내보내기 요청 말투: "엑셀로 줘", "엑셀 파일로 만들어줘", "내보내줘" ('액셀'처럼 자주 틀리는 철자도)
+EXPORT_ACTION_RE = re.compile(
+	r"(?:[엑액]셀|excel|csv)\s*(?:파일)?\S*|내려\s*받\S*|다운\s*로드\S*|파일로\S*|내보내\S*|만들어\S*|뽑아\S*|저장\S*|출력\S*", re.IGNORECASE)
+EVERYONE_RE = re.compile(r"전체|전부|모두|모든")
+# "오늘 수정한 인원", "이번 주에 변경된 사람": 사람이 고친 인원(편성 변경·훈련 기록 수정). 기간 말이 없으면 오늘.
+CHANGED_RE = re.compile(r"(?:수정|변경|바뀐|바꾼|편집|고친|고쳐|업데이트)\s*(?:한|된|됐|했|해서)")
+CHANGED_PEOPLE_RE = re.compile(r"인원|사람|명단|누구|애들|분들|대상자")
+PERIODS = (
+	(re.compile(r"어제"), "어제"), (re.compile(r"이번\s*주"), "이번 주"), (re.compile(r"이번\s*달"), "이번 달"),
+	(re.compile(r"(?:최근|지난)\s*(?:7일|일주일)"), "최근 7일"),
+)
+
+
+PERIOD_WORD_RE = re.compile(r"오늘|금일|어제|이번\s*주|이번\s*달|(?:최근|지난)\s*(?:7일|일주일)")
+# 종류를 가린 말: "오늘 자동편성한 인원"(편성), "결재한 인원"(보류·연기 승인, '결제'는 흔한 오타)
+CHANGE_KINDS = (
+	(re.compile(r"결[재제]\s*(?:한|된|했|처리)"), "결재"),
+	(re.compile(r"(?:자동\s*)?(?:재?편성|배치|배정|해제)\s*(?:한|했|해서)"), "편성"),
+)
+# '편성된 인원'은 지금 편성 상태인 사람을 묻는 기존 조회와 같은 말이라, 기간 말이 있을 때만 "편성한 인원"으로 읽는다.
+PASSIVE_ASSIGN_RE = re.compile(r"(?:자동\s*)?(?:재?편성|배치|배정|해제)\s*된")
+
+
+def parse_period(text: str) -> str:
+	return next((name for pattern, name in PERIODS if pattern.search(text)), "오늘")
+
+
+def parse_changed(text: str) -> tuple[str, str | None] | None:
+	"""'오늘 수정한 인원' → ("오늘", None), '오늘 자동편성한 인원' → ("오늘", "편성"). 해당 말이 아니면 None.
+
+	'자동편성한 인원'처럼 행동을 뜻하는 말은 기간이 없으면 오늘로 본다. '편성된 인원'은 기존 조회와 같은 말이라 기간 말이 있을 때만 읽는다.
+	"""
+	if not CHANGED_PEOPLE_RE.search(text):
+		return None
+	kind = next((name for pattern, name in CHANGE_KINDS if pattern.search(text)), None)
+	if kind is None and PERIOD_WORD_RE.search(text) and PASSIVE_ASSIGN_RE.search(text):
+		kind = "편성"
+	if CHANGED_RE.search(text) or kind is not None:
+		return parse_period(text), kind
+	return None
 STATUS_FOCUS = (("보류", "보류"), ("연기", "연기"), ("고발", "고발"), ("결재", "결재"), ("미편성", "미편성"), ("교육", "교육"))
 
 
@@ -203,6 +253,11 @@ def route(message: str) -> tuple[str, BaseModel] | Unparsed | None:
 		return "check_data_issues", DataCheckArgs()
 	if CHANGES_RE.search(text):
 		return "show_recent_changes", RecentChangesArgs()
+	if EXPORT_RE.search(text):
+		return _route_export(text)
+	changed = parse_changed(text)
+	if changed is not None:
+		return "list_changed_people", ChangedPeopleArgs(period=changed[0], kind=changed[1])
 	if MOVE_RE.search(text) or AVOID_PLATOON_RE.search(text):
 		# 한 사람을 다른 분대로 옮긴다. 이름이 없으면 라우터가 직전 답변의 한 사람으로 채운다.
 		avoid = AVOID_PLATOON_RE.search(text)
@@ -221,10 +276,44 @@ def route(message: str) -> tuple[str, BaseModel] | Unparsed | None:
 		name = person_name(text)
 		if name:
 			return "person_summary", PersonSummaryArgs(name=name)
+	if REPORT_RE.search(text) and REPORT_TOPIC_RE.search(text):
+		# "오늘 현황 보고용으로 정리해줘": 대화용 요약이 아니라 보고 문안을 원한다.
+		return "draft_status_report", StatusReportArgs()
+	if APPROVAL_TOPIC_RE.search(text) and APPROVAL_LIST_RE.search(text):
+		# "결재 대기 목록", "서류가 빠진 연기 신청은?": 개수가 아니라 목록·서류 상태를 묻는다.
+		return "list_pending_postponements", PendingPostponementsArgs(
+			kind="연기" if "연기" in text else "보류" if "보류" in text else None,
+			incomplete_documents=bool(DOCUMENT_GAP_RE.search(text)),
+		)
 	focus = next((value for word, value in STATUS_FOCUS if word in text), None)
 	if STATUS_RE.search(text) or focus in ("보류", "연기", "고발", "결재") and re.search(r"몇|얼마", text):
 		return "summarize_status", StatusArgs(focus=focus)
 	return _route_list(text, number, bool(releases))
+
+
+def _route_export(text: str) -> tuple[str, BaseModel] | Unparsed:
+	"""'서류 미비자 엑셀로 줘', '교육 미달자 파일로 내보내줘', '이 명단 엑셀로': 파일로 만들어 달라는 요청."""
+	changed = parse_changed(text)
+	if changed is not None:
+		return "export_list", ExportArgs(subject="changed_people", period=changed[0], change_kind=changed[1])
+	if APPROVAL_TOPIC_RE.search(text) and "전입" not in text:
+		return "export_list", ExportArgs(
+			subject="pending_postponements",
+			kind="연기" if "연기" in text else "보류" if "보류" in text else None,
+			incomplete_documents=bool(DOCUMENT_GAP_RE.search(text)),
+		)
+	sentence = Sentence(text)
+	sentence.take(EXPORT_ACTION_RE)
+	sentence.take(REFERENCE_RE)  # '이 명단'의 '명단'을 검색 말투로 먼저 쓰면 '이'가 남는다.
+	sentence.take(SEARCH_ACTION_RE)
+	condition = parse_filter(sentence)
+	leftover = sentence.leftover()
+	if leftover:
+		return Unparsed(leftover)
+	fields = condition.model_dump(exclude_defaults=True)
+	if fields.get("name") in FILLER:
+		fields.pop("name")  # "명단 엑셀로 줘"의 '명단'을 사람 이름으로 읽지 않는다.
+	return "export_list", ExportArgs(**fields, everyone=bool(EVERYONE_RE.search(text)))
 
 
 def _route_list(text: str, number: re.Match[str] | None, releases: bool) -> tuple[str, BaseModel] | Unparsed | None:

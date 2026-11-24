@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from user.app.copilot.schemas import Proposal, UiAction
+from user.app.copilot.schemas import Download, Proposal, UiAction
 from user.app.models.organization import OrganizationNode
 from user.app.models.squad import Squad
 
@@ -26,6 +26,7 @@ class ToolResult:
 	ui_actions: list[UiAction] = field(default_factory=list)
 	proposal: Proposal | None = None
 	conditions: list[str] = field(default_factory=list)  # 적용한 조건. 답변 위에 칩으로 보인다.
+	download: Download | None = None  # 내려받기 파일(명단 내보내기)
 
 
 @dataclass(frozen=True)

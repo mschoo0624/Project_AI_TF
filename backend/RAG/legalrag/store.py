@@ -2,7 +2,7 @@
 Loading/saving the processed corpus and the vector index.
 
 data/processed/laws.jsonl   one JSON line per article (output of scripts/preprocess.py)
-data/index/embeddings.npy   one normalized vector per article (output of scripts/build_index.py)
+data/index/embeddings.npy   one normalized vector per passage (항 단위, see chunker.py) (output of scripts/build_index.py)
 data/index/index_info.json  which model built the vectors + article ids in the same order
 """
 from __future__ import annotations
@@ -46,6 +46,13 @@ def search_text(a: Article) -> str:
     return f"{a.display_name}\n{where}\n{clean_text(a.text)}".strip()
 
 
+def chunk_search_text(a: Article, label: str, text: str) -> str:
+    """The text that is embedded / keyword-indexed for one passage (항). Keeps the article title as context."""
+    where = " ".join(x for x in (a.chapter, a.section) if x)
+    name = f"{a.display_name} {label}".strip()
+    return f"{name}\n{where}\n{clean_text(text)}".strip()
+
+
 def load_embedding_model(name: str):
     from sentence_transformers import SentenceTransformer
 
@@ -61,23 +68,27 @@ def _has_cuda() -> bool:
         return False
 
 
-def build_embeddings(cfg: Config, articles: List[Article]) -> None:
+def build_embeddings(cfg: Config, articles: List[Article], chunks) -> None:
+    from .chunker import chunk_id
+
     model = load_embedding_model(cfg.embedding_model)
-    texts = [search_text(a) for a in articles]
+    texts = [chunk_search_text(articles[c.article_idx], c.label, c.text) for c in chunks]
     vecs = model.encode(texts, batch_size=8, normalize_embeddings=True, show_progress_bar=True)
     cfg.index_dir.mkdir(parents=True, exist_ok=True)
     np.save(cfg.index_dir / "embeddings.npy", np.asarray(vecs, dtype="float32"))
-    info = {"embedding_model": cfg.embedding_model, "ids": [a.id for a in articles]}
+    info = {"embedding_model": cfg.embedding_model, "ids": [chunk_id(articles, c) for c in chunks]}
     (cfg.index_dir / "index_info.json").write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
-def load_embeddings(cfg: Config, articles: List[Article]) -> np.ndarray:
+def load_embeddings(cfg: Config, articles: List[Article], chunks) -> np.ndarray:
+    from .chunker import chunk_id
+
     emb_path = cfg.index_dir / "embeddings.npy"
     info_path = cfg.index_dir / "index_info.json"
     if not emb_path.exists() or not info_path.exists():
         raise FileNotFoundError(f"Vector index not found in {cfg.index_dir}. Run: python -m scripts.build_index")
     info = json.loads(info_path.read_text(encoding="utf-8"))
-    if info["ids"] != [a.id for a in articles]:
+    if info["ids"] != [chunk_id(articles, c) for c in chunks]:
         raise RuntimeError("Index is out of date with laws.jsonl. Re-run: python -m scripts.build_index")
     if info["embedding_model"] != cfg.embedding_model:
         raise RuntimeError(

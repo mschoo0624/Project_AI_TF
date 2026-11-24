@@ -158,3 +158,9 @@
   .mascot-eyes, .mascot.is-thinking, .mascot-hand, .chat-launcher-hint, .legal-chat, .legal-chat-bubble, .legal-chat-dots i, .copilot-history { animation:none; }
   .chat-launcher:hover, .legal-chat-chips button:hover:not(:disabled), .legal-chat-form button:hover:not(:disabled) { transform:none; }
 }
+
+/* 업무 Copilot: 오늘 확인할 일, 내려받기 */
+.copilot-briefing { display:flex; flex-direction:column; gap:6px; width:100%; margin-bottom:10px; padding:10px 11px; border:1px solid var(--chat-line); border-radius:12px; background:var(--chat-mint); text-align:left; }
+.copilot-briefing > b { color:#2f5a45; font-size:12px; }
+.copilot-download { display:inline-block; margin:2px 0 6px; padding:7px 12px; border:1px solid var(--chat-green); border-radius:999px; background:#fff; color:#2f5a45; font:inherit; font-size:12px; font-weight:600; cursor:pointer; overflow-wrap:anywhere; text-align:left; }
+.copilot-download:hover { background:var(--chat-mint); }

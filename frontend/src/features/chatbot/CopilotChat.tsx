@@ -34,10 +34,18 @@ type Proposal = {
   assignments: PlannedAssignment[]
   notes: string[]
 }
+// 내보내기: 서버가 만든 CSV를 받는 링크. 파일은 서버가 15분만 보관합니다.
+type Download = { url: string; filename: string; rows: number }
+// 채팅을 열면 먼저 보여 주는 "오늘 확인할 일". prompt는 누르면 보낼 문장입니다.
+type BriefingItem = { text: string; prompt: string }
+// items=DB 현황, unfinished=지난 대화에서 승인하지 않고 둔 제안, frequent=자주 쓰는 요청 (둘은 이 브라우저의 대화 기록에서)
+type Briefing = { items: BriefingItem[]; unfinished: BriefingItem[]; frequent: BriefingItem[] }
+const NO_BRIEFING: Briefing = { items: [], unfinished: [], frequent: [] }
 type ChatResponse = {
   message: string
   ui_actions: CopilotAction[]
   proposal: Proposal | null
+  download?: Download | null
   conditions: string[]
   unparsed: string[]
   trace_id: string
@@ -79,7 +87,7 @@ type Message =
   | {
     id: number; role: 'assistant'; text: string; pending: boolean; error?: string
     proposal?: Proposal; proposalState?: ProposalState; traceId?: string
-    conditions?: string[]; unparsed?: string[]
+    conditions?: string[]; unparsed?: string[]; download?: Download
   }
 
 // 로그인이 생기기 전까지 대화는 브라우저별 무작위 ID로 구분합니다. 저장소를 못 쓰면 이 창에서만 유지됩니다.
@@ -167,6 +175,19 @@ function approveLabel(proposal: Proposal) {
   if (proposal.kind === 'release') return `${proposal.assignments.length}명 해제`
   if (proposal.kind === 'move') return '옮기기 승인'
   return '승인'
+}
+
+// 대기 표시: 규칙으로 처리되는 질문은 바로 끝나므로 3초가 지나서야 "AI 해석 중" 안내와 경과 시간을 보여 준다.
+function PendingStatus() {
+  const [seconds, setSeconds] = useState(0)
+  useEffect(() => {
+    const timer = window.setInterval(() => setSeconds(value => value + 1), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  return <p className="legal-chat-pending">
+    <span className="legal-chat-dots" aria-hidden="true"><i /><i /><i /></span>
+    {seconds < 3 ? '확인하는 중' : `AI가 질문을 해석하는 중이에요… ${seconds}초 (최대 1분 정도 걸릴 수 있어요)`}
+  </p>
 }
 
 function BulkPlan({ proposal }: { proposal: Proposal }) {
@@ -375,6 +396,7 @@ export default function CopilotChat({ onAction, onDataChanged }: {
         {
           id: userId + 1, role: 'assistant', text: result.message, pending: false, traceId: result.trace_id,
           proposal: result.proposal ?? undefined, proposalState, conditions: result.conditions, unparsed: result.unparsed,
+          download: result.download ?? undefined,
         },
       ]
     })
@@ -445,6 +467,19 @@ export default function CopilotChat({ onAction, onDataChanged }: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 빈 화면(새 대화)일 때마다 오늘 확인할 일을 새로 가져옵니다. 못 가져와도 채팅은 그대로 씁니다.
+  const [briefing, setBriefing] = useState<Briefing>(NO_BRIEFING)
+  const isEmpty = messages.length === 0
+  useEffect(() => {
+    if (!isEmpty) return
+    let cancelled = false
+    fetch(`${API_BASE}/copilot/briefing?client_id=${clientId()}`)
+      .then(response => response.ok ? response.json() as Promise<Briefing> : NO_BRIEFING)
+      .then(body => { if (!cancelled) setBriefing({ ...NO_BRIEFING, ...body }) })
+      .catch(() => { if (!cancelled) setBriefing(NO_BRIEFING) })
+    return () => { cancelled = true }
+  }, [isEmpty])
+
   const updateAssistant = (id: number, update: Partial<Extract<Message, { role: 'assistant' }>>) =>
     setMessages(current => current.map(message => message.id === id && message.role === 'assistant' ? { ...message, ...update } : message))
   const updateProposal = (id: number, update: Partial<ProposalState>) =>
@@ -480,6 +515,7 @@ export default function CopilotChat({ onAction, onDataChanged }: {
         traceId: result.trace_id,
         conditions: result.conditions,
         unparsed: result.unparsed,
+        download: result.download ?? undefined,
         proposalState: result.proposal ? { status: 'open', selected: result.proposal.options[0]?.squad_id ?? 0 } : undefined,
       })
       lastList.current = listOf(result) ?? lastList.current
@@ -488,6 +524,25 @@ export default function CopilotChat({ onAction, onDataChanged }: {
       updateAssistant(answerId, { pending: false, error: `오류: ${error instanceof Error ? error.message : String(error)}` })
     } finally {
       setBusy(false)
+    }
+  }
+
+  // 내려받기: 파일은 서버가 잠깐만 보관하므로 다시 연 대화에서는 만료됐을 수 있습니다.
+  const downloadFile = async (id: number, file: Download) => {
+    updateAssistant(id, { error: undefined })
+    try {
+      const response = await fetch(`${API_BASE}${file.url}`)
+      if (!response.ok) throw new Error(await errorDetail(response))
+      const href = URL.createObjectURL(await response.blob())
+      const link = document.createElement('a')
+      link.href = href
+      link.download = file.filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(href), 10_000)
+    } catch (error) {
+      updateAssistant(id, { error: `내려받지 못했어요: ${error instanceof Error ? error.message : String(error)}` })
     }
   }
 
@@ -562,6 +617,16 @@ export default function CopilotChat({ onAction, onDataChanged }: {
         <Mascot size={88} mood="wave" />
         <h3>업무 Chatbot이에요.</h3>
         <p>인원 조회, 편성·해제 제안, 현황·교육 미달·이상 데이터 점검을 도와드려요.<br />데이터 변경은 [승인]을 눌렀을 때만 일어나고, 변경 기록에 남아요.</p>
+        {([
+          ['오늘 확인할 일', briefing.items],
+          ['지난번에 하다 만 일', briefing.unfinished],
+          ['자주 쓰는 요청', briefing.frequent],
+        ] as const).map(([heading, list]) => list.length > 0 && <div key={heading} className="copilot-briefing" aria-label={heading}>
+          <b>{heading}</b>
+          <div className="legal-chat-chips">
+            {list.map(item => <button key={item.prompt} type="button" disabled={busy} onClick={() => ask(item.prompt)}>{item.text}</button>)}
+          </div>
+        </div>)}
         <div className="legal-chat-chips">
           {EXAMPLES.map(example => <button key={example} type="button" disabled={busy} onClick={() => ask(example)}>{example}</button>)}
         </div>
@@ -577,10 +642,12 @@ export default function CopilotChat({ onAction, onDataChanged }: {
               {message.unparsed?.map(word => <b key={word} className="is-unparsed" title="이해하지 못한 말">{word}?</b>)}
             </div> : null}
             {message.text.split('\n').map((line, index) => <p key={index}>{line}</p>)}
+            {message.download && <button type="button" className="copilot-download"
+              onClick={() => downloadFile(message.id, message.download!)}>
+              ⬇ 내려받기 · {message.download.filename} ({message.download.rows}건)
+            </button>}
             {message.error && <p className="is-error">{message.error}</p>}
-            {message.pending && <p className="legal-chat-pending">
-              <span className="legal-chat-dots" aria-hidden="true"><i /><i /><i /></span>확인하는 중
-            </p>}
+            {message.pending && <PendingStatus />}
             {message.proposal && message.proposalState && <ProposalCard
               proposal={message.proposal}
               state={message.proposalState}

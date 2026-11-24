@@ -19,6 +19,7 @@ from user.app.api.training import (
 )
 from user.app.api.training_results import router as training_results_router
 from user.app.api.transfers import router as transfers_router
+from user.app.copilot import llm as copilot_llm
 from user.app.copilot.router import router as copilot_router
 from classifier_agent.API import router as classifier_router, start_analysis_service, stop_analysis_service
 from RAG.legalrag import server as rag_server
@@ -76,6 +77,7 @@ async def startup() -> None:
     initialize_prediction_cache()
     initialize_attendance_cache()
     rag_server.start_loading()
+    asyncio.create_task(asyncio.to_thread(copilot_llm.warm_up))  # 첫 LLM 질문이 느리지 않도록 미리 데운다
     _training_reconciliation_task = asyncio.create_task(_training_reconciliation_loop())
 
 
