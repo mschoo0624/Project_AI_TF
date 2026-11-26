@@ -9,8 +9,6 @@ html, body { min-width:0; min-height:100vh; background:#fff; }
 /* Push mode: the law chatbot panel opens next to the sidebar, so the workspace moves right instead of being covered. */
 .app.chat-open .workspace { margin-left:calc(var(--sidebar-width) + var(--chat-width)); }
 .workspace-content { flex:none; width:calc(1920px - var(--sidebar-width)); margin:0 auto; position:relative; transform:translateZ(0); }
-.home-dashboard { height:852px; min-height:852px; grid-template-rows:300px 500px; gap:16px 24px; padding-top:20px; padding-bottom:16px; }
-.home-left-column { grid-template-rows:72px 212px 1fr; gap:16px; }
 .home-today { padding-top:0; }
 .home-today-tile { height:94px; padding-top:12px; }
 .home-today-tile strong { font-size:27px; }

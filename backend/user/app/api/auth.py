@@ -50,6 +50,7 @@ def _token_response(user: User, token: str, expires_at) -> dict[str, object]:
         "user": {
             "id": user.id, "username": user.username, "role": user.role,
             "unit_code": user.unit_code, "position": user.position,
+            "service_number": user.service_number,
         },
     }
 
@@ -124,10 +125,7 @@ def login(
             headers={"Retry-After": str(int(LOGIN_WINDOW.total_seconds()))},
         )
 
-    user = db.scalar(select(User).where(
-        User.username == payload.username.strip(),
-        User.unit_code == payload.unit_code.strip(),
-    ))
+    user = db.scalar(select(User).where(User.username == payload.username.strip()))
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
         db.add_all(AuthLoginFailure(key_hash=key, failed_at=now) for key in keys)
         db.commit()
@@ -181,6 +179,7 @@ def create_user(
         role=POSITION_ROLES[payload.position],
         unit_code=unit_code,
         position=payload.position,
+        service_number=payload.service_number.strip(),
     )
     db.add(user)
     try:

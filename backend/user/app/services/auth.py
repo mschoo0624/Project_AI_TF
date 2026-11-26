@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Callable
@@ -121,3 +122,21 @@ def require_roles(*roles: str) -> Callable[..., User]:
 require_viewer = require_roles("viewer", "scheduler", "approver")
 require_scheduler = require_roles("scheduler", "approver")
 require_approver = require_roles("approver")
+
+
+def seed_dev_account(db: Session) -> None:
+    """개발용 시드 계정 (부대코드/아이디/비밀번호 모두 1234). SEED_DEV_ACCOUNT=0 이면 건너뜀."""
+    if os.getenv("SEED_DEV_ACCOUNT", "1") != "1":
+        return
+    if db.scalar(select(User).where(User.username == "1234")) is not None:
+        return
+    db.add(User(
+        username="1234",
+        password_hash=hash_password("1234"),
+        role=POSITION_ROLES["동대장"],
+        unit_code="1234",
+        position="동대장",
+        service_number="1234",
+        is_active=True,
+    ))
+    db.commit()

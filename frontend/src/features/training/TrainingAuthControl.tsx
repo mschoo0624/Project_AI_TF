@@ -30,7 +30,7 @@ export function TrainingLoginPage({ checkingSession, sessionError, onRetry }: {
       const response = await fetch(`${apiBase()}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ unit_code: unitCode, username, password }),
+        body: JSON.stringify({ username, password }),
       })
       const payload = await response.json() as TokenResponse | { detail?: string }
       if (!response.ok || !('access_token' in payload)) {
@@ -82,13 +82,13 @@ export function TrainingLoginPage({ checkingSession, sessionError, onRetry }: {
         <div className="training-login-heading">
           <span>SECURE ACCESS</span>
           <h2>{showBootstrap ? '첫 동대장 계정 만들기' : '로그인'}</h2>
-          <p>{showBootstrap ? '최초 동대장 계정으로 사용할 부대코드, 아이디, 비밀번호를 입력하세요.' : '부대코드와 계정 정보를 입력해 접속하세요.'}</p>
+          <p>{showBootstrap ? '최초 동대장 계정으로 사용할 부대코드, 아이디, 비밀번호를 입력하세요.' : '아이디와 비밀번호를 입력해 접속하세요.'}</p>
         </div>
         {checkingSession && <p className="training-login-notice" role="status">로그인 상태를 확인하고 있습니다.</p>}
         {sessionError && <div className="training-login-error" role="alert"><span>{sessionError}</span><button type="button" onClick={onRetry}>다시 확인</button></div>}
-        <label>부대코드<input autoComplete="organization" value={unitCode} onChange={event => setUnitCode(event.target.value)} required disabled={busy} /></label>
+        {showBootstrap && <label>부대코드<input autoComplete="organization" value={unitCode} onChange={event => setUnitCode(event.target.value)} required disabled={busy} /></label>}
         <label>아이디<input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required disabled={busy} /></label>
-        <label>비밀번호<input type="password" autoComplete={showBootstrap ? 'new-password' : 'current-password'} minLength={showBootstrap ? 12 : undefined} value={password} onChange={event => setPassword(event.target.value)} required disabled={busy} /></label>
+        <label>비밀번호<input type="password" autoComplete={showBootstrap ? 'new-password' : 'current-password'} minLength={showBootstrap ? 8 : undefined} value={password} onChange={event => setPassword(event.target.value)} required disabled={busy} /></label>
         {error && <p className="training-login-error" role="alert">{error}</p>}
         <button className="training-login-submit" type="submit" disabled={busy || checkingSession}>{busy ? '처리 중…' : showBootstrap ? '동대장 계정 만들기' : '로그인'}</button>
         <button className="training-login-switch" type="button" onClick={() => { setShowBootstrap(value => !value); setError('') }} disabled={busy}>{showBootstrap ? '로그인으로 돌아가기' : '첫 동대장 계정 만들기'}</button>
@@ -217,7 +217,7 @@ export default function TrainingAuthControl() {
         onChange={event => setNewUnitCode(event.target.value)}
         readOnly={auth.user.position === '동대장'} required disabled={accountBusy} /></label>
       <label>아이디<input autoComplete="off" value={newUsername} onChange={event => setNewUsername(event.target.value)} required disabled={accountBusy} /></label>
-      <label>임시 비밀번호<input type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={event => setNewPassword(event.target.value)} required disabled={accountBusy} /></label>
+      <label>임시 비밀번호<input type="password" autoComplete="new-password" minLength={8} value={newPassword} onChange={event => setNewPassword(event.target.value)} required disabled={accountBusy} /></label>
       <label>구분<select value={newPosition} onChange={event => setNewPosition(event.target.value as AuthUser['position'])} disabled={accountBusy}>
         <option value="상근예비역">상근예비역</option>
         <option value="동대장">동대장</option>
@@ -229,7 +229,7 @@ export default function TrainingAuthControl() {
     </form>}
     {open && !auth && <form className="training-auth-popover" onSubmit={event => void (showBootstrap ? createFirstApprover(event) : login(event))}>
       <label>사용자명<input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required /></label>
-      <label>비밀번호<input type="password" autoComplete={showBootstrap ? 'new-password' : 'current-password'} minLength={showBootstrap ? 12 : undefined} value={password} onChange={event => setPassword(event.target.value)} required /></label>
+      <label>비밀번호<input type="password" autoComplete={showBootstrap ? 'new-password' : 'current-password'} minLength={showBootstrap ? 8 : undefined} value={password} onChange={event => setPassword(event.target.value)} required /></label>
       {error && <p role="alert">{error}</p>}
       <button type="submit" disabled={busy}>{busy ? '처리 중…' : showBootstrap ? 'approver 계정 만들기' : '로그인'}</button>
       <button className="training-auth-switch" type="button" onClick={() => { setShowBootstrap(value => !value); setError('') }} disabled={busy}>{showBootstrap ? '로그인으로 돌아가기' : '첫 approver 계정 만들기'}</button>

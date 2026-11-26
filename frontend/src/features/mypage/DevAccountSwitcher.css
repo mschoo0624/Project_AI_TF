@@ -1,0 +1,3 @@
+/* TODO(배포 전 삭제): DevAccountSwitcher 전용 스타일 */
+.dev-switcher { display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border:1px dashed #d97706; border-radius:8px; background:#fff7ed; color:#9a3412; font-size:12px; font-weight:600; }
+.dev-switcher select { height:26px; border:1px solid #f3c99a; border-radius:6px; background:#fff; color:#1b2433; font-size:12px; }
