@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { documentTime } from './api'
 import { fieldGroups, fieldMaxLength, formatTraining, isLinkedField, textFields } from './draft'
 import { documentHtml } from './DraftDocument'
@@ -8,8 +8,17 @@ import ProsecutionPrintDialog from './ProsecutionPrintDialog'
 import templateUrl from '../../assets/[별지 6] 예비군법 위반자 고발장(예비군 조직·편성과 운영에 관한 훈령).pdf?url'
 import './prosecution.css'
 
-export default function ProsecutionDraft({ revision }: { revision: number }) {
+export default function ProsecutionDraft({ revision, initialPersonId }: { revision: number; initialPersonId?: string }) {
   const draft = useProsecutionDraft(revision)
+  // 목록의 '고발서작성' 버튼으로 열린 경우: 대상자 목록이 불러와지면 해당 인원을 한 번만 자동 선택
+  const started = useRef(false)
+  useEffect(() => {
+    if (!initialPersonId || started.current || draft.listLoading) return
+    if (!draft.targets.some(target => target.military_number === initialPersonId)) return
+    started.current = true
+    draft.selectPerson(initialPersonId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPersonId, draft.listLoading, draft.targets])
   const { form, saved, sources, saving, loading, generated, dirty, canSave, showTemplate, printDocument } = draft
   const html = useMemo(() => documentHtml(form), [form])
 

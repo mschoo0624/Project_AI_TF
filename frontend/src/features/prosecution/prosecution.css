@@ -93,3 +93,20 @@
   .prosecution-header-actions { justify-content:flex-start; }
   .prosecution-modal>header { flex-wrap:wrap; }
 }
+
+/* ── 고발대상자 목록: 작업 열 / 고발서작성 버튼 ── */
+.rm-prosecution-roster-table td.rm-prosecution-action { text-align:right; white-space:nowrap; }
+.rm-prosecution-list-panel:not(.rm-prosecution-training-review) .rm-prosecution-roster-table th:last-child { text-align:right; }
+.rm-prosecution-write { padding:7px 12px; font-size:12px; font-weight:600; white-space:nowrap; }
+.rm-prosecution-roster-table tbody tr:hover { background:#f5f9ff; }
+.rm-prosecution-roster-table tbody tr:focus-visible { outline:2px solid var(--review-blue,#087af4); outline-offset:-2px; }
+
+/* ── 훈련 이력 프로필: 내용 높이에 맞춰 가운데 정렬 (아래 빈 공간 제거) ── */
+.rm-prosecution-profile { inset:0; margin:auto; width:min(1100px,92vw); height:fit-content; max-height:86vh; }
+
+/* ── 고발서작성 팝업 ── */
+.prosecution-draft-dialog { width:min(96vw,1440px); height:92vh; }
+.prosecution-draft-dialog-body { flex:1; display:flex; min-height:0; padding:0 16px 16px; background:#fafbff; }
+.prosecution-draft-dialog .prosecution-draft { flex:1; min-width:0; }
+.prosecution-draft-dialog .prosecution-draft>header { justify-content:flex-end; padding-top:12px; }
+.prosecution-draft-dialog .prosecution-draft>header>div:first-child { display:none; }
