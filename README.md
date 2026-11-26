@@ -24,27 +24,6 @@
 - **저장·열람:** `prosecution_document` 테이블에 작성 내용, 선택한 훈련의 저장 당시 정보, 작성자·저장 시각·버전을 보관합니다. 저장된 고발장은 검색·재열기·수정할 수 있으며 최신 훈련 정보로 덮어쓰지 않습니다. 최초 저장 시 근거 변경을 확인하고, 중복 요청과 동시 수정 충돌을 검사합니다.
 - **인쇄:** 저장 후 인쇄 미리보기에서 프린터 또는 PDF 저장을 선택합니다. 별지 제6호서식의 항목을 따른 A4 HTML 양식이며, DB에는 PDF 파일 대신 작성 데이터를 저장합니다. 고발 접수·전송, 서명·관인 생성, 인원·훈련 데이터 수정은 수행하지 않습니다.
 
-기본 DB는 `backend/project_ai_tf.db`이며 `DB_PATH`/`DATABASE_URL` 설정을 따릅니다. 미저장 내용은 새로고침하면 사라집니다. 데스크톱 시연판은 매 실행 시 빌드 당시 DB로 복원하므로 이전 실행에서 저장한 고발장도 초기화됩니다.
-
-### 코드 구조
-
-| 위치 | 역할 |
-| --- | --- |
-| `frontend/src/features/prosecution/ProsecutionPage.tsx`, `ProsecutionRoster.tsx`, `ProsecutionProfile.tsx` | 탭·목록·훈련 이력 |
-| 같은 폴더의 `ProsecutionDraft.tsx`, `useProsecutionDraft.ts`, `draft.ts` | 작성 화면·상태/저장 흐름·양식 및 자동 입력 규칙 |
-| 같은 폴더의 `DraftDocument.tsx`, `ProsecutionPrintDialog.tsx`, `ProsecutionSavedDocuments.tsx` | 출력 양식·인쇄·저장 목록 |
-| 같은 폴더의 `api.ts`, `types.ts`, `useProsecutionQuery.ts`, `prosecution.css` | API 요청·자료형·조회 상태·기능 전용 스타일 |
-| `backend/user/app/api/prosecution_documents.py`, `schemas/prosecution_document.py` | HTTP 라우팅·권한·요청 검증 |
-| `backend/user/app/services/prosecution_documents.py`, `services/prosecution_draft.py` | 저장·조회·버전 검사 및 인원/훈련 근거 조회 |
-| `backend/user/app/models/prosecution_document.py` | 저장 테이블 |
-
-기존 API 주소를 유지합니다: 목록 `GET /reservists/prosecution-targets`, 미이수 검토 `GET /reservists/training-review-targets`, 작성 근거 `GET /reservists/{military_number}/prosecution-draft`, 문서 목록/생성 `GET/POST /prosecution-documents`, 상세/수정 `GET/PUT /prosecution-documents/{id}`.
-
-검증 명령:
-
-- `backend`에서 `.\.venv\Scripts\python.exe -m pytest tests/test_prosecution_draft.py tests/test_prosecution_documents.py -q` (임시 DB 사용)
-- `frontend`에서 `npm run build`
-
 ## Description:
 - Creating the Live Dashboard for more clear visualization and easy formatting and editing the individuals' information. 
 
