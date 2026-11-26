@@ -253,6 +253,7 @@ function SidebarClock() {
 }
 
 function App() {
+  useAutoLogout()
   useWorkLogDay()
   const [homeRevision, setHomeRevision] = useState(0)
   const [activePage, setActivePageState] = useState<PageId>('home')

@@ -103,10 +103,3 @@
 
 /* ── 훈련 이력 프로필: 내용 높이에 맞춰 가운데 정렬 (아래 빈 공간 제거) ── */
 .rm-prosecution-profile { inset:0; margin:auto; width:min(1100px,92vw); height:fit-content; max-height:86vh; }
-
-/* ── 고발서작성 팝업 ── */
-.prosecution-draft-dialog { width:min(96vw,1440px); height:92vh; }
-.prosecution-draft-dialog-body { flex:1; display:flex; min-height:0; padding:0 16px 16px; background:#fafbff; }
-.prosecution-draft-dialog .prosecution-draft { flex:1; min-width:0; }
-.prosecution-draft-dialog .prosecution-draft>header { justify-content:flex-end; padding-top:12px; }
-.prosecution-draft-dialog .prosecution-draft>header>div:first-child { display:none; }

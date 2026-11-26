@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { RosterHeading, RosterSummary, RosterPagination } from '../../components/PersonnelRosterParts'
 import ProsecutionProfile from './ProsecutionProfile'
-import ProsecutionDraftDialog from './ProsecutionDraftDialog'
 import { useProsecutionQuery } from './useProsecutionQuery'
 import type { ProsecutionTarget, TrainingReviewTarget } from './types'
 
@@ -10,13 +9,14 @@ const targetColumns = [['군번', 16], ['성명', 14], ['연차', 9], ['분대',
 const reviewColumns = [['군번', 22], ['성명', 22], ['연차', 16], ['미이수 연차', 24], ['잔여시간', 16]] as const
 const count = (value: number) => `${value.toLocaleString('ko-KR')}명`
 
-export default function ProsecutionRoster({ revision }: { revision: number }) {
+export default function ProsecutionRoster({ revision, onWrite, writingDisabled }: {
+  revision: number; onWrite: (personId: string) => void; writingDisabled: boolean
+}) {
   const targetsQuery = useProsecutionQuery<ProsecutionTarget[]>('/reservists/prosecution-targets', revision)
   const reviewQuery = useProsecutionQuery<TrainingReviewTarget[]>('/reservists/training-review-targets', revision)
   const targets = targetsQuery.data ?? []
   const reviewTargets = reviewQuery.data ?? []
   const [selectedTarget, setSelectedTarget] = useState<ProsecutionTarget | null>(null)
-  const [reportTarget, setReportTarget] = useState<ProsecutionTarget | null>(null)
   const [search, setSearch] = useState('')
   const [branch, setBranch] = useState('')
   const [filters, setFilters] = useState({ search: '', branch: '' })
@@ -80,8 +80,8 @@ export default function ProsecutionRoster({ revision }: { revision: number }) {
                 <td title={person.prosecution_reason ?? undefined}><span className="rm-prosecution-badge">{person.prosecution_reason ?? '훈련 요건 충족'}</span><small>{person.target_years.map(year => `${year}년차`).join(', ')}</small></td>
                 <td>{person.consecutive_unexcused_absences}회</td>
                 <td className="rm-prosecution-action">
-                  <button type="button" className="rm-btn rm-btn-primary rm-prosecution-write" aria-label={`${person.name} 고발서작성`}
-                    onClick={event => { event.stopPropagation(); setReportTarget(person) }}
+                  <button type="button" className="rm-btn rm-btn-primary rm-prosecution-write" aria-label={`${person.name} 고발서작성`} disabled={writingDisabled}
+                    onClick={event => { event.stopPropagation(); onWrite(person.military_number) }}
                     onKeyDown={event => event.stopPropagation()}>고발서작성</button>
                 </td>
               </tr>)
@@ -98,7 +98,5 @@ export default function ProsecutionRoster({ revision }: { revision: number }) {
       </section>
     </div>
     {selectedTarget && <ProsecutionProfile key={selectedTarget.military_number} target={selectedTarget} onClose={() => setSelectedTarget(null)} />}
-    {reportTarget && <ProsecutionDraftDialog key={reportTarget.military_number} revision={revision} personId={reportTarget.military_number}
-      name={reportTarget.name} onClose={() => setReportTarget(null)} />}
   </main>
 }

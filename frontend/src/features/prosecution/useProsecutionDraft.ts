@@ -92,7 +92,9 @@ export default function useProsecutionDraft(revision: number) {
   const discard = () => !dirty || window.confirm('저장하지 않은 변경사항이 있습니다. 변경사항을 버리고 계속하시겠습니까?')
 
   const selectPerson = (id: string) => {
-    if (!discard()) return
+    if (saveInFlight.current) return false
+    if (id && id === (saved?.person_id ?? personId)) return true
+    if (!discard()) return false
     setForm(createBlankDraft())
     setSaved(null)
     setDraftRecords([])
@@ -103,6 +105,8 @@ export default function useProsecutionDraft(revision: number) {
     setShowTemplate(false)
     clientId.current = ''
     setPersonId(id)
+    if (id && id === personId) setRetryRevision(value => value + 1)
+    return true
   }
 
   const changeField = (key: string, value: string) => {
@@ -197,3 +201,5 @@ export default function useProsecutionDraft(revision: number) {
     closePrint: () => setPrintDocument(null),
   }
 }
+
+export type ProsecutionDraftState = ReturnType<typeof useProsecutionDraft>
